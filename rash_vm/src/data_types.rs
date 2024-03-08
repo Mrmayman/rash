@@ -35,7 +35,7 @@ impl ToString for DataValue {
                     if !formatted.contains("e-") {
                         // Rust formats it as 1e21, ignoring the plus
                         // So we must add it ourselves to match Scratch
-                        formatted.replace("e", "e+")
+                        formatted.replace('e', "e+")
                     } else {
                         formatted
                     }
