@@ -1,3 +1,6 @@
 [workspace]
 
 members = ["rash", "rash_vm"]
+
+[profile.release]
+debug = true

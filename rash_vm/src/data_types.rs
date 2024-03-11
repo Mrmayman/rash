@@ -9,6 +9,18 @@ pub enum DataValue {
     Bool(bool),
 }
 
+// I know #[derive(Clone)] does the same thing.
+// But this made it faster by 20 milliseconds
+impl Clone for DataValue {
+    fn clone(&self) -> Self {
+        match *self {
+            Self::Number(arg0) => Self::Number(arg0),
+            Self::String(ref arg0) => Self::String(arg0.to_owned()),
+            Self::Bool(arg0) => Self::Bool(arg0),
+        }
+    }
+}
+
 impl std::fmt::Debug for DataValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -63,6 +75,7 @@ impl DataValue {
     /// * `String("0b10") -> 2.0`
     /// * `String("something") -> 0.0` (a default value if not valid)
     /// * `Bool(true) -> 1.0`
+    #[inline]
     pub fn to_number(&self) -> f64 {
         match self {
             DataValue::Number(number) => *number,
@@ -97,6 +110,7 @@ impl DataValue {
     /// * `String("0.0") -> true`
     /// * `Bool(true) -> true`
     /// * `Bool(false) -> false`
+    #[inline]
     pub fn to_bool(&self) -> bool {
         match self {
             DataValue::Number(n) => *n != 0.0 && !n.is_nan(),
