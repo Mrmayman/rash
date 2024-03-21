@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["rash", "rash_vm"]
+members = ["rash", "rash_loader_sb3", "rash_vm"]
 
 [profile.release]
 debug = true
