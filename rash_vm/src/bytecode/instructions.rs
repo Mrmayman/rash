@@ -1,14 +1,15 @@
-use crate::data_types::DataValue;
+use crate::data_types::ScratchObject;
 
 /// A struct representing a point in the code to jump or goto to.
 /// Think of it like C goto.
 /// Mostly used for the compiling stage, as it is slow to run.
-pub type JumpPoint = usize;
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct JumpPoint(pub usize);
 
 /// A pointer to data.
 /// It's just an index to the array of VM memory.
-// pub struct DataPointer(pub usize);
-pub type DataPointer = usize;
+#[derive(Clone)]
+pub struct DataPointer(pub usize);
 
 /// The bytecode instructions.
 /// This is what the VM runs.
@@ -18,48 +19,45 @@ pub type DataPointer = usize;
 /// * Whereas with Places, you define a place and give it an id, and jump to a place with that id. Think of it like C goto.
 /// * So the VM will have to search where that place is defined.
 /// * Places are easier to compile but slow to run, so we convert them to raw locations at the last stage.
+#[derive(Clone)]
 pub enum Instruction {
     MemSetToValue {
         ptr: DataPointer,
-        value: DataValue,
-    },
-    MemCopy {
-        start: DataPointer,
-        destination: DataPointer,
+        value: ScratchObject,
     },
     MathAdd {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     MathSubtract {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     MathMultiply {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     MathDivide {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     MathMod {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     CompGreater {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     CompLesser {
-        a: DataPointer,
-        b: DataPointer,
+        a: ScratchObject,
+        b: ScratchObject,
         result: DataPointer,
     },
     JumpDefinePoint {
@@ -67,11 +65,11 @@ pub enum Instruction {
     },
     JumpToPointIfTrue {
         place: JumpPoint,
-        condition: DataPointer,
+        condition: ScratchObject,
     },
     JumpToRawLocationIfTrue {
         location: usize,
-        condition: DataPointer,
+        condition: ScratchObject,
     },
     ThreadPause,
     ThreadKill,

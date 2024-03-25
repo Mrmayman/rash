@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 rash_vm = { path = "../rash_vm" }
+rash_loader_sb3 = { path = "../rash_loader_sb3" }

@@ -1,106 +1,101 @@
-use std::time::Instant;
+use std::{path::PathBuf, time::Instant};
 
-use rash_vm::{bytecode::bytecode_instructions::Instruction, data_types::DataValue};
+use rash_vm::{
+    bytecode::instructions::{DataPointer, Instruction, JumpPoint},
+    data_types::ScratchObject,
+};
 
-fn main() {
+fn _run() {
     let mut thread = rash_vm::vm_thread::Thread::new(
         vec![
             Instruction::MemSetToValue {
-                ptr: 0,
-                value: DataValue::Number(0.0),
+                ptr: DataPointer(0),
+                value: ScratchObject::Number(0.0),
             },
             Instruction::MemSetToValue {
-                ptr: 1,
-                value: DataValue::Number(1.0),
+                ptr: DataPointer(1),
+                value: ScratchObject::Number(1.0),
             },
             Instruction::MemSetToValue {
-                ptr: 2,
-                value: DataValue::Number(0.0),
+                ptr: DataPointer(3),
+                value: ScratchObject::Number(0.0),
             },
-            Instruction::MemSetToValue {
-                ptr: 3,
-                value: DataValue::Number(2.0),
+            Instruction::JumpDefinePoint {
+                place: JumpPoint(0),
             },
             Instruction::MathMod {
-                a: 2,
-                b: 3,
-                result: 4,
+                a: ScratchObject::Pointer(3),
+                b: ScratchObject::Number(2.0),
+                result: DataPointer(2),
             },
             Instruction::MathMultiply {
-                a: 3,
-                b: 4,
-                result: 4,
-            },
-            Instruction::MemSetToValue {
-                ptr: 3,
-                value: DataValue::Number(1.0),
+                a: ScratchObject::Number(2.0),
+                b: ScratchObject::Pointer(2),
+                result: DataPointer(2),
             },
             Instruction::MathSubtract {
-                a: 4,
-                b: 3,
-                result: 4,
-            },
-            Instruction::MemSetToValue {
-                ptr: 3,
-                value: DataValue::Number(4.0),
+                a: ScratchObject::Pointer(2),
+                b: ScratchObject::Number(1.0),
+                result: DataPointer(2),
             },
             Instruction::MathMultiply {
-                a: 4,
-                b: 3,
-                result: 5,
+                a: ScratchObject::Number(4.0),
+                b: ScratchObject::Pointer(2),
+                result: DataPointer(4),
             },
             Instruction::MathDivide {
-                a: 5,
-                b: 1,
-                result: 3,
+                a: ScratchObject::Pointer(4),
+                b: ScratchObject::Pointer(1),
+                result: DataPointer(4),
             },
             Instruction::MathAdd {
-                a: 0,
-                b: 3,
-                result: 0,
-            },
-            Instruction::MemSetToValue {
-                ptr: 3,
-                value: DataValue::Number(2.0),
+                a: ScratchObject::Pointer(0),
+                b: ScratchObject::Pointer(4),
+                result: DataPointer(0),
             },
             Instruction::MathAdd {
-                a: 1,
-                b: 3,
-                result: 1,
-            },
-            Instruction::MemSetToValue {
-                ptr: 3,
-                value: DataValue::Number(1.0),
+                a: ScratchObject::Pointer(1),
+                b: ScratchObject::Number(2.0),
+                result: DataPointer(1),
             },
             Instruction::MathAdd {
-                a: 2,
-                b: 3,
-                result: 2,
-            },
-            Instruction::MemSetToValue {
-                ptr: 3,
-                value: DataValue::Number(1000000.0),
+                a: ScratchObject::Pointer(3),
+                b: ScratchObject::Number(1.0),
+                result: DataPointer(3),
             },
             Instruction::CompLesser {
-                a: 2,
-                b: 3,
-                result: 3,
+                a: ScratchObject::Pointer(3),
+                b: ScratchObject::Number(1_000_000.0),
+                result: DataPointer(4),
             },
-            Instruction::JumpToRawLocationIfTrue {
-                location: 3,
-                condition: 3,
+            Instruction::JumpToPointIfTrue {
+                place: JumpPoint(0),
+                condition: ScratchObject::Pointer(4),
             },
             Instruction::ThreadKill,
         ]
         .into_boxed_slice(),
     );
 
-    let memory: Vec<DataValue> = (0..10).map(|n| DataValue::Number(n as f64)).collect();
+    let memory: Vec<ScratchObject> = (0..10).map(|n| ScratchObject::Number(n as f64)).collect();
     let mut memory = memory.into_boxed_slice();
 
+    thread.optimize();
     let instant = Instant::now();
     thread.run(&mut memory);
     println!("Time passed: {}", instant.elapsed().as_secs_f64());
 
     memory.iter().for_each(|n| println!("{:?}", n));
+}
+
+fn main() {
+    // let project = match std::env::args().nth(1) {
+    //     Some(n) => rash_loader_sb3::extract::ProjectFile::open(&PathBuf::from(n)),
+    //     None => {
+    //         eprintln!("Pass an argument to a project to be run");
+    //         return;
+    //     }
+    // }
+    // .unwrap();
+    _run()
 }

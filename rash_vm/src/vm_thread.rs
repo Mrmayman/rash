@@ -1,4 +1,9 @@
-use crate::{bytecode::bytecode_instructions::Instruction, data_types::DataValue};
+use std::collections::BTreeMap;
+
+use crate::{
+    bytecode::instructions::{Instruction, JumpPoint},
+    data_types::ScratchObject,
+};
 
 /// A code thread in the VM.
 ///
@@ -28,7 +33,7 @@ impl Thread {
 
     /// Runs the code until the thread has paused
     /// (screen refresh) or it has finished running.
-    pub fn run(&mut self, memory: &mut [DataValue]) {
+    pub fn run(&mut self, memory: &mut [ScratchObject]) {
         if self.killed {
             return;
         }
@@ -36,70 +41,69 @@ impl Thread {
         loop {
             match self.code[self.instruction_counter] {
                 Instruction::MemSetToValue { ref ptr, ref value } => {
-                    memory[*ptr] = value.clone();
-                }
-                Instruction::MemCopy {
-                    ref start,
-                    ref destination,
-                } => {
-                    memory[*destination] = memory[*start].clone();
+                    // println!("{ptr} = {value:?}");
+                    memory[ptr.0] = value.clone();
                 }
                 Instruction::MathAdd {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] =
-                        DataValue::Number(memory[*a].to_number() + memory[*b].to_number());
+                    // println!("{result} = {a:?} + {b:?}");
+                    memory[result.0] =
+                        ScratchObject::Number(a.to_number(memory) + b.to_number(memory));
                 }
                 Instruction::MathSubtract {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] =
-                        DataValue::Number(memory[*a].to_number() - memory[*b].to_number());
+                    // println!("{result} = {a:?} - {b:?}");
+                    memory[result.0] =
+                        ScratchObject::Number(a.to_number(memory) - b.to_number(memory));
                 }
                 Instruction::MathMultiply {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] =
-                        DataValue::Number(memory[*a].to_number() * memory[*b].to_number());
+                    // println!("{result} = {a:?} * {b:?}");
+                    memory[result.0] =
+                        ScratchObject::Number(a.to_number(memory) * b.to_number(memory));
                 }
                 Instruction::MathDivide {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] =
-                        DataValue::Number(memory[*a].to_number() / memory[*b].to_number());
+                    // println!("{result} = {a:?} / {b:?}");
+                    memory[result.0] =
+                        ScratchObject::Number(a.to_number(memory) / b.to_number(memory));
                 }
                 Instruction::MathMod {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] = DataValue::Number(
-                        memory[*a].to_number().rem_euclid(memory[*b].to_number()),
-                    );
+                    // println!("{result} = {a:?} % {b:?}");
+                    memory[result.0] =
+                        ScratchObject::Number(a.to_number(memory).rem_euclid(b.to_number(memory)));
                 }
                 Instruction::CompGreater {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] =
-                        DataValue::Bool(memory[*a].to_number() > memory[*b].to_number());
+                    memory[result.0] =
+                        ScratchObject::Bool(a.to_number(memory) > b.to_number(memory));
                 }
                 Instruction::CompLesser {
                     ref a,
                     ref b,
                     ref result,
                 } => {
-                    memory[*result] =
-                        DataValue::Bool(memory[*a].to_number() < memory[*b].to_number());
+                    memory[result.0] =
+                        ScratchObject::Bool(a.to_number(memory) < b.to_number(memory));
                 }
                 Instruction::JumpDefinePoint { .. } => unreachable!(),
                 Instruction::JumpToPointIfTrue { .. } => unreachable!(),
@@ -107,7 +111,7 @@ impl Thread {
                     ref location,
                     ref condition,
                 } => {
-                    if memory[*condition].to_bool() {
+                    if condition.to_bool(&memory) {
                         self.instruction_counter = location - 1;
                     }
                 }
@@ -119,5 +123,48 @@ impl Thread {
             }
             self.instruction_counter += 1;
         }
+    }
+
+    pub fn optimize(&mut self) {
+        #[cfg(feature = "jit")]
+        self.jit();
+
+        self.flatten_places()
+    }
+
+    fn flatten_places(&mut self) {
+        // Create a map to store jump points and their corresponding indices
+        let places: BTreeMap<JumpPoint, usize> = self
+            .code
+            .iter()
+            .enumerate()
+            .filter_map(|(n, instruction)| {
+                if let Instruction::JumpDefinePoint { place } = instruction {
+                    Some((place.clone(), n))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Filter out JumpDefinePoint instructions and replace JumpToPointIfTrue instructions with JumpToRawLocationIfTrue
+        let new_code: Vec<Instruction> = self
+            .code
+            .iter()
+            .enumerate()
+            .filter_map(|(n, instruction)| match instruction {
+                Instruction::JumpDefinePoint { .. } => None,
+                Instruction::JumpToPointIfTrue { place, condition } => {
+                    Some(Instruction::JumpToRawLocationIfTrue {
+                        location: places[place],
+                        condition: condition.clone(),
+                    })
+                }
+                _ => Some(instruction.clone()),
+            })
+            .collect();
+
+        // Update code with the new flattened instructions
+        self.code = new_code.into_boxed_slice();
     }
 }
