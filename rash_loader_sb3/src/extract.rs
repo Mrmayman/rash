@@ -33,7 +33,7 @@ impl ProjectFile {
 
         zip_extract::extract(
             std::io::Cursor::new(file_bytes),
-            &temporary_extract_directory.path(),
+            temporary_extract_directory.path(),
             false,
         )?;
 

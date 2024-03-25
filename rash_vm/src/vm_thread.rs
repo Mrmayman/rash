@@ -111,7 +111,7 @@ impl Thread {
                     ref location,
                     ref condition,
                 } => {
-                    if condition.to_bool(&memory) {
+                    if condition.to_bool(memory) {
                         self.instruction_counter = location - 1;
                     }
                 }
@@ -151,8 +151,7 @@ impl Thread {
         let new_code: Vec<Instruction> = self
             .code
             .iter()
-            .enumerate()
-            .filter_map(|(n, instruction)| match instruction {
+            .filter_map(|instruction| match instruction {
                 Instruction::JumpDefinePoint { .. } => None,
                 Instruction::JumpToPointIfTrue { place, condition } => {
                     Some(Instruction::JumpToRawLocationIfTrue {
