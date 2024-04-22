@@ -6,10 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libtcc = { version = "*", optional = true }
-
-[target.'cfg(target_arch = "x86_64")'.features]
-jit = ["dep:libtcc"]
 
 [profile.release]
 panic = "abort"

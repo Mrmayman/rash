@@ -126,9 +126,6 @@ impl Thread {
     }
 
     pub fn optimize(&mut self) {
-        #[cfg(feature = "jit")]
-        self.jit();
-
         self.flatten_places()
     }
 

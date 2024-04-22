@@ -5,38 +5,47 @@ use serde_json::Value;
 
 #[derive(Serialize, Deserialize)]
 pub struct JsonStruct {
-    targets: Vec<Target>,
-    monitors: Vec<Monitor>,
-    extensions: Vec<Value>,
-    meta: Value,
+    pub targets: Vec<Target>,
+    pub monitors: Vec<Monitor>,
+    pub extensions: Vec<Value>,
+    pub meta: Value,
 }
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct Target {
-    isStage: bool,
-    name: String,
-    variables: BTreeMap<String, Vec<Value>>,
-    lists: Value,
-    broadcasts: Value,
-    blocks: BTreeMap<String, Block>,
-    comments: Value,
-    currentCostume: i64,
-    costumes: Vec<TargetCostume>,
-    sounds: Vec<Value>,
-    volume: f64,
-    layerOrder: i64,
-    tempo: Option<f64>,
-    visible: Option<bool>,
-    x: Option<f64>,
-    y: Option<f64>,
-    size: Option<f64>,
-    direction: Option<f64>,
-    draggable: Option<bool>,
-    rotationStyle: Option<String>,
-    videoTransparency: Option<f64>,
-    videoState: Option<String>,
-    textToSpeechLanguage: Option<Value>,
+    pub isStage: bool,
+    pub name: String,
+    pub variables: BTreeMap<String, Vec<Value>>,
+    pub lists: Value,
+    pub broadcasts: Value,
+    pub blocks: BTreeMap<String, Block>,
+    pub comments: Value,
+    pub currentCostume: i64,
+    pub costumes: Vec<TargetCostume>,
+    pub sounds: Vec<Value>,
+    pub volume: f64,
+    pub layerOrder: i64,
+    pub tempo: Option<f64>,
+    pub visible: Option<bool>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub size: Option<f64>,
+    pub direction: Option<f64>,
+    pub draggable: Option<bool>,
+    pub rotationStyle: Option<String>,
+    pub videoTransparency: Option<f64>,
+    pub videoState: Option<String>,
+    pub textToSpeechLanguage: Option<Value>,
+}
+
+impl Target {
+    pub fn get_hat_blocks(&self) -> Vec<(&String, &Block)> {
+        self.blocks
+            .iter()
+            .filter(|(_, block)| !block.has_parent())
+            .collect()
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -58,34 +67,46 @@ pub enum Block {
     Array(Vec<Value>),
 }
 
+impl Block {
+    pub fn has_parent(&self) -> bool {
+        matches!(
+            self,
+            Block::Block {
+                parent: Some(_),
+                ..
+            }
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct TargetCostume {
-    name: String,
-    dataFormat: String,
-    assetId: String,
-    md5ext: String,
-    rotationCenterX: f64,
-    rotationCenterY: f64,
+    pub name: String,
+    pub dataFormat: String,
+    pub assetId: String,
+    pub md5ext: String,
+    pub rotationCenterX: f64,
+    pub rotationCenterY: f64,
 }
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct Monitor {
-    id: String,
-    mode: String,
-    opcode: String,
-    params: Value,
-    spriteName: Option<String>,
-    value: Value,
-    width: f64,
-    height: f64,
-    x: f64,
-    y: f64,
-    visible: bool,
-    sliderMin: Option<f64>,
-    sliderMax: Option<f64>,
-    isDiscrete: Option<bool>,
+    pub id: String,
+    pub mode: String,
+    pub opcode: String,
+    pub params: Value,
+    pub spriteName: Option<String>,
+    pub value: Value,
+    pub width: f64,
+    pub height: f64,
+    pub x: f64,
+    pub y: f64,
+    pub visible: bool,
+    pub sliderMin: Option<f64>,
+    pub sliderMax: Option<f64>,
+    pub isDiscrete: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -96,7 +117,7 @@ pub struct MonitorParams {
 
 #[derive(Serialize, Deserialize)]
 pub struct Meta {
-    semver: String,
-    vm: String,
-    agent: String,
+    pub semver: String,
+    pub vm: String,
+    pub agent: String,
 }

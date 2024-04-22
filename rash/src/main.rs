@@ -89,13 +89,14 @@ fn _run() {
 }
 
 fn main() {
-    // let project = match std::env::args().nth(1) {
-    //     Some(n) => rash_loader_sb3::extract::ProjectFile::open(&PathBuf::from(n)),
-    //     None => {
-    //         eprintln!("Pass an argument to a project to be run");
-    //         return;
-    //     }
-    // }
-    // .unwrap();
-    _run()
+    let mut project = match std::env::args().nth(1) {
+        Some(n) => rash_loader_sb3::extract::ProjectFile::open(&std::path::PathBuf::from(n)),
+        None => {
+            eprintln!("Pass an argument to a project to be run");
+            return;
+        }
+    }
+    .unwrap();
+
+    project.load();
 }

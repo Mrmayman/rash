@@ -10,3 +10,4 @@ zip-extract = "*"
 serde = { version = "*", features = ["serde_derive"] }
 serde_json = "*"
 tempfile = "*"
+rash_vm = { path = "../rash_vm" }

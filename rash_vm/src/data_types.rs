@@ -44,8 +44,32 @@ impl ScratchObject {
     /// * `String("0b10") -> 2.0`
     /// * `String("something") -> 0.0` (a default value if not valid)
     /// * `Bool(true) -> 1.0`
-    #[inline]
     pub fn to_number(&self, memory: &[ScratchObject]) -> f64 {
+        // Why two functions?
+        // If I just use one function `to_number()` for everything,
+        // then if a pointer is hit, it would call to_number()
+        // on the data pointed by the pointer, being recursive.
+
+        // The calling would be:
+        // to_number(pointer) -> to_number(*pointer) -> actual value
+
+        // However, we know there is only one level of nesting.
+        // The calling WON'T be:
+        // to_number(pointer) -> to_number(*pointer) -> to_number(*pointer) -> actual value
+
+        // So, we can just use a different function for pointers.
+        // This way, the calling will be:
+        // to_number(pointer) -> to_number_unchecked(*pointer) -> actual value
+
+        if let ScratchObject::Pointer(ptr) = self {
+            memory[*ptr].to_number_unchecked()
+        } else {
+            self.to_number_unchecked()
+        }
+    }
+
+    #[inline]
+    fn to_number_unchecked(&self) -> f64 {
         match self {
             ScratchObject::Number(number) => *number,
             ScratchObject::String(string) => string.parse().unwrap_or({
@@ -60,7 +84,7 @@ impl ScratchObject {
                 }
             }),
             ScratchObject::Bool(boolean) => *boolean as i32 as f64,
-            ScratchObject::Pointer(pointer) => memory[*pointer].to_number(memory),
+            ScratchObject::Pointer(_) => unreachable!(),
         }
     }
 
@@ -80,8 +104,8 @@ impl ScratchObject {
     /// * `String("0.0") -> true`
     /// * `Bool(true) -> true`
     /// * `Bool(false) -> false`
-    #[inline]
     pub fn to_bool(&self, memory: &[ScratchObject]) -> bool {
+        // We don't use the above trick because it's slower here?
         match self {
             ScratchObject::Number(n) => *n != 0.0 && !n.is_nan(),
             ScratchObject::String(s) => s != "0" && s != "false",
@@ -122,13 +146,6 @@ impl ScratchObject {
             ScratchObject::Pointer(p) => memory[*p].to_string(memory),
         }
     }
-
-    // pub fn to_pointer(&self) -> usize {
-    //     match self {
-    //         ScratchObject::Pointer(n) => *n,
-    //         _ => unreachable!(),
-    //     }
-    // }
 }
 
 /// Takes in string such as "0x10" or "0b10" and converts it to number.
