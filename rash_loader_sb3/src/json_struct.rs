@@ -19,7 +19,7 @@ pub struct Target {
     pub variables: BTreeMap<String, Vec<Value>>,
     pub lists: Value,
     pub broadcasts: Value,
-    pub blocks: BTreeMap<String, Block>,
+    pub blocks: BTreeMap<String, JsonBlock>,
     pub comments: Value,
     pub currentCostume: i64,
     pub costumes: Vec<TargetCostume>,
@@ -40,7 +40,7 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn get_hat_blocks(&self) -> Vec<(&String, &Block)> {
+    pub fn get_hat_blocks(&self) -> Vec<(&String, &JsonBlock)> {
         self.blocks
             .iter()
             .filter(|(_, block)| !block.has_parent())
@@ -50,29 +50,39 @@ impl Target {
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
+pub struct Block {
+    pub opcode: String,
+    pub next: Option<String>,
+    pub parent: Option<String>,
+    pub inputs: BTreeMap<String, Value>,
+    pub fields: BTreeMap<String, Value>,
+    pub shadow: bool,
+    pub topLevel: bool,
+    // Only for hat blocks.
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[allow(non_snake_case)]
 #[serde(untagged)]
-pub enum Block {
+pub enum JsonBlock {
     Block {
-        opcode: String,
-        next: Option<String>,
-        parent: Option<String>,
-        inputs: BTreeMap<String, Value>,
-        fields: BTreeMap<String, Value>,
-        shadow: bool,
-        topLevel: bool,
-        // Only for hat blocks.
-        x: Option<f64>,
-        y: Option<f64>,
+        #[serde(flatten)]
+        block: Block,
     },
     Array(Vec<Value>),
 }
 
-impl Block {
+impl JsonBlock {
     pub fn has_parent(&self) -> bool {
         matches!(
             self,
-            Block::Block {
-                parent: Some(_),
+            JsonBlock::Block {
+                block: Block {
+                    parent: Some(_),
+                    ..
+                },
                 ..
             }
         )

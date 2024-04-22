@@ -4,10 +4,10 @@ use rash_vm::data_types::ScratchObject;
 
 use super::{
     error::{CompilerError, RegisterAction},
-    instance::ThreadId,
+    structures::ThreadId,
 };
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum VariableIdentifier {
     Hash(String),
     TempVar {
@@ -18,21 +18,21 @@ pub enum VariableIdentifier {
 
 #[derive(Clone, Copy)]
 pub struct VMid(pub usize);
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct RegisterId(pub usize);
 
-pub struct VariableManager {
+pub struct VariableAllocator {
     variables: BTreeMap<VariableIdentifier, (VMid, Option<ScratchObject>)>,
     registers_allocated: BTreeMap<RegisterId, bool>,
 }
 
-impl Default for VariableManager {
+impl Default for VariableAllocator {
     fn default() -> Self {
-        VariableManager::new()
+        VariableAllocator::new()
     }
 }
 
-impl VariableManager {
+impl VariableAllocator {
     pub fn new() -> Self {
         Self {
             variables: BTreeMap::new(),

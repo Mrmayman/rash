@@ -1,4 +1,4 @@
-pub mod compiler;
+mod compiler;
 pub mod error;
-pub mod extract;
-pub mod json_struct;
+mod json_struct;
+pub mod load;
