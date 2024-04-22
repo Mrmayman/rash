@@ -8,19 +8,19 @@ use rash_vm::{
 use serde_json::Value;
 
 use crate::{
-    compiler::{error::CompilerError, variable_manager::VariableIdentifier},
+    compiler::{error::CompilerError, variable_allocator::VariableIdentifier},
     json_struct::JsonBlock,
 };
 
 use self::{
     structures::{CompileResult, ThreadId, ThreadState, ThreadType},
-    variable_manager::VariableAllocator,
+    variable_allocator::VariableAllocator,
 };
 
 mod data_ids;
 pub mod error;
 pub mod structures;
-pub mod variable_manager;
+pub mod variable_allocator;
 
 pub struct Compiler {
     pub thread_id: ThreadId,

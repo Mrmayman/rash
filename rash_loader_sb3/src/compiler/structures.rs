@@ -1,6 +1,6 @@
 use rash_vm::bytecode::instructions::Instruction;
 
-use super::{error::CompilerError, variable_manager::RegisterId};
+use super::{error::CompilerError, variable_allocator::RegisterId};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct ThreadId {

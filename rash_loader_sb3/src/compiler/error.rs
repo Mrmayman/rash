@@ -1,4 +1,4 @@
-use super::variable_manager::{RegisterId, VariableIdentifier};
+use super::variable_allocator::{RegisterId, VariableIdentifier};
 
 #[derive(Debug)]
 pub enum RegisterAction {

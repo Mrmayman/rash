@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 use crate::{
     compiler::{
-        error::CompilerError, structures::ThreadType, variable_manager::VariableIdentifier,
+        error::CompilerError, structures::ThreadType, variable_allocator::VariableIdentifier,
         Compiler,
     },
     error::LoadError,
