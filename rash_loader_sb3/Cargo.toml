@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-zip-extract = "*"
-serde = { version = "*", features = ["serde_derive"] }
-serde_json = "*"
-tempfile = "*"
+zip-extract = "0.1"
+serde = { version = "1", features = ["serde_derive"] }
+serde_json = "1"
+tempfile = "3"
 rash_vm = { path = "../rash_vm" }
+colored = "2"
