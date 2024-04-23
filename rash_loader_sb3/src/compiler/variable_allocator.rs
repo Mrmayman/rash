@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Display};
 
-use rash_vm::data_types::ScratchObject;
+use rash_vm::{bytecode::instructions::DataPointer, data_types::ScratchObject};
 
 use super::{
     error::{CompilerError, RegisterAction},
@@ -18,8 +18,27 @@ pub enum VariableIdentifier {
 
 #[derive(Clone, Copy)]
 pub struct VMid(pub usize);
+
+impl From<VMid> for ScratchObject {
+    fn from(val: VMid) -> Self {
+        ScratchObject::Pointer(val.0)
+    }
+}
+
+impl From<VMid> for DataPointer {
+    fn from(val: VMid) -> Self {
+        DataPointer(val.0)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct RegisterId(pub usize);
+
+impl Display for RegisterId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({})", self.0)
+    }
+}
 
 pub struct VariableAllocator {
     variables: BTreeMap<VariableIdentifier, (VMid, Option<ScratchObject>)>,

@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, io::Read, path::Path};
 
+use colored::Colorize;
 use rash_vm::data_types::ScratchObject;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -13,6 +14,7 @@ use crate::{
     json_struct::{JsonBlock, JsonStruct},
 };
 
+/// The representation of an SB3 Scratch project file.
 pub struct ProjectFile {
     pub temp_dir: TempDir,
     pub json: JsonStruct,
@@ -64,8 +66,14 @@ impl ProjectFile {
                 compiler.thread_id.thread_id = thread_id;
                 compiler.thread_state.instructions.clear();
 
-                ProjectFile::compile_hat_block(hat_block, &mut compiler, &sprite.blocks)?;
-                println!("{:#?}", compiler.thread_state.instructions);
+                if let Err(err) =
+                    ProjectFile::compile_hat_block(hat_block, &mut compiler, &sprite.blocks)
+                {
+                    eprintln!("{} {err}", "[error]".red())
+                }
+                if !compiler.thread_state.instructions.is_empty() {
+                    println!("{:#?}", compiler.thread_state.instructions);
+                }
             }
         }
 
@@ -110,8 +118,10 @@ impl ProjectFile {
                 };
 
                 // 5) Compile the GoTo block.
-                let result = compiler.compile_block(block, &blocks);
-                println!("{result:?}");
+                let result = compiler.compile_block(block, blocks);
+                if let Err(err) = result {
+                    eprintln!("{} {err}", "[error]".red())
+                }
 
                 // 6) id to Hide block.
                 if let JsonBlock::Block { block } = block {

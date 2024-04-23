@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JsonStruct {
     pub targets: Vec<Target>,
     pub monitors: Vec<Monitor>,
@@ -11,7 +11,7 @@ pub struct JsonStruct {
     pub meta: Value,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct Target {
     pub isStage: bool,
@@ -48,7 +48,7 @@ impl Target {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct Block {
     pub opcode: String,
@@ -63,7 +63,7 @@ pub struct Block {
     pub y: Option<f64>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 #[serde(untagged)]
 pub enum JsonBlock {
@@ -89,7 +89,7 @@ impl JsonBlock {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct TargetCostume {
     pub name: String,
@@ -100,7 +100,7 @@ pub struct TargetCostume {
     pub rotationCenterY: f64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct Monitor {
     pub id: String,
@@ -109,8 +109,8 @@ pub struct Monitor {
     pub params: Value,
     pub spriteName: Option<String>,
     pub value: Value,
-    pub width: f64,
-    pub height: f64,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
     pub x: f64,
     pub y: f64,
     pub visible: bool,
@@ -119,13 +119,13 @@ pub struct Monitor {
     pub isDiscrete: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct MonitorParams {
     VARIABLE: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Meta {
     pub semver: String,
     pub vm: String,
