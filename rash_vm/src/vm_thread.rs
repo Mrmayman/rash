@@ -120,12 +120,61 @@ impl Thread {
                     self.killed = true;
                     break;
                 }
+                Instruction::MathUncheckedAdd {
+                    ref a,
+                    ref b,
+                    ref result,
+                } => unsafe {
+                    memory[result.0] = ScratchObject::Number(
+                        a.to_number_unchecked(memory) + b.to_number_unchecked(memory),
+                    );
+                },
+                Instruction::MathUncheckedSubtract {
+                    ref a,
+                    ref b,
+                    ref result,
+                } => unsafe {
+                    memory[result.0] = ScratchObject::Number(
+                        a.to_number_unchecked(memory) - b.to_number_unchecked(memory),
+                    );
+                },
+                Instruction::MathUncheckedMultiply {
+                    ref a,
+                    ref b,
+                    ref result,
+                } => unsafe {
+                    memory[result.0] = ScratchObject::Number(
+                        a.to_number_unchecked(memory) * b.to_number_unchecked(memory),
+                    );
+                },
+                Instruction::MathUncheckedDivide {
+                    ref a,
+                    ref b,
+                    ref result,
+                } => unsafe {
+                    memory[result.0] = ScratchObject::Number(
+                        a.to_number_unchecked(memory) / b.to_number_unchecked(memory),
+                    );
+                },
+                Instruction::MathUncheckedMod {
+                    ref a,
+                    ref b,
+                    ref result,
+                } => unsafe {
+                    memory[result.0] = ScratchObject::Number(
+                        a.to_number_unchecked(memory)
+                            .rem_euclid(b.to_number_unchecked(memory)),
+                    );
+                },
             }
             self.instruction_counter += 1;
         }
     }
 
-    pub fn optimize(&mut self) {
+    pub fn optimize(&mut self, memory: &mut [ScratchObject]) {
+        #[cfg(feature = "jit")]
+        self.jit(memory.as_ptr());
+
         self.flatten_places()
     }
 

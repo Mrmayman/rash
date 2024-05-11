@@ -23,42 +23,37 @@ fn _run() {
             Instruction::JumpDefinePoint {
                 place: JumpPoint(0),
             },
-            Instruction::MathMod {
+            Instruction::MathUncheckedMod {
                 a: ScratchObject::Pointer(3),
                 b: ScratchObject::Number(2.0),
                 result: DataPointer(2),
             },
-            Instruction::MathMultiply {
-                a: ScratchObject::Number(2.0),
+            Instruction::MathUncheckedMultiply {
+                a: ScratchObject::Number(8.0),
                 b: ScratchObject::Pointer(2),
                 result: DataPointer(2),
             },
-            Instruction::MathSubtract {
+            Instruction::MathUncheckedSubtract {
                 a: ScratchObject::Pointer(2),
-                b: ScratchObject::Number(1.0),
+                b: ScratchObject::Number(4.0),
                 result: DataPointer(2),
             },
-            Instruction::MathMultiply {
-                a: ScratchObject::Number(4.0),
-                b: ScratchObject::Pointer(2),
-                result: DataPointer(4),
-            },
-            Instruction::MathDivide {
-                a: ScratchObject::Pointer(4),
+            Instruction::MathUncheckedDivide {
+                a: ScratchObject::Pointer(2),
                 b: ScratchObject::Pointer(1),
-                result: DataPointer(4),
+                result: DataPointer(2),
             },
-            Instruction::MathAdd {
+            Instruction::MathUncheckedAdd {
                 a: ScratchObject::Pointer(0),
-                b: ScratchObject::Pointer(4),
+                b: ScratchObject::Pointer(2),
                 result: DataPointer(0),
             },
-            Instruction::MathAdd {
+            Instruction::MathUncheckedAdd {
                 a: ScratchObject::Pointer(1),
                 b: ScratchObject::Number(2.0),
                 result: DataPointer(1),
             },
-            Instruction::MathAdd {
+            Instruction::MathUncheckedAdd {
                 a: ScratchObject::Pointer(3),
                 b: ScratchObject::Number(1.0),
                 result: DataPointer(3),
@@ -80,7 +75,7 @@ fn _run() {
     let memory: Vec<ScratchObject> = (0..10).map(|n| ScratchObject::Number(n as f64)).collect();
     let mut memory = memory.into_boxed_slice();
 
-    thread.optimize();
+    thread.optimize(&mut memory);
     let instant = Instant::now();
     thread.run(&mut memory);
     println!("Time passed: {}", instant.elapsed().as_secs_f64());
@@ -89,14 +84,15 @@ fn _run() {
 }
 
 fn main() {
-    let mut project = match std::env::args().nth(1) {
-        Some(n) => rash_loader_sb3::ProjectFile::open(&std::path::PathBuf::from(n)),
-        None => {
-            eprintln!("Pass an argument to a project to be run");
-            return;
-        }
-    }
-    .unwrap();
+    _run()
+    // let mut project = match std::env::args().nth(1) {
+    //     Some(n) => rash_loader_sb3::ProjectFile::open(&std::path::PathBuf::from(n)),
+    //     None => {
+    //         eprintln!("Pass an argument to a project to be run");
+    //         return;
+    //     }
+    // }
+    // .unwrap();
 
-    project.load().unwrap();
+    // project.load().unwrap();
 }

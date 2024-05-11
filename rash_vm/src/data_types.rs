@@ -3,6 +3,7 @@
 /// * `to_string() -> String`
 /// * `to_number() -> f64`
 /// * `to_bool() -> bool`
+#[repr(C)]
 pub enum ScratchObject {
     Number(f64),
     String(String),
@@ -59,17 +60,16 @@ impl ScratchObject {
 
         // So, we can just use a different function for pointers.
         // This way, the calling will be:
-        // to_number(pointer) -> to_number_unchecked(*pointer) -> actual value
+        // to_number(pointer) -> to_number_flattened(*pointer) -> actual value
 
         if let ScratchObject::Pointer(ptr) = self {
-            memory[*ptr].to_number_unchecked()
+            memory[*ptr].to_number_inner()
         } else {
-            self.to_number_unchecked()
+            self.to_number_inner()
         }
     }
 
-    #[inline]
-    fn to_number_unchecked(&self) -> f64 {
+    fn to_number_inner(&self) -> f64 {
         match self {
             ScratchObject::Number(number) => *number,
             ScratchObject::String(string) => string.parse().unwrap_or({
@@ -85,6 +85,39 @@ impl ScratchObject {
             }),
             ScratchObject::Bool(boolean) => *boolean as i32 as f64,
             ScratchObject::Pointer(_) => unreachable!(),
+        }
+    }
+
+    /// Extracts a number from a [`ScratchObject::Number`].
+    ///
+    /// # Warning
+    /// Only use this if you are *100% absolutely* sure that
+    /// the data is a Number. If it is a string or bool, it
+    /// won't get converted.
+    ///
+    /// # Safety
+    /// Running this on a String, Bool or Pointer is
+    /// *UNDEFINED BEHAVIOUR* and may cause bugs and crashes.
+    ///
+    /// Let me reiterate, only use this if you're sure the value
+    /// is a number.
+    ///
+    /// # Why?
+    /// Sometimes, if a variable is known to be a number, it
+    /// makes sense to directly extract the [`f64`] from it,
+    /// instead of checking for types and conversions.
+    pub unsafe fn to_number_unchecked(&self, memory: &[ScratchObject]) -> f64 {
+        if let ScratchObject::Pointer(ptr) = self {
+            memory[*ptr].to_number_unchecked_inner()
+        } else {
+            self.to_number_unchecked_inner()
+        }
+    }
+
+    unsafe fn to_number_unchecked_inner(&self) -> f64 {
+        match self {
+            ScratchObject::Number(number) => *number,
+            _ => unreachable!(),
         }
     }
 

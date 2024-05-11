@@ -30,7 +30,17 @@ pub enum Instruction {
         b: ScratchObject,
         result: DataPointer,
     },
+    MathUncheckedAdd {
+        a: ScratchObject,
+        b: ScratchObject,
+        result: DataPointer,
+    },
     MathSubtract {
+        a: ScratchObject,
+        b: ScratchObject,
+        result: DataPointer,
+    },
+    MathUncheckedSubtract {
         a: ScratchObject,
         b: ScratchObject,
         result: DataPointer,
@@ -40,12 +50,27 @@ pub enum Instruction {
         b: ScratchObject,
         result: DataPointer,
     },
+    MathUncheckedMultiply {
+        a: ScratchObject,
+        b: ScratchObject,
+        result: DataPointer,
+    },
     MathDivide {
         a: ScratchObject,
         b: ScratchObject,
         result: DataPointer,
     },
+    MathUncheckedDivide {
+        a: ScratchObject,
+        b: ScratchObject,
+        result: DataPointer,
+    },
     MathMod {
+        a: ScratchObject,
+        b: ScratchObject,
+        result: DataPointer,
+    },
+    MathUncheckedMod {
         a: ScratchObject,
         b: ScratchObject,
         result: DataPointer,
