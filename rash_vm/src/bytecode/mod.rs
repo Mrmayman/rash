@@ -1,10 +1,15 @@
 use std::fmt::Display;
 
+use colored::Colorize;
+
 use crate::data_types::ScratchObject;
 
 /// A struct representing a point in the code to jump or goto to.
 /// Think of it like C goto.
-/// Mostly used for the compiling stage, as it is slow to run.
+/// Only used for the compiling stage, as it is slow to run.
+///
+/// It is replaced with raw jumps that directly change the
+/// program counter, when `thread.flatten_places()` is called.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct JumpPoint(pub usize);
 
@@ -15,7 +20,12 @@ pub struct DataPointer(pub usize);
 
 impl Display for DataPointer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "*{}", self.0)
+        write!(
+            f,
+            "{}{}",
+            "*".purple(),
+            self.0.to_string().bright_purple().bold()
+        )
     }
 }
 
@@ -111,28 +121,48 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::MemSetToValue { ptr, value } => write!(f, "{ptr} = {value}"),
-            Instruction::MathAdd { a, b, result } => write!(f, "{result} = {a} + {b}"),
-            Instruction::MathUncheckedAdd { a, b, result } => write!(f, "{result} = {a} ?+ {b}"),
-            Instruction::MathSubtract { a, b, result } => write!(f, "{result} = {a} - {b}"),
+            Instruction::MemSetToValue { ptr, value } => {
+                write!(f, "{ptr} = {value}")
+            }
+            Instruction::MathAdd { a, b, result } => {
+                write!(f, "{result} = {a} {} {b}", "+".red().bold())
+            }
+            Instruction::MathUncheckedAdd { a, b, result } => {
+                write!(f, "{result} = {a} {}{} {b}", "?".dimmed(), "+".red().bold())
+            }
+            Instruction::MathSubtract { a, b, result } => {
+                write!(f, "{result} = {a} {} {b}", "-".red().bold())
+            }
             Instruction::MathUncheckedSubtract { a, b, result } => {
-                write!(f, "{result} = {a} ?- {b}")
+                write!(f, "{result} = {a} {}{} {b}", "?".dimmed(), "-".red().bold())
             }
             Instruction::MathMultiply { a, b, result } => write!(f, "{result} = {a} * {b}"),
             Instruction::MathUncheckedMultiply { a, b, result } => {
-                write!(f, "{result} = {a} ?* {b}")
+                write!(f, "{result} = {a} {}{} {b}", "?".dimmed(), "*".red().bold())
             }
             Instruction::MathDivide { a, b, result } => write!(f, "{result} = {a} / {b}"),
             Instruction::MathUncheckedDivide { a, b, result } => {
-                write!(f, "{result} = {a} ?/ {b}")
+                write!(f, "{result} = {a} {}{} {b}", "?".dimmed(), "/".red().bold())
             }
             Instruction::MathMod { a, b, result } => write!(f, "{result} = {a} % {b}"),
-            Instruction::MathUncheckedMod { a, b, result } => write!(f, "{result} = {a} ?% {b}"),
+            Instruction::MathUncheckedMod { a, b, result } => {
+                write!(f, "{result} = {a} {}{} {b}", "?".dimmed(), "%".red().bold())
+            }
             Instruction::CompGreater { a, b, result } => write!(f, "{result} = {a} > {b}"),
             Instruction::CompLesser { a, b, result } => write!(f, "{result} = {a} < {b}"),
-            Instruction::JumpDefinePoint { place } => write!(f, "BLOCK_{}:", place.0),
+            Instruction::JumpDefinePoint { place } => write!(
+                f,
+                "{}{}:",
+                "BLOCK_".underline().bold(),
+                place.0.to_string().bold().underline()
+            ),
             Instruction::JumpToPointIfTrue { place, condition } => {
-                write!(f, "if {condition} goto BLOCK_{}", place.0)
+                write!(
+                    f,
+                    "if {condition} goto {}{}",
+                    "BLOCK_".bold().underline(),
+                    place.0.to_string().underline().bold()
+                )
             }
             Instruction::JumpToRawLocationIfTrue {
                 location,

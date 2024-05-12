@@ -1,4 +1,4 @@
-use rash_vm::bytecode::instructions::Instruction;
+use rash_vm::bytecode::Instruction;
 
 use super::{error::CompilerError, variable_allocator::RegisterId};
 

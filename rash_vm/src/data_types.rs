@@ -1,3 +1,5 @@
+use colored::Colorize;
+
 /// The enum variant data type used to represent dynamically typed objects in the interpreter.
 /// # Conversion
 /// * `to_string() -> String`
@@ -27,10 +29,27 @@ impl Clone for ScratchObject {
 impl std::fmt::Debug for ScratchObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Number(n) => write!(f, "({})", n),
-            Self::String(s) => write!(f, "\"{}\"", s),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Pointer(p) => write!(f, "*{}", p),
+            Self::Number(n) => write!(
+                f,
+                "{}{}{}",
+                "(".green(),
+                n.to_string().bright_green().bold(),
+                ")".green()
+            ),
+            Self::String(s) => write!(
+                f,
+                "{}{}{}",
+                "\"".yellow(),
+                s.bright_yellow().bold(),
+                "\"".yellow()
+            ),
+            Self::Bool(b) => write!(f, "{}", b.to_string().cyan()),
+            Self::Pointer(p) => write!(
+                f,
+                "{}{}",
+                "*".purple(),
+                p.to_string().bright_purple().bold()
+            ),
         }
     }
 }

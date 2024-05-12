@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use rash_vm::{
-    bytecode::instructions::{DataPointer, Instruction, JumpPoint},
+    bytecode::{DataPointer, Instruction, JumpPoint},
     data_types::ScratchObject,
 };
 

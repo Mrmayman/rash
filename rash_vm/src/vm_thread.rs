@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    bytecode::instructions::{Instruction, JumpPoint},
+    bytecode::{Instruction, JumpPoint},
     data_types::ScratchObject,
 };
 

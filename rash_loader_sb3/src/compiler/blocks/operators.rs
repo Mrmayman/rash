@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use rash_vm::bytecode::instructions::{DataPointer, Instruction};
+use rash_vm::bytecode::{DataPointer, Instruction};
 
 use crate::{
     compiler::{structures::CompileResult, Compiler},

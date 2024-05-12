@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display};
 
-use rash_vm::{bytecode::instructions::DataPointer, data_types::ScratchObject};
+use rash_vm::{bytecode::DataPointer, data_types::ScratchObject};
 
 use super::{
     error::{CompilerError, RegisterAction},

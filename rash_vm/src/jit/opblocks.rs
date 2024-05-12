@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 
-use crate::bytecode::instructions::Instruction;
+use crate::bytecode::{Instruction, JumpPoint};
 
 pub enum OpBlock {
     NormalCode { code: Vec<Instruction> },
@@ -35,8 +37,58 @@ impl OpBuffer {
         self.blocks.push(OpBlock::FlowStop { is_kill: kill });
     }
 
+    pub fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
     pub fn finish(self) -> Vec<OpBlock> {
         self.blocks
+    }
+
+    /// By default, [`Instruction::JumpToPointIfTrue`] jumps to the code-block based
+    /// on the internal id given by the interpreter.
+    /// However we need to change this to an ID that cranelift is happy with.
+    pub fn fix_jumps(&mut self, block_lookup: &HashMap<JumpPoint, Option<usize>>) {
+        // If an error happens, we can't borrow self to print it because
+        // we are mutable looping over self.blocks.
+        // So we get the debug print value beforehand.
+        let debug_print = format!("{self:?}");
+
+        self.blocks
+            // 1) Loop over all the code-blocks mutably.
+            .iter_mut()
+            // 2) We only need the normal blocks, not the special ones
+            // that mark a thread pause/end.
+            .filter_map(|block| {
+                if let OpBlock::NormalCode { code } = block {
+                    Some(code)
+                } else {
+                    None
+                }
+            })
+            // 3) Go through every normal code block
+            .for_each(|code| {
+                // a) For every instruction in a code block...
+                code.iter_mut()
+                    // b) Filter out the Instruction::JumpToPointIfTrue as
+                    //    that's what we want to fix.
+                    .filter_map(|instruction| {
+                        if let Instruction::JumpToPointIfTrue { place, .. } = instruction {
+                            Some(place)
+                        } else {
+                            None
+                        }
+                    })
+                    // c) For every jump point taken from Instruction::JumpToPointIfTrue...
+                    .for_each(|point| match block_lookup.get(point) {
+                        // d) Get the cranelift-compatible code-block id from the HashMap.
+                        Some(Some(n)) => *point = JumpPoint(*n),
+                        _ => {
+                            // TODO: Better error handling.
+                            eprintln!("[error] JIT: jump block not defined\n\n{debug_print}")
+                        }
+                    });
+            });
     }
 }
 

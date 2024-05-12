@@ -2,7 +2,7 @@ mod blocks;
 use std::collections::BTreeMap;
 
 use rash_vm::{
-    bytecode::instructions::{DataPointer, Instruction},
+    bytecode::{DataPointer, Instruction},
     data_types::ScratchObject,
 };
 use serde_json::Value;
