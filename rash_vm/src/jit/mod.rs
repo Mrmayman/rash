@@ -2,12 +2,18 @@ use cranelift::{codegen::CodegenError, prelude::*};
 
 use crate::{bytecode::instructions::Instruction, data_types::ScratchObject, vm_thread::Thread};
 
-use self::opblocks::OpBuffer;
+use self::opblocks::{OpBlock, OpBuffer};
 
 mod opblocks;
 
 impl Thread {
     pub fn jit(&mut self, memory: *const ScratchObject) -> Result<(), JitError> {
+        let blocks = self.split_into_blocks()?;
+
+        Ok(())
+    }
+
+    fn split_into_blocks(&self) -> Result<Vec<OpBlock>, JitError> {
         let mut buffer = OpBuffer::new();
 
         for instruction in self.code.iter() {
@@ -36,10 +42,7 @@ impl Thread {
         }
 
         println!("{buffer:?}");
-
-        let blocks = buffer.finish();
-
-        Ok(())
+        Ok(buffer.finish())
     }
 }
 

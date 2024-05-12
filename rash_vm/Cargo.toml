@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 cranelift = { version = "0.89", optional = true }
 target-lexicon = { version = "0.12", optional = true }
+colored = "2"
 
 [features]
 default = ["jit"]

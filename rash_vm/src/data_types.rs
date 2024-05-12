@@ -35,8 +35,14 @@ impl std::fmt::Debug for ScratchObject {
     }
 }
 
+impl std::fmt::Display for ScratchObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self, f)
+    }
+}
+
 impl ScratchObject {
-    /// Gets a number from a DataValue using implicit convertion.
+    /// Gets a number from a ScratchObject using implicit convertion.
     /// Supports `0x` hexadecimal and `0b` binary literal strings.
     /// # Examples
     /// * `Number(2.0) -> 2.0`
@@ -121,7 +127,7 @@ impl ScratchObject {
         }
     }
 
-    /// Gets a bool from a DataValue using implicit convertion.
+    /// Gets a bool from a ScratchObject using implicit convertion.
     /// # Rules
     /// * All non zero and NaN numbers are truthy.
     /// * All strings except for "false" and "0" are truthy.

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::data_types::ScratchObject;
 
 /// A struct representing a point in the code to jump or goto to.
@@ -10,6 +12,12 @@ pub struct JumpPoint(pub usize);
 /// It's just an index to the array of VM memory.
 #[derive(Clone, Debug)]
 pub struct DataPointer(pub usize);
+
+impl Display for DataPointer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "*{}", self.0)
+    }
+}
 
 /// The bytecode instructions.
 /// This is what the VM runs.
@@ -98,4 +106,40 @@ pub enum Instruction {
     },
     ThreadPause,
     ThreadKill,
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Instruction::MemSetToValue { ptr, value } => write!(f, "{ptr} = {value}"),
+            Instruction::MathAdd { a, b, result } => write!(f, "{result} = {a} + {b}"),
+            Instruction::MathUncheckedAdd { a, b, result } => write!(f, "{result} = {a} ?+ {b}"),
+            Instruction::MathSubtract { a, b, result } => write!(f, "{result} = {a} - {b}"),
+            Instruction::MathUncheckedSubtract { a, b, result } => {
+                write!(f, "{result} = {a} ?- {b}")
+            }
+            Instruction::MathMultiply { a, b, result } => write!(f, "{result} = {a} * {b}"),
+            Instruction::MathUncheckedMultiply { a, b, result } => {
+                write!(f, "{result} = {a} ?* {b}")
+            }
+            Instruction::MathDivide { a, b, result } => write!(f, "{result} = {a} / {b}"),
+            Instruction::MathUncheckedDivide { a, b, result } => {
+                write!(f, "{result} = {a} ?/ {b}")
+            }
+            Instruction::MathMod { a, b, result } => write!(f, "{result} = {a} % {b}"),
+            Instruction::MathUncheckedMod { a, b, result } => write!(f, "{result} = {a} ?% {b}"),
+            Instruction::CompGreater { a, b, result } => write!(f, "{result} = {a} > {b}"),
+            Instruction::CompLesser { a, b, result } => write!(f, "{result} = {a} < {b}"),
+            Instruction::JumpDefinePoint { place } => write!(f, "BLOCK_{}:", place.0),
+            Instruction::JumpToPointIfTrue { place, condition } => {
+                write!(f, "if {condition} goto BLOCK_{}", place.0)
+            }
+            Instruction::JumpToRawLocationIfTrue {
+                location,
+                condition,
+            } => write!(f, "if {condition} goto (*{location})"),
+            Instruction::ThreadPause => write!(f, "SCREEN_REFRESH"),
+            Instruction::ThreadKill => write!(f, "THREAD_END"),
+        }
+    }
 }

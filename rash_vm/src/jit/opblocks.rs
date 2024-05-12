@@ -1,3 +1,5 @@
+use colored::Colorize;
+
 use crate::bytecode::instructions::Instruction;
 
 pub enum OpBlock {
@@ -42,11 +44,15 @@ impl std::fmt::Debug for OpBuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::new();
         for (block_i, block) in self.blocks.iter().enumerate() {
-            buf.push_str(&format!("block{block_i}:\n"));
+            buf.push_str(&format!(
+                "{}{}:\n",
+                "block".blue(),
+                block_i.to_string().bright_blue().bold()
+            ));
             match block {
                 OpBlock::NormalCode { code } => {
                     for instruction in code {
-                        buf.push_str(&format!("    {instruction:?}\n"));
+                        buf.push_str(&format!("    {instruction}\n"));
                     }
                     buf.push('\n');
                 }
