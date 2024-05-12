@@ -173,7 +173,11 @@ impl Thread {
 
     pub fn optimize(&mut self, memory: &mut [ScratchObject]) {
         #[cfg(feature = "jit")]
-        self.jit(memory.as_ptr());
+        {
+            if let Err(err) = self.jit(memory.as_ptr()) {
+                eprintln!("[error] JIT error: {err:?}");
+            }
+        }
 
         self.flatten_places()
     }

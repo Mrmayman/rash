@@ -27,7 +27,7 @@ impl Clone for ScratchObject {
 impl std::fmt::Debug for ScratchObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Number(n) => write!(f, "{}", n),
+            Self::Number(n) => write!(f, "({})", n),
             Self::String(s) => write!(f, "\"{}\"", s),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Pointer(p) => write!(f, "*{}", p),

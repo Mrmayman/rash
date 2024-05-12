@@ -3,7 +3,7 @@ use crate::data_types::ScratchObject;
 /// A struct representing a point in the code to jump or goto to.
 /// Think of it like C goto.
 /// Mostly used for the compiling stage, as it is slow to run.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct JumpPoint(pub usize);
 
 /// A pointer to data.
