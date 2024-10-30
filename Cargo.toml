@@ -1,3 +1,3 @@
 [workspace]
 
-members = ["rash", "rash_loader_sb3", "rash_vm"]
+members = ["rash"]
