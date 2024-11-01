@@ -1,4 +1,5 @@
 mod cranelift_test;
+mod data_types;
 mod json;
 
 fn main() {
