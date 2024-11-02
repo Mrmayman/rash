@@ -10,13 +10,13 @@ pub enum ScratchObject {
     Number(f64),
     String(String),
     Bool(bool),
-    Pointer(usize),
+    // Pointer(usize),
 }
 
 pub const ID_NUMBER: usize = 0;
 pub const ID_STRING: usize = 1;
 pub const ID_BOOL: usize = 2;
-pub const ID_POINTER: usize = 3;
+// pub const ID_POINTER: usize = 3;
 
 // I know #[derive(Clone)] does the same thing.
 // But this made it faster by 20 milliseconds
@@ -26,7 +26,7 @@ impl Clone for ScratchObject {
             Self::Number(arg0) => Self::Number(arg0),
             Self::String(ref arg0) => Self::String(arg0.to_owned()),
             Self::Bool(arg0) => Self::Bool(arg0),
-            Self::Pointer(arg0) => Self::Pointer(arg0),
+            // Self::Pointer(arg0) => Self::Pointer(arg0),
         }
     }
 }
@@ -49,12 +49,12 @@ impl std::fmt::Debug for ScratchObject {
                 "\"".yellow()
             ),
             Self::Bool(b) => write!(f, "{}", b.to_string().cyan()),
-            Self::Pointer(p) => write!(
-                f,
-                "{}{}",
-                "*".purple(),
-                p.to_string().bright_purple().bold()
-            ),
+            // Self::Pointer(p) => write!(
+            //     f,
+            //     "{}{}",
+            //     "*".purple(),
+            //     p.to_string().bright_purple().bold()
+            // ),
         }
     }
 }
@@ -63,6 +63,12 @@ impl std::fmt::Display for ScratchObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self, f)
     }
+}
+
+pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
+    // transmute the i64 to ScratchObject
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    obj.to_number()
 }
 
 impl ScratchObject {
@@ -75,7 +81,7 @@ impl ScratchObject {
     /// * `String("0b10") -> 2.0`
     /// * `String("something") -> 0.0` (a default value if not valid)
     /// * `Bool(true) -> 1.0`
-    pub fn to_number(&self, memory: &[ScratchObject]) -> f64 {
+    pub fn to_number(&self) -> f64 {
         // Why two functions?
         // If I just use one function `to_number()` for everything,
         // then if a pointer is hit, it would call to_number()
@@ -92,11 +98,11 @@ impl ScratchObject {
         // This way, the calling will be:
         // to_number(pointer) -> to_number_flattened(*pointer) -> actual value
 
-        if let ScratchObject::Pointer(ptr) = self {
-            memory[*ptr].to_number_inner()
-        } else {
-            self.to_number_inner()
-        }
+        // if let ScratchObject::Pointer(ptr) = self {
+        // memory[*ptr].to_number_inner()
+        // } else {
+        self.to_number_inner()
+        // }
     }
 
     fn to_number_inner(&self) -> f64 {
@@ -114,42 +120,42 @@ impl ScratchObject {
                 }
             }),
             ScratchObject::Bool(boolean) => *boolean as i32 as f64,
-            ScratchObject::Pointer(_) => unreachable!(),
+            // ScratchObject::Pointer(_) => unreachable!(),
         }
     }
 
-    /// Extracts a number from a [`ScratchObject::Number`].
-    ///
-    /// # Warning
-    /// Only use this if you are *100% absolutely* sure that
-    /// the data is a Number. If it is a string or bool, it
-    /// won't get converted.
-    ///
-    /// # Safety
-    /// Running this on a String, Bool or Pointer is
-    /// *UNDEFINED BEHAVIOUR* and may cause bugs and crashes.
-    ///
-    /// Let me reiterate, only use this if you're sure the value
-    /// is a number.
-    ///
-    /// # Why?
-    /// Sometimes, if a variable is known to be a number, it
-    /// makes sense to directly extract the [`f64`] from it,
-    /// instead of checking for types and conversions.
-    pub unsafe fn to_number_unchecked(&self, memory: &[ScratchObject]) -> f64 {
-        if let ScratchObject::Pointer(ptr) = self {
-            memory[*ptr].to_number_unchecked_inner()
-        } else {
-            self.to_number_unchecked_inner()
-        }
-    }
+    // /// Extracts a number from a [`ScratchObject::Number`].
+    // ///
+    // /// # Warning
+    // /// Only use this if you are *100% absolutely* sure that
+    // /// the data is a Number. If it is a string or bool, it
+    // /// won't get converted.
+    // ///
+    // /// # Safety
+    // /// Running this on a String, Bool or Pointer is
+    // /// *UNDEFINED BEHAVIOUR* and may cause bugs and crashes.
+    // ///
+    // /// Let me reiterate, only use this if you're sure the value
+    // /// is a number.
+    // ///
+    // /// # Why?
+    // /// Sometimes, if a variable is known to be a number, it
+    // /// makes sense to directly extract the [`f64`] from it,
+    // /// instead of checking for types and conversions.
+    // pub unsafe fn to_number_unchecked(&self) -> f64 {
+    //     // if let ScratchObject::Pointer(ptr) = self {
+    //     // memory[*ptr].to_number_unchecked_inner()
+    //     // } else {
+    //     self.to_number_unchecked_inner()
+    //     // }
+    // }
 
-    unsafe fn to_number_unchecked_inner(&self) -> f64 {
-        match self {
-            ScratchObject::Number(number) => *number,
-            _ => unreachable!(),
-        }
-    }
+    // unsafe fn to_number_unchecked_inner(&self) -> f64 {
+    //     match self {
+    //         ScratchObject::Number(number) => *number,
+    //         _ => unreachable!(),
+    //     }
+    // }
 
     /// Gets a bool from a ScratchObject using implicit convertion.
     /// # Rules
@@ -167,17 +173,17 @@ impl ScratchObject {
     /// * `String("0.0") -> true`
     /// * `Bool(true) -> true`
     /// * `Bool(false) -> false`
-    pub fn to_bool(&self, memory: &[ScratchObject]) -> bool {
+    pub fn to_bool(&self) -> bool {
         // We don't use the above trick because it's slower here?
         match self {
             ScratchObject::Number(n) => *n != 0.0 && !n.is_nan(),
             ScratchObject::String(s) => s != "0" && s != "false",
             ScratchObject::Bool(b) => *b,
-            ScratchObject::Pointer(p) => memory[*p].to_bool(memory),
+            // ScratchObject::Pointer(p) => memory[*p].to_bool(memory),
         }
     }
 
-    pub fn to_string(&self, memory: &[ScratchObject]) -> String {
+    pub fn to_string(&self) -> String {
         // If number is bigger than this then represent as exponentials.
         const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
         // If number is smaller than this then represent as exponentials.
@@ -206,7 +212,7 @@ impl ScratchObject {
             }
             ScratchObject::String(s) => s.to_owned(), // Faster than s.to_string()
             ScratchObject::Bool(b) => b.to_string(),
-            ScratchObject::Pointer(p) => memory[*p].to_string(memory),
+            // ScratchObject::Pointer(p) => memory[*p].to_string(memory),
         }
     }
 }
@@ -225,83 +231,47 @@ mod tests {
 
     #[test]
     fn conversion_bool() {
-        let memory: [ScratchObject; 0] = [];
+        // let memory: [ScratchObject; 0] = [];
 
-        assert_eq!(
-            ScratchObject::String("true".to_owned()).to_bool(&memory),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("false".to_owned()).to_bool(&memory),
-            false
-        );
+        assert_eq!(ScratchObject::String("true".to_owned()).to_bool(), true);
+        assert_eq!(ScratchObject::String("false".to_owned()).to_bool(), false);
 
-        assert_eq!(ScratchObject::String("1".to_owned()).to_bool(&memory), true);
-        assert_eq!(
-            ScratchObject::String("0".to_owned()).to_bool(&memory),
-            false
-        );
+        assert_eq!(ScratchObject::String("1".to_owned()).to_bool(), true);
+        assert_eq!(ScratchObject::String("0".to_owned()).to_bool(), false);
 
-        assert_eq!(
-            ScratchObject::String("1.0".to_owned()).to_bool(&memory),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("0.0".to_owned()).to_bool(&memory),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("-1".to_owned()).to_bool(&memory),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("-1.0".to_owned()).to_bool(&memory),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("0e10".to_owned()).to_bool(&memory),
-            true
-        );
+        assert_eq!(ScratchObject::String("1.0".to_owned()).to_bool(), true);
+        assert_eq!(ScratchObject::String("0.0".to_owned()).to_bool(), true);
+        assert_eq!(ScratchObject::String("-1".to_owned()).to_bool(), true);
+        assert_eq!(ScratchObject::String("-1.0".to_owned()).to_bool(), true);
+        assert_eq!(ScratchObject::String("0e10".to_owned()).to_bool(), true);
     }
 
     #[test]
     fn conversion_number() {
-        let memory: [ScratchObject; 0] = [];
+        // let memory: [ScratchObject; 0] = [];
 
-        assert_eq!(ScratchObject::Number(69.0).to_number(&memory), 69.0);
-        assert_eq!(
-            ScratchObject::String("69.0".to_owned()).to_number(&memory),
-            69.0
-        );
+        assert_eq!(ScratchObject::Number(69.0).to_number(), 69.0);
+        assert_eq!(ScratchObject::String("69.0".to_owned()).to_number(), 69.0);
 
+        assert_eq!(ScratchObject::String("1e3".to_owned()).to_number(), 1000.0);
         assert_eq!(
-            ScratchObject::String("1e3".to_owned()).to_number(&memory),
-            1000.0
-        );
-        assert_eq!(
-            ScratchObject::String("1.2e3".to_owned()).to_number(&memory),
+            ScratchObject::String("1.2e3".to_owned()).to_number(),
             1200.0
         );
 
-        assert_eq!(
-            ScratchObject::String("0x10".to_owned()).to_number(&memory),
-            16.0
-        );
-        assert_eq!(
-            ScratchObject::String("0b10".to_owned()).to_number(&memory),
-            2.0
-        );
+        assert_eq!(ScratchObject::String("0x10".to_owned()).to_number(), 16.0);
+        assert_eq!(ScratchObject::String("0b10".to_owned()).to_number(), 2.0);
     }
 
     #[test]
     fn conversion_string() {
-        let memory: [ScratchObject; 0] = [];
+        // let memory: [ScratchObject; 0] = [];
 
-        assert_eq!(ScratchObject::Number(6.9).to_string(&memory), "6.9");
-        assert_eq!(ScratchObject::Number(2e22).to_string(&memory), "2e+22");
-        assert_eq!(ScratchObject::Number(2e-22).to_string(&memory), "2e-22");
+        assert_eq!(ScratchObject::Number(6.9).to_string(), "6.9");
+        assert_eq!(ScratchObject::Number(2e22).to_string(), "2e+22");
+        assert_eq!(ScratchObject::Number(2e-22).to_string(), "2e-22");
 
-        assert_eq!(ScratchObject::Bool(true).to_string(&memory), "true");
-        assert_eq!(ScratchObject::Bool(false).to_string(&memory), "false");
+        assert_eq!(ScratchObject::Bool(true).to_string(), "true");
+        assert_eq!(ScratchObject::Bool(false).to_string(), "false");
     }
 }

@@ -1,7 +1,9 @@
-mod cranelift_test;
+mod compiler;
 mod data_types;
+mod input_primitives;
+mod ins_shortcuts;
 mod json;
 
 fn main() {
-    cranelift_test::c_main();
+    compiler::c_main();
 }
