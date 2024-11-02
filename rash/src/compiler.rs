@@ -6,10 +6,11 @@ use cranelift::prelude::*;
 use isa::CallConv;
 use lazy_static::lazy_static;
 use target_lexicon::Triple;
-use types::I64;
+use types::{F64, I64};
 
 use crate::{
-    data_types::{ScratchObject, ID_NUMBER},
+    callbacks,
+    data_types::{self, ScratchObject, ID_NUMBER, ID_STRING},
     input_primitives::{Input, Ptr, ReturnValue},
     ins_shortcuts::{ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string},
 };
@@ -27,11 +28,13 @@ pub struct Compiler {
 #[derive(Debug)]
 pub enum ScratchBlock {
     WhenFlagClicked,
-    SetVar(Ptr, Input),
+    VarSet(Ptr, Input),
+    VarRead(Ptr),
     OpAdd(Input, Input),
     OpSub(Input, Input),
     OpMul(Input, Input),
     OpDiv(Input, Input),
+    OpJoin(Input, Input),
 }
 
 struct CodeSprite {
@@ -75,11 +78,14 @@ impl Compiler {
         let code_sprites = vec![CodeSprite {
             scripts: vec![vec![
                 ScratchBlock::WhenFlagClicked,
-                ScratchBlock::SetVar(Ptr(0), Input::Obj(ScratchObject::Number(2.0))),
-                ScratchBlock::SetVar(Ptr(1), Input::Obj(ScratchObject::Bool(true))),
-                ScratchBlock::SetVar(Ptr(2), Input::Obj(ScratchObject::Bool(false))),
-                ScratchBlock::SetVar(Ptr(3), Input::Obj(ScratchObject::String("Hey".to_owned()))),
-                ScratchBlock::SetVar(
+                ScratchBlock::VarSet(Ptr(0), Input::Obj(ScratchObject::Number(2.0))),
+                ScratchBlock::VarSet(Ptr(1), Input::Obj(ScratchObject::Bool(true))),
+                ScratchBlock::VarSet(Ptr(2), Input::Obj(ScratchObject::Bool(false))),
+                ScratchBlock::VarSet(
+                    Ptr(3),
+                    Input::Obj(ScratchObject::String("192.0".to_owned())),
+                ),
+                ScratchBlock::VarSet(
                     Ptr(4),
                     Input::Block(Box::new(ScratchBlock::OpAdd(
                         Input::Obj(ScratchObject::Number(2.0)),
@@ -89,7 +95,7 @@ impl Compiler {
                         ))),
                     ))),
                 ),
-                ScratchBlock::SetVar(
+                ScratchBlock::VarSet(
                     Ptr(5),
                     Input::Block(Box::new(ScratchBlock::OpSub(
                         Input::Obj(ScratchObject::Number(2.0)),
@@ -99,17 +105,14 @@ impl Compiler {
                         ))),
                     ))),
                 ),
-                ScratchBlock::SetVar(
+                ScratchBlock::VarSet(
                     Ptr(6),
                     Input::Block(Box::new(ScratchBlock::OpAdd(
                         Input::Block(Box::new(ScratchBlock::OpAdd(
                             Input::Obj(ScratchObject::Bool(true)),
                             Input::Obj(ScratchObject::Bool(true)),
                         ))),
-                        Input::Block(Box::new(ScratchBlock::OpMul(
-                            Input::Obj(ScratchObject::String("3.0".to_owned())),
-                            Input::Obj(ScratchObject::Number(4.0)),
-                        ))),
+                        Input::Block(Box::new(ScratchBlock::VarRead(Ptr(3)))),
                     ))),
                 ),
             ]],
@@ -141,6 +144,7 @@ impl Compiler {
 
                 let mut ctx = codegen::Context::for_function(func);
                 let mut plane = ControlPlane::default();
+
                 let code = ctx.compile(&*isa, &mut plane).unwrap();
 
                 let mut buffer = memmap2::MmapOptions::new()
@@ -149,6 +153,16 @@ impl Compiler {
                     .unwrap();
 
                 buffer.copy_from_slice(code.code_buffer());
+
+                let ptr = buffer.as_ptr();
+                let bytes = unsafe { std::slice::from_raw_parts(ptr, code.code_buffer().len()) };
+
+                std::fs::write("/home/mrmayman/Desktop/func.bin", bytes).unwrap();
+
+                for (_i, byte) in bytes.iter().enumerate() {
+                    print!("{:#04x} ", byte);
+                }
+                println!();
 
                 let buffer = buffer.make_exec().unwrap();
 
@@ -168,7 +182,7 @@ pub fn compile_block(
 ) -> Option<ReturnValue> {
     match block {
         ScratchBlock::WhenFlagClicked => {}
-        ScratchBlock::SetVar(ptr, obj) => {
+        ScratchBlock::VarSet(ptr, obj) => {
             match obj {
                 Input::Obj(obj) => match obj {
                     ScratchObject::Number(num) => {
@@ -208,6 +222,24 @@ pub fn compile_block(
                             builder.ins().store(MemFlags::new(), i3, mem_ptr, 16);
                             builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
                         }
+                        ReturnValue::ObjectPointer(value) => {
+                            // read 4 i64 from pointer
+                            let i1 = builder.ins().load(I64, MemFlags::new(), value, 0);
+                            let i2 = builder.ins().load(I64, MemFlags::new(), value, 8);
+                            let i3 = builder.ins().load(I64, MemFlags::new(), value, 16);
+                            let i4 = builder.ins().load(I64, MemFlags::new(), value, 24);
+
+                            let mem_ptr = builder.ins().iconst(
+                                I64,
+                                MEMORY.as_ptr() as i64
+                                    + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
+                            );
+
+                            builder.ins().store(MemFlags::new(), i1, mem_ptr, 0);
+                            builder.ins().store(MemFlags::new(), i2, mem_ptr, 8);
+                            builder.ins().store(MemFlags::new(), i3, mem_ptr, 16);
+                            builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
+                        }
                     }
                 }
             };
@@ -236,6 +268,65 @@ pub fn compile_block(
             let res = builder.ins().fdiv(a, b);
             return Some(ReturnValue::Num(res));
         }
+        ScratchBlock::VarRead(ptr) => {
+            let func = builder.ins().iconst(I64, callbacks::var_read as i64);
+            let sig = builder.import_signature({
+                let mut sig = Signature::new(CallConv::SystemV);
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig
+            });
+            let mem_ptr = builder.ins().iconst(
+                I64,
+                MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
+            );
+            let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                4 * std::mem::size_of::<i64>() as u32,
+                8,
+            ));
+            let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
+
+            builder
+                .ins()
+                .call_indirect(sig, func, &[mem_ptr, stack_ptr]);
+            // let results = builder.inst_results(num);
+            return Some(ReturnValue::ObjectPointer(stack_ptr));
+            // let obj = ScratchObject::Number(3.0);
+            // let transmuted_obj: [i64; 4] = unsafe { std::mem::transmute(obj) };
+            // let i1 = builder.ins().iconst(I64, transmuted_obj[0]);
+            // let i2 = builder.ins().iconst(I64, transmuted_obj[1]);
+            // let i3 = builder.ins().iconst(I64, transmuted_obj[2]);
+            // let i4 = builder.ins().iconst(I64, transmuted_obj[3]);
+            // return Some(ReturnValue::Object((i1, i2, i3, i4)));
+        }
+        ScratchBlock::OpJoin(a, b) => {
+            let a = a.get_string(builder);
+            let b = b.get_string(builder);
+
+            let func = builder.ins().iconst(I64, callbacks::op_join_string as i64);
+            let sig = builder.import_signature({
+                let mut sig = Signature::new(CallConv::SystemV);
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.returns.push(AbiParam::new(I64));
+                sig.returns.push(AbiParam::new(I64));
+                sig.returns.push(AbiParam::new(I64));
+                sig
+            });
+            let id = builder.ins().iconst(I64, ID_STRING as i64);
+            let num = builder
+                .ins()
+                .call_indirect(sig, func, &[a.0, a.1, a.2, b.0, b.1, b.2]);
+            let results = builder.inst_results(num);
+            return Some(ReturnValue::Object((
+                id, results[0], results[1], results[2],
+            )));
+        }
     }
     None
 }
@@ -243,6 +334,19 @@ pub fn compile_block(
 pub fn c_main() {
     // let arg1 = std::env::args().nth(1).unwrap();
     // println!("opening dir {arg1}");
+    println!("var_read: {:X}", callbacks::var_read as i64);
+    println!("op_join_string: {:X}", callbacks::op_join_string as i64);
+    println!(
+        "to_string_from_num: {:X}",
+        data_types::to_string_from_num as i64
+    );
+    println!("to_string: {:X}", data_types::to_string as i64);
+    println!(
+        "to_string_from_bool: {:X}",
+        data_types::to_string_from_bool as i64
+    );
+    println!("to_number: {:X}", data_types::to_number as i64);
+
     let compiler = Compiler::new();
     compiler.compile();
 

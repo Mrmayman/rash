@@ -65,10 +65,42 @@ impl std::fmt::Display for ScratchObject {
     }
 }
 
+#[repr(C)]
+pub struct ScratchObjectBytes {
+    i1: i64,
+    i2: i64,
+    i3: i64,
+    i4: i64,
+}
+
 pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
-    // transmute the i64 to ScratchObject
+    println!("converting to number - id: {i1}");
+    println!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
+    println!("hex: {:X} {:X}", i1 << 32, i2 << 32);
+    debug_assert!(i1 < 4);
+    debug_assert!(i1 >= 0);
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
     obj.to_number()
+}
+
+pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64) -> ScratchObjectBytes {
+    debug_assert!(i1 < 4);
+    debug_assert!(i1 > 0);
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let string = obj.to_string();
+    unsafe { std::mem::transmute(ScratchObject::String(string)) }
+}
+
+pub extern "C" fn to_string_from_num(i1: f64) -> ScratchObjectBytes {
+    let obj = ScratchObject::Number(i1);
+    let string = obj.to_string();
+    unsafe { std::mem::transmute(ScratchObject::String(string)) }
+}
+
+pub extern "C" fn to_string_from_bool(i1: i64) -> ScratchObjectBytes {
+    let obj = ScratchObject::Bool(i1 != 0);
+    let string = obj.to_string();
+    unsafe { std::mem::transmute(ScratchObject::String(string)) }
 }
 
 impl ScratchObject {

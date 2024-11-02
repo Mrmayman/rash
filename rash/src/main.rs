@@ -1,3 +1,4 @@
+mod callbacks;
 mod compiler;
 mod data_types;
 mod input_primitives;
