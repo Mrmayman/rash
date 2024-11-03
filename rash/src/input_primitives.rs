@@ -1,3 +1,4 @@
+use codegen::ir::StackSlot;
 use cranelift::prelude::*;
 use isa::CallConv;
 use types::{F64, I32, I64};
@@ -66,11 +67,12 @@ impl Input {
     }
 }
 
+#[derive(Debug)]
 pub enum ReturnValue {
     Num(Value),
     Bool(Value),
     Object((Value, Value, Value, Value)),
-    ObjectPointer(Value),
+    ObjectPointer(Value, StackSlot),
 }
 
 impl ReturnValue {
@@ -82,17 +84,17 @@ impl ReturnValue {
                 builder.inst_results(num)[0]
             }
             ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
-            ReturnValue::ObjectPointer(value) => {
+            ReturnValue::ObjectPointer(value, slot) => {
                 // Get 4 i64 from pointer
 
                 // The "tag" of a Rust enum is surprisingly i32 but aligned as i64
                 // So we must load an i32 and convert it to i64
-                let i1 = builder.ins().load(I32, MemFlags::new(), value, 0);
+                let i1 = builder.ins().stack_load(I32, slot, 0);
                 let i1 = builder.ins().sextend(I64, i1);
 
-                let i2 = builder.ins().load(I64, MemFlags::new(), value, 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), value, 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), value, 24);
+                let i2 = builder.ins().stack_load(I64, slot, 8);
+                let i3 = builder.ins().stack_load(I64, slot, 16);
+                let i4 = builder.ins().stack_load(I64, slot, 24);
 
                 // Convert the object to number
                 let num = ins_call_to_num(builder, i1, i2, i3, i4);
@@ -102,6 +104,7 @@ impl ReturnValue {
     }
 
     pub fn get_string(self, builder: &mut FunctionBuilder<'_>) -> Value {
+        println!("get_string {self:?}");
         match self {
             ReturnValue::Num(value) => {
                 let func = builder
@@ -138,12 +141,12 @@ impl ReturnValue {
                 // let results = builder.inst_results(num);
                 stack_ptr
             }
-            ReturnValue::ObjectPointer(value) => {
+            ReturnValue::ObjectPointer(value, slot) => {
                 // read 4 i64 from pointer
-                let i1 = builder.ins().load(I64, MemFlags::new(), value, 0);
-                let i2 = builder.ins().load(I64, MemFlags::new(), value, 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), value, 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), value, 24);
+                let i1 = builder.ins().stack_load(I64, slot, 0);
+                let i2 = builder.ins().stack_load(I64, slot, 8);
+                let i3 = builder.ins().stack_load(I64, slot, 16);
+                let i4 = builder.ins().stack_load(I64, slot, 24);
 
                 get_string_from_obj(builder, i1, i2, i3, i4)
             }

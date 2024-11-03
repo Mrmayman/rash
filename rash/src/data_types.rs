@@ -86,12 +86,31 @@ pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
     obj.to_number()
 }
 
-pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {
+pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut i64) {
+    #[cfg(debug_assertions)]
+    {
+        if !(0..4).contains(&i1) {
+            eprintln!("error converting to string - enum id: {i1}");
+            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
+            eprintln!("hex: {:X} {:X} (bitshift)", i1 << 32, i2 << 32);
+        }
+    }
     debug_assert!(i1 < 4);
-    debug_assert!(i1 > 0);
+    debug_assert!(i1 >= 0);
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
     let string = obj.to_str();
-    unsafe { out.write(ScratchObject::String(string)) };
+    // println!("to string: {obj}, {string}");
+    let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
+    // print!("writing: ");
+    // for byte in bytes {
+    // print!("{byte:X}, ")
+    // }
+    // println!();
+    unsafe {
+        out.write(bytes[0]);
+        out.offset(1).write(bytes[1]);
+        out.offset(2).write(bytes[2]);
+    };
 }
 
 pub extern "C" fn to_string_from_num(i1: f64, out: *mut ScratchObject) {
@@ -226,7 +245,9 @@ impl ScratchObject {
 
         match self {
             ScratchObject::Number(num) => {
-                if *num >= POSITIVE_EXPONENTIAL_THRESHOLD {
+                if *num == 0.0 {
+                    "0".to_owned()
+                } else if num.abs() >= POSITIVE_EXPONENTIAL_THRESHOLD {
                     // Number so big it is exponential
                     // Eg: 1000000000000000000000 is 1e+21
                     let formatted = format!("{:e}", num);

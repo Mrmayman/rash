@@ -1,9 +1,23 @@
 use crate::data_types::ScratchObject;
 
 pub extern "C" fn op_join_string(a: *mut String, b: *mut String, out: *mut usize) {
-    // println!("joining string");
+    /*unsafe {
+        println!(
+            "join string: {:X}, {:X}, {:X}",
+            *(a as *const i64),
+            *(a as *const i64).offset(1),
+            *(a as *const i64).offset(2)
+        );
+        println!(
+            "join string: {:X}, {:X}, {:X}",
+            *(b as *const i64),
+            *(b as *const i64).offset(1),
+            *(b as *const i64).offset(2)
+        );
+    }*/
     let a_ref = unsafe { &*a };
     let b_ref = unsafe { &*b };
+    // println!("joining string {a_ref}, {b_ref}");
     let result = format!("{}{}", a_ref, b_ref);
     let data: [usize; 3] = unsafe { std::mem::transmute(result) };
     unsafe {

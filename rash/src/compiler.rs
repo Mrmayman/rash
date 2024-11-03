@@ -80,47 +80,47 @@ impl Compiler {
         let code_sprites = vec![CodeSprite {
             scripts: vec![vec![
                 ScratchBlock::WhenFlagClicked,
-                ScratchBlock::VarSet(Ptr(0), Input::Obj(ScratchObject::Number(2.0))),
-                ScratchBlock::VarSet(Ptr(1), Input::Obj(ScratchObject::Bool(true))),
-                ScratchBlock::VarSet(Ptr(2), Input::Obj(ScratchObject::Bool(false))),
-                ScratchBlock::VarSet(
-                    Ptr(3),
-                    Input::Obj(ScratchObject::String("192.0".to_owned())),
-                ),
-                ScratchBlock::VarSet(
-                    Ptr(4),
-                    Input::Block(Box::new(ScratchBlock::OpAdd(
-                        Input::Obj(ScratchObject::Number(2.0)),
-                        Input::Block(Box::new(ScratchBlock::OpMul(
-                            Input::Obj(ScratchObject::String("3.0".to_owned())),
-                            Input::Obj(ScratchObject::Number(4.0)),
-                        ))),
-                    ))),
-                ),
-                ScratchBlock::VarSet(
-                    Ptr(5),
-                    Input::Block(Box::new(ScratchBlock::OpSub(
-                        Input::Obj(ScratchObject::Number(2.0)),
-                        Input::Block(Box::new(ScratchBlock::OpDiv(
-                            Input::Obj(ScratchObject::Number(3.0)),
-                            Input::Obj(ScratchObject::Number(4.0)),
-                        ))),
-                    ))),
-                ),
-                ScratchBlock::VarSet(
-                    Ptr(6),
-                    Input::Block(Box::new(ScratchBlock::OpAdd(
-                        Input::Block(Box::new(ScratchBlock::OpAdd(
-                            Input::Obj(ScratchObject::Bool(true)),
-                            Input::Obj(ScratchObject::Bool(true)),
-                        ))),
-                        Input::Block(Box::new(ScratchBlock::VarRead(Ptr(3)))),
-                    ))),
-                ),
+                // ScratchBlock::VarSet(Ptr(0), Input::Obj(ScratchObject::Number(2.0))),
+                // ScratchBlock::VarSet(Ptr(1), Input::Obj(ScratchObject::Bool(true))),
+                // ScratchBlock::VarSet(Ptr(2), Input::Obj(ScratchObject::Bool(false))),
+                // ScratchBlock::VarSet(
+                //     Ptr(3),
+                //     Input::Obj(ScratchObject::String("192.0".to_owned())),
+                // ),
+                // ScratchBlock::VarSet(
+                //     Ptr(4),
+                //     Input::Block(Box::new(ScratchBlock::OpAdd(
+                //         Input::Obj(ScratchObject::Number(2.0)),
+                //         Input::Block(Box::new(ScratchBlock::OpMul(
+                //             Input::Obj(ScratchObject::String("3.0".to_owned())),
+                //             Input::Obj(ScratchObject::Number(4.0)),
+                //         ))),
+                //     ))),
+                // ),
+                // ScratchBlock::VarSet(
+                //     Ptr(5),
+                //     Input::Block(Box::new(ScratchBlock::OpSub(
+                //         Input::Obj(ScratchObject::Number(2.0)),
+                //         Input::Block(Box::new(ScratchBlock::OpDiv(
+                //             Input::Obj(ScratchObject::Number(3.0)),
+                //             Input::Obj(ScratchObject::Number(4.0)),
+                //         ))),
+                //     ))),
+                // ),
+                // ScratchBlock::VarSet(
+                //     Ptr(6),
+                //     Input::Block(Box::new(ScratchBlock::OpAdd(
+                //         Input::Block(Box::new(ScratchBlock::OpAdd(
+                //             Input::Obj(ScratchObject::Bool(true)),
+                //             Input::Obj(ScratchObject::Bool(true)),
+                //         ))),
+                //         Input::Block(Box::new(ScratchBlock::VarRead(Ptr(3)))),
+                //     ))),
+                // ),
                 ScratchBlock::VarSet(
                     Ptr(7),
                     Input::Block(Box::new(ScratchBlock::OpJoin(
-                        Input::Obj(ScratchObject::String("hello".to_owned())),
+                        Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
                         Input::Obj(ScratchObject::String("world".to_owned())),
                     ))),
                 ),
@@ -135,7 +135,7 @@ impl Compiler {
                 let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
 
                 let mut code_block = builder.create_block();
-                builder.seal_block(code_block);
+                // builder.seal_block(code_block);
 
                 builder.append_block_params_for_function_params(code_block);
                 builder.switch_to_block(code_block);
@@ -143,6 +143,8 @@ impl Compiler {
                 for block in script {
                     compile_block(block, &mut builder, &mut code_block);
                 }
+
+                builder.seal_block(code_block);
 
                 let ins = builder.ins();
                 ins.return_(&[]);
@@ -234,11 +236,11 @@ pub fn compile_block(
                             builder.ins().store(MemFlags::new(), i3, mem_ptr, 16);
                             builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
                         }
-                        ReturnValue::ObjectPointer(value) => {
-                            let i1 = builder.ins().load(I64, MemFlags::new(), value, 0);
-                            let i2 = builder.ins().load(I64, MemFlags::new(), value, 8);
-                            let i3 = builder.ins().load(I64, MemFlags::new(), value, 16);
-                            let i4 = builder.ins().load(I64, MemFlags::new(), value, 24);
+                        ReturnValue::ObjectPointer(value, slot) => {
+                            let i1 = builder.ins().stack_load(I64, slot, 0);
+                            let i2 = builder.ins().stack_load(I64, slot, 8);
+                            let i3 = builder.ins().stack_load(I64, slot, 16);
+                            let i4 = builder.ins().stack_load(I64, slot, 24);
 
                             let mem_ptr = builder.ins().iconst(
                                 I64,
@@ -302,7 +304,7 @@ pub fn compile_block(
                 .ins()
                 .call_indirect(sig, func, &[mem_ptr, stack_ptr]);
 
-            return Some(ReturnValue::ObjectPointer(stack_ptr));
+            return Some(ReturnValue::ObjectPointer(stack_ptr, stack_slot));
 
             // let obj = ScratchObject::Number(3.0);
             // let transmuted_obj: [usize; 4] = unsafe { std::mem::transmute(obj) };
@@ -341,12 +343,15 @@ pub fn compile_block(
         }
         ScratchBlock::ControlRepeat(input, vec) => {
             let loop_block = builder.create_block();
-            let body_block = builder.create_block();
+            builder.append_block_param(loop_block, I64);
+            let mut body_block = builder.create_block();
+            builder.append_block_param(body_block, I64);
             let end_block = builder.create_block();
 
             let number = input.get_number(builder, code_block);
+            let number = builder.ins().fcvt_to_sint(I64, number);
             builder.ins().jump(loop_block, &[number]);
-            // TODO: Seal block
+            builder.seal_block(*code_block);
 
             builder.switch_to_block(loop_block);
             // (counter < number)
@@ -360,11 +365,16 @@ pub fn compile_block(
             builder.seal_block(loop_block);
 
             builder.switch_to_block(body_block);
+            for block in vec {
+                compile_block(block, builder, &mut body_block);
+            }
+
             let incremented = builder.ins().iadd_imm(counter, 1);
             builder.ins().jump(loop_block, &[incremented]);
-            builder.seal_block(loop_block);
+            builder.seal_block(body_block);
 
             builder.switch_to_block(end_block);
+            *code_block = end_block;
         }
     }
     None
