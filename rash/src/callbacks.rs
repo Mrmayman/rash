@@ -1,6 +1,12 @@
 use crate::data_types::ScratchObject;
 
-pub extern "C" fn op_join_string(a: *mut String, b: *mut String, out: *mut usize) {
+pub extern "C" fn op_join_string(
+    a: *mut String,
+    b: *mut String,
+    out: *mut usize,
+    a_is_const: i64,
+    b_is_const: i64,
+) {
     /*unsafe {
         println!(
             "join string: {:X}, {:X}, {:X}",
@@ -28,15 +34,19 @@ pub extern "C" fn op_join_string(a: *mut String, b: *mut String, out: *mut usize
 
     // Drop a and b
     unsafe {
-        std::ptr::drop_in_place(a);
-        std::ptr::drop_in_place(b);
+        if a_is_const == 0 {
+            std::ptr::drop_in_place(a);
+        }
+        if b_is_const == 0 {
+            std::ptr::drop_in_place(b);
+        }
     }
 }
 
-pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut usize) {
+pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut i64) {
     let obj = unsafe { (*ptr).clone() };
     // println!("reading var - {obj}");
-    let data: [usize; 4] = unsafe { std::mem::transmute(obj) };
+    let data: [i64; 4] = unsafe { std::mem::transmute(obj) };
     unsafe {
         dest.write(data[0]);
         dest.offset(1).write(data[1]);

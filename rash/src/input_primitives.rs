@@ -33,7 +33,11 @@ impl Input {
         }
     }
 
-    pub fn get_string(&self, builder: &mut FunctionBuilder<'_>, code_block: &mut Block) -> Value {
+    pub fn get_string(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        code_block: &mut Block,
+    ) -> (Value, bool) {
         match self {
             Input::Obj(scratch_object) => {
                 // Create a stack slot to store the string
@@ -57,11 +61,11 @@ impl Input {
                 builder.ins().stack_store(val2, stack_slot, 8);
                 builder.ins().stack_store(val3, stack_slot, 16);
 
-                stack_ptr
+                (stack_ptr, true)
             }
             Input::Block(scratch_block) => {
                 let o = compile_block(scratch_block, builder, code_block).unwrap();
-                o.get_string(builder)
+                (o.get_string(builder), false)
             }
         }
     }
@@ -104,7 +108,7 @@ impl ReturnValue {
     }
 
     pub fn get_string(self, builder: &mut FunctionBuilder<'_>) -> Value {
-        println!("get_string {self:?}");
+        // println!("get_string {self:?}");
         match self {
             ReturnValue::Num(value) => {
                 let func = builder

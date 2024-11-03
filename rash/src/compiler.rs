@@ -12,9 +12,7 @@ use crate::{
     callbacks,
     data_types::{self, ScratchObject, ID_NUMBER, ID_STRING},
     input_primitives::{Input, Ptr, ReturnValue},
-    ins_shortcuts::{
-        ins_create_string_stack_slot, ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string,
-    },
+    ins_shortcuts::{ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string},
 };
 
 lazy_static! {
@@ -117,12 +115,19 @@ impl Compiler {
                 //         Input::Block(Box::new(ScratchBlock::VarRead(Ptr(3)))),
                 //     ))),
                 // ),
-                ScratchBlock::VarSet(
-                    Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpJoin(
-                        Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
-                        Input::Obj(ScratchObject::String("world".to_owned())),
-                    ))),
+                ScratchBlock::ControlRepeat(
+                    Input::Obj(ScratchObject::Number(100000.0)),
+                    vec![ScratchBlock::VarSet(
+                        Ptr(7),
+                        // Input::Block(Box::new(ScratchBlock::OpJoin(
+                        //     Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
+                        //     Input::Obj(ScratchObject::String("world".to_owned())),
+                        // ))),
+                        Input::Block(Box::new(ScratchBlock::OpAdd(
+                            Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
+                            Input::Obj(ScratchObject::Bool(true)),
+                        ))),
+                    )],
                 ),
             ]],
         }];
@@ -181,7 +186,9 @@ impl Compiler {
                 unsafe {
                     let code_fn: unsafe extern "sysv64" fn() = std::mem::transmute(buffer.as_ptr());
 
-                    code_fn()
+                    let instant = std::time::Instant::now();
+                    code_fn();
+                    println!("Time: {:?}", instant.elapsed());
                 }
             }
         }
@@ -197,21 +204,25 @@ pub fn compile_block(
         ScratchBlock::WhenFlagClicked => {}
         ScratchBlock::VarSet(ptr, obj) => {
             match obj {
-                Input::Obj(obj) => match obj {
-                    ScratchObject::Number(num) => {
-                        ins_mem_write_f64(builder, *ptr, *num);
+                Input::Obj(obj) => {
+                    ins_drop_obj(builder, *ptr);
+                    match obj {
+                        ScratchObject::Number(num) => {
+                            ins_mem_write_f64(builder, *ptr, *num);
+                        }
+                        ScratchObject::Bool(num) => {
+                            ins_mem_write_bool(builder, *ptr, *num);
+                        }
+                        ScratchObject::String(string) => {
+                            ins_mem_write_string(string, builder, *ptr);
+                        }
                     }
-                    ScratchObject::Bool(num) => {
-                        ins_mem_write_bool(builder, *ptr, *num);
-                    }
-                    ScratchObject::String(string) => {
-                        ins_mem_write_string(string, builder, *ptr);
-                    }
-                },
+                }
                 Input::Block(block) => {
                     // compile block
                     let val = compile_block(block, builder, code_block);
                     let val = val.unwrap();
+                    ins_drop_obj(builder, *ptr);
                     match val {
                         ReturnValue::Num(value) | ReturnValue::Bool(value) => {
                             let mem_ptr = builder.ins().iconst(
@@ -236,7 +247,7 @@ pub fn compile_block(
                             builder.ins().store(MemFlags::new(), i3, mem_ptr, 16);
                             builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
                         }
-                        ReturnValue::ObjectPointer(value, slot) => {
+                        ReturnValue::ObjectPointer(_value, slot) => {
                             let i1 = builder.ins().stack_load(I64, slot, 0);
                             let i2 = builder.ins().stack_load(I64, slot, 8);
                             let i3 = builder.ins().stack_load(I64, slot, 16);
@@ -316,11 +327,16 @@ pub fn compile_block(
         }
         ScratchBlock::OpJoin(a, b) => {
             // Get strings
-            let a = a.get_string(builder, code_block);
-            let b = b.get_string(builder, code_block);
+            let (a, a_is_const) = a.get_string(builder, code_block);
+            let (b, b_is_const) = b.get_string(builder, code_block);
 
             // Create stack slot for result
-            let stack_ptr = ins_create_string_stack_slot(builder);
+            let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                3 * std::mem::size_of::<i64>() as u32,
+                0,
+            ));
+            let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
             // Call join_string function
             let func = builder.ins().iconst(I64, callbacks::op_join_string as i64);
@@ -329,15 +345,21 @@ pub fn compile_block(
                 sig.params.push(AbiParam::new(I64));
                 sig.params.push(AbiParam::new(I64));
                 sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
+                sig.params.push(AbiParam::new(I64));
                 sig
             });
-            builder.ins().call_indirect(sig, func, &[a, b, stack_ptr]);
+            let a_is_const = builder.ins().iconst(I64, a_is_const as i64);
+            let b_is_const = builder.ins().iconst(I64, b_is_const as i64);
+            builder
+                .ins()
+                .call_indirect(sig, func, &[a, b, stack_ptr, a_is_const, b_is_const]);
 
             // Read resulting string
             let id = builder.ins().iconst(I64, ID_STRING as i64);
-            let i1 = builder.ins().load(I64, MemFlags::new(), stack_ptr, 0);
-            let i2 = builder.ins().load(I64, MemFlags::new(), stack_ptr, 8);
-            let i3 = builder.ins().load(I64, MemFlags::new(), stack_ptr, 16);
+            let i1 = builder.ins().stack_load(I64, stack_slot, 0);
+            let i2 = builder.ins().stack_load(I64, stack_slot, 8);
+            let i3 = builder.ins().stack_load(I64, stack_slot, 16);
 
             return Some(ReturnValue::Object((id, i1, i2, i3)));
         }
@@ -350,7 +372,9 @@ pub fn compile_block(
 
             let number = input.get_number(builder, code_block);
             let number = builder.ins().fcvt_to_sint(I64, number);
-            builder.ins().jump(loop_block, &[number]);
+
+            let counter = builder.ins().iconst(I64, 0);
+            builder.ins().jump(loop_block, &[counter]);
             builder.seal_block(*code_block);
 
             builder.switch_to_block(loop_block);
@@ -362,22 +386,37 @@ pub fn compile_block(
             builder
                 .ins()
                 .brif(condition, body_block, &[counter], end_block, &[]);
-            builder.seal_block(loop_block);
 
             builder.switch_to_block(body_block);
             for block in vec {
                 compile_block(block, builder, &mut body_block);
             }
-
+            let counter = builder.block_params(body_block)[0];
             let incremented = builder.ins().iadd_imm(counter, 1);
             builder.ins().jump(loop_block, &[incremented]);
             builder.seal_block(body_block);
+            builder.seal_block(loop_block);
 
             builder.switch_to_block(end_block);
             *code_block = end_block;
         }
     }
     None
+}
+
+fn ins_drop_obj(builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
+    let func = builder.ins().iconst(I64, data_types::drop_obj as i64);
+    let sig = builder.import_signature({
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I64));
+        sig
+    });
+    let mem_ptr = builder.ins().iconst(
+        I64,
+        MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
+    );
+
+    builder.ins().call_indirect(sig, func, &[mem_ptr]);
 }
 
 pub fn c_main() {
@@ -390,9 +429,9 @@ pub fn c_main() {
     compiler.compile();
 
     // print memory
-    for (i, obj) in MEMORY.iter().enumerate().take(10) {
-        println!("{}: {:?}", i, obj);
-    }
+    // for (i, obj) in MEMORY.iter().enumerate().take(10) {
+    //     println!("{}: {:?}", i, obj);
+    // }
 }
 
 fn print_func_addresses() {

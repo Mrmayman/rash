@@ -72,6 +72,7 @@ impl std::fmt::Display for ScratchObject {
 }
 
 pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
+    let i1 = (i1 as i32) as i64;
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -87,6 +88,8 @@ pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
 }
 
 pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut i64) {
+    let i1 = (i1 as i32) as i64;
+    // println!("{i1}");
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -123,6 +126,13 @@ pub extern "C" fn to_string_from_bool(i1: i64, out: *mut ScratchObject) {
     let obj = ScratchObject::Bool(i1 != 0);
     let string = obj.to_str();
     unsafe { out.write(ScratchObject::String(string)) }
+}
+
+pub extern "C" fn drop_obj(i1: *mut ScratchObject) {
+    unsafe {
+        // println!("setting var: force drop obj: {}", *i1);
+        std::ptr::drop_in_place(i1);
+    }
 }
 
 impl ScratchObject {
