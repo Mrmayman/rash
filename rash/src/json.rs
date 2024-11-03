@@ -39,14 +39,14 @@ pub struct Target {
     pub textToSpeechLanguage: Option<Value>,
 }
 
-impl Target {
+/*impl Target {
     pub fn get_hat_blocks(&self) -> Vec<(&String, &JsonBlock)> {
         self.blocks
             .iter()
             .filter(|(_, block)| !block.has_parent())
             .collect()
     }
-}
+}*/
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
@@ -74,7 +74,7 @@ pub enum JsonBlock {
     Array(Vec<Value>),
 }
 
-impl JsonBlock {
+/*impl JsonBlock {
     pub fn has_parent(&self) -> bool {
         matches!(
             self,
@@ -87,7 +87,7 @@ impl JsonBlock {
             }
         )
     }
-}
+}*/
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]

@@ -6,13 +6,15 @@ use cranelift::prelude::*;
 use isa::CallConv;
 use lazy_static::lazy_static;
 use target_lexicon::Triple;
-use types::{F64, I64};
+use types::I64;
 
 use crate::{
     callbacks,
     data_types::{self, ScratchObject, ID_NUMBER, ID_STRING},
     input_primitives::{Input, Ptr, ReturnValue},
-    ins_shortcuts::{ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string},
+    ins_shortcuts::{
+        ins_create_string_stack_slot, ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string,
+    },
 };
 
 lazy_static! {
@@ -35,6 +37,7 @@ pub enum ScratchBlock {
     OpMul(Input, Input),
     OpDiv(Input, Input),
     OpJoin(Input, Input),
+    ControlRepeat(Input, Vec<ScratchBlock>),
 }
 
 struct CodeSprite {
@@ -64,7 +67,6 @@ impl Compiler {
     }
 
     pub fn compile(&self) {
-        // println!("{}", std::mem::size_of::<ScratchObject>());
         let mut builder = settings::builder();
         builder.set("opt_level", "speed").unwrap();
         let flags = settings::Flags::new(builder);
@@ -115,6 +117,13 @@ impl Compiler {
                         Input::Block(Box::new(ScratchBlock::VarRead(Ptr(3)))),
                     ))),
                 ),
+                ScratchBlock::VarSet(
+                    Ptr(7),
+                    Input::Block(Box::new(ScratchBlock::OpJoin(
+                        Input::Obj(ScratchObject::String("hello".to_owned())),
+                        Input::Obj(ScratchObject::String("world".to_owned())),
+                    ))),
+                ),
             ]],
         }];
         for sprite in &code_sprites {
@@ -125,14 +134,14 @@ impl Compiler {
                 let mut func_ctx = FunctionBuilderContext::new();
                 let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
 
-                let block = builder.create_block();
-                builder.seal_block(block);
+                let mut code_block = builder.create_block();
+                builder.seal_block(code_block);
 
-                builder.append_block_params_for_function_params(block);
-                builder.switch_to_block(block);
+                builder.append_block_params_for_function_params(code_block);
+                builder.switch_to_block(code_block);
 
                 for block in script {
-                    compile_block(block, &mut builder);
+                    compile_block(block, &mut builder, &mut code_block);
                 }
 
                 let ins = builder.ins();
@@ -144,6 +153,7 @@ impl Compiler {
 
                 let mut ctx = codegen::Context::for_function(func);
                 let mut plane = ControlPlane::default();
+                ctx.optimize(isa.as_ref(), &mut plane).unwrap();
 
                 let code = ctx.compile(&*isa, &mut plane).unwrap();
 
@@ -157,12 +167,12 @@ impl Compiler {
                 let ptr = buffer.as_ptr();
                 let bytes = unsafe { std::slice::from_raw_parts(ptr, code.code_buffer().len()) };
 
-                std::fs::write("/home/mrmayman/Desktop/func.bin", bytes).unwrap();
+                std::fs::write("func.bin", bytes).unwrap();
 
-                for (_i, byte) in bytes.iter().enumerate() {
-                    print!("{:#04x} ", byte);
-                }
-                println!();
+                // for (_i, byte) in bytes.iter().enumerate() {
+                //     print!("{:#04x} ", byte);
+                // }
+                // println!();
 
                 let buffer = buffer.make_exec().unwrap();
 
@@ -179,6 +189,7 @@ impl Compiler {
 pub fn compile_block(
     block: &ScratchBlock,
     builder: &mut FunctionBuilder<'_>,
+    code_block: &mut Block,
 ) -> Option<ReturnValue> {
     match block {
         ScratchBlock::WhenFlagClicked => {}
@@ -197,7 +208,8 @@ pub fn compile_block(
                 },
                 Input::Block(block) => {
                     // compile block
-                    let val = compile_block(block, builder).unwrap();
+                    let val = compile_block(block, builder, code_block);
+                    let val = val.unwrap();
                     match val {
                         ReturnValue::Num(value) | ReturnValue::Bool(value) => {
                             let mem_ptr = builder.ins().iconst(
@@ -223,7 +235,6 @@ pub fn compile_block(
                             builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
                         }
                         ReturnValue::ObjectPointer(value) => {
-                            // read 4 i64 from pointer
                             let i1 = builder.ins().load(I64, MemFlags::new(), value, 0);
                             let i2 = builder.ins().load(I64, MemFlags::new(), value, 8);
                             let i3 = builder.ins().load(I64, MemFlags::new(), value, 16);
@@ -245,26 +256,26 @@ pub fn compile_block(
             };
         }
         ScratchBlock::OpAdd(a, b) => {
-            let a = a.get_number(builder);
-            let b = b.get_number(builder);
+            let a = a.get_number(builder, code_block);
+            let b = b.get_number(builder, code_block);
             let res = builder.ins().fadd(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpSub(a, b) => {
-            let a = a.get_number(builder);
-            let b = b.get_number(builder);
+            let a = a.get_number(builder, code_block);
+            let b = b.get_number(builder, code_block);
             let res = builder.ins().fsub(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpMul(a, b) => {
-            let a = a.get_number(builder);
-            let b = b.get_number(builder);
+            let a = a.get_number(builder, code_block);
+            let b = b.get_number(builder, code_block);
             let res = builder.ins().fmul(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpDiv(a, b) => {
-            let a = a.get_number(builder);
-            let b = b.get_number(builder);
+            let a = a.get_number(builder, code_block);
+            let b = b.get_number(builder, code_block);
             let res = builder.ins().fdiv(a, b);
             return Some(ReturnValue::Num(res));
         }
@@ -282,7 +293,7 @@ pub fn compile_block(
             );
             let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
                 StackSlotKind::ExplicitSlot,
-                4 * std::mem::size_of::<i64>() as u32,
+                4 * std::mem::size_of::<usize>() as u32,
                 8,
             ));
             let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
@@ -290,10 +301,11 @@ pub fn compile_block(
             builder
                 .ins()
                 .call_indirect(sig, func, &[mem_ptr, stack_ptr]);
-            // let results = builder.inst_results(num);
+
             return Some(ReturnValue::ObjectPointer(stack_ptr));
+
             // let obj = ScratchObject::Number(3.0);
-            // let transmuted_obj: [i64; 4] = unsafe { std::mem::transmute(obj) };
+            // let transmuted_obj: [usize; 4] = unsafe { std::mem::transmute(obj) };
             // let i1 = builder.ins().iconst(I64, transmuted_obj[0]);
             // let i2 = builder.ins().iconst(I64, transmuted_obj[1]);
             // let i3 = builder.ins().iconst(I64, transmuted_obj[2]);
@@ -301,31 +313,58 @@ pub fn compile_block(
             // return Some(ReturnValue::Object((i1, i2, i3, i4)));
         }
         ScratchBlock::OpJoin(a, b) => {
-            let a = a.get_string(builder);
-            let b = b.get_string(builder);
+            // Get strings
+            let a = a.get_string(builder, code_block);
+            let b = b.get_string(builder, code_block);
 
+            // Create stack slot for result
+            let stack_ptr = ins_create_string_stack_slot(builder);
+
+            // Call join_string function
             let func = builder.ins().iconst(I64, callbacks::op_join_string as i64);
             let sig = builder.import_signature({
                 let mut sig = Signature::new(CallConv::SystemV);
                 sig.params.push(AbiParam::new(I64));
                 sig.params.push(AbiParam::new(I64));
                 sig.params.push(AbiParam::new(I64));
-                sig.params.push(AbiParam::new(I64));
-                sig.params.push(AbiParam::new(I64));
-                sig.params.push(AbiParam::new(I64));
-                sig.returns.push(AbiParam::new(I64));
-                sig.returns.push(AbiParam::new(I64));
-                sig.returns.push(AbiParam::new(I64));
                 sig
             });
+            builder.ins().call_indirect(sig, func, &[a, b, stack_ptr]);
+
+            // Read resulting string
             let id = builder.ins().iconst(I64, ID_STRING as i64);
-            let num = builder
+            let i1 = builder.ins().load(I64, MemFlags::new(), stack_ptr, 0);
+            let i2 = builder.ins().load(I64, MemFlags::new(), stack_ptr, 8);
+            let i3 = builder.ins().load(I64, MemFlags::new(), stack_ptr, 16);
+
+            return Some(ReturnValue::Object((id, i1, i2, i3)));
+        }
+        ScratchBlock::ControlRepeat(input, vec) => {
+            let loop_block = builder.create_block();
+            let body_block = builder.create_block();
+            let end_block = builder.create_block();
+
+            let number = input.get_number(builder, code_block);
+            builder.ins().jump(loop_block, &[number]);
+            // TODO: Seal block
+
+            builder.switch_to_block(loop_block);
+            // (counter < number)
+            let counter = builder.block_params(loop_block)[0];
+            let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
+
+            // if (counter < number) jump to body_block else jump to end_block
+            builder
                 .ins()
-                .call_indirect(sig, func, &[a.0, a.1, a.2, b.0, b.1, b.2]);
-            let results = builder.inst_results(num);
-            return Some(ReturnValue::Object((
-                id, results[0], results[1], results[2],
-            )));
+                .brif(condition, body_block, &[counter], end_block, &[]);
+            builder.seal_block(loop_block);
+
+            builder.switch_to_block(body_block);
+            let incremented = builder.ins().iadd_imm(counter, 1);
+            builder.ins().jump(loop_block, &[incremented]);
+            builder.seal_block(loop_block);
+
+            builder.switch_to_block(end_block);
         }
     }
     None
@@ -334,18 +373,8 @@ pub fn compile_block(
 pub fn c_main() {
     // let arg1 = std::env::args().nth(1).unwrap();
     // println!("opening dir {arg1}");
-    println!("var_read: {:X}", callbacks::var_read as i64);
-    println!("op_join_string: {:X}", callbacks::op_join_string as i64);
-    println!(
-        "to_string_from_num: {:X}",
-        data_types::to_string_from_num as i64
-    );
-    println!("to_string: {:X}", data_types::to_string as i64);
-    println!(
-        "to_string_from_bool: {:X}",
-        data_types::to_string_from_bool as i64
-    );
-    println!("to_number: {:X}", data_types::to_number as i64);
+
+    print_func_addresses();
 
     let compiler = Compiler::new();
     compiler.compile();
@@ -354,4 +383,19 @@ pub fn c_main() {
     for (i, obj) in MEMORY.iter().enumerate().take(10) {
         println!("{}: {:?}", i, obj);
     }
+}
+
+fn print_func_addresses() {
+    println!("var_read: {:X}", callbacks::var_read as usize);
+    println!("op_join_string: {:X}", callbacks::op_join_string as usize);
+    println!(
+        "to_string_from_num: {:X}",
+        data_types::to_string_from_num as usize
+    );
+    println!("to_string: {:X}", data_types::to_string as usize);
+    println!(
+        "to_string_from_bool: {:X}",
+        data_types::to_string_from_bool as usize
+    );
+    println!("to_number: {:X}", data_types::to_number as usize);
 }

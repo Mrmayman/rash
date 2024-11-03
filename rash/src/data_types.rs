@@ -13,6 +13,12 @@ pub enum ScratchObject {
     // Pointer(usize),
 }
 
+// impl Drop for ScratchObject {
+//     fn drop(&mut self) {
+//         println!("Dropping self: {self}");
+//     }
+// }
+
 pub const ID_NUMBER: usize = 0;
 pub const ID_STRING: usize = 1;
 pub const ID_BOOL: usize = 2;
@@ -65,42 +71,39 @@ impl std::fmt::Display for ScratchObject {
     }
 }
 
-#[repr(C)]
-pub struct ScratchObjectBytes {
-    i1: i64,
-    i2: i64,
-    i3: i64,
-    i4: i64,
-}
-
 pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
-    println!("converting to number - id: {i1}");
-    println!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-    println!("hex: {:X} {:X}", i1 << 32, i2 << 32);
+    #[cfg(debug_assertions)]
+    {
+        if !(0..4).contains(&i1) {
+            eprintln!("error converting to number - enum id: {i1}");
+            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
+            eprintln!("hex: {:X} {:X} (bitshift)", i1 << 32, i2 << 32);
+        }
+    }
     debug_assert!(i1 < 4);
     debug_assert!(i1 >= 0);
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
     obj.to_number()
 }
 
-pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64) -> ScratchObjectBytes {
+pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {
     debug_assert!(i1 < 4);
     debug_assert!(i1 > 0);
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
-    let string = obj.to_string();
-    unsafe { std::mem::transmute(ScratchObject::String(string)) }
+    let string = obj.to_str();
+    unsafe { out.write(ScratchObject::String(string)) };
 }
 
-pub extern "C" fn to_string_from_num(i1: f64) -> ScratchObjectBytes {
+pub extern "C" fn to_string_from_num(i1: f64, out: *mut ScratchObject) {
     let obj = ScratchObject::Number(i1);
-    let string = obj.to_string();
-    unsafe { std::mem::transmute(ScratchObject::String(string)) }
+    let string = obj.to_str();
+    unsafe { out.write(ScratchObject::String(string)) }
 }
 
-pub extern "C" fn to_string_from_bool(i1: i64) -> ScratchObjectBytes {
+pub extern "C" fn to_string_from_bool(i1: i64, out: *mut ScratchObject) {
     let obj = ScratchObject::Bool(i1 != 0);
-    let string = obj.to_string();
-    unsafe { std::mem::transmute(ScratchObject::String(string)) }
+    let string = obj.to_str();
+    unsafe { out.write(ScratchObject::String(string)) }
 }
 
 impl ScratchObject {
@@ -215,7 +218,7 @@ impl ScratchObject {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn to_str(&self) -> String {
         // If number is bigger than this then represent as exponentials.
         const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
         // If number is smaller than this then represent as exponentials.
@@ -299,11 +302,11 @@ mod tests {
     fn conversion_string() {
         // let memory: [ScratchObject; 0] = [];
 
-        assert_eq!(ScratchObject::Number(6.9).to_string(), "6.9");
-        assert_eq!(ScratchObject::Number(2e22).to_string(), "2e+22");
-        assert_eq!(ScratchObject::Number(2e-22).to_string(), "2e-22");
+        assert_eq!(ScratchObject::Number(6.9).to_str(), "6.9");
+        assert_eq!(ScratchObject::Number(2e22).to_str(), "2e+22");
+        assert_eq!(ScratchObject::Number(2e-22).to_str(), "2e-22");
 
-        assert_eq!(ScratchObject::Bool(true).to_string(), "true");
-        assert_eq!(ScratchObject::Bool(false).to_string(), "false");
+        assert_eq!(ScratchObject::Bool(true).to_str(), "true");
+        assert_eq!(ScratchObject::Bool(false).to_str(), "false");
     }
 }

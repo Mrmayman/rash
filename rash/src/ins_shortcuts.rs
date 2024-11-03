@@ -79,3 +79,13 @@ pub fn ins_mem_write_f64(builder: &mut FunctionBuilder<'_>, ptr: Ptr, num: f64) 
     let id = builder.ins().iconst(I64, ID_NUMBER as i64);
     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 }
+
+pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value {
+    let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+        StackSlotKind::ExplicitSlot,
+        3 * std::mem::size_of::<i64>() as u32,
+        0,
+    ));
+    let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
+    stack_ptr
+}
