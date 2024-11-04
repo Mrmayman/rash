@@ -89,3 +89,18 @@ pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value 
     let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
     stack_ptr
 }
+
+pub fn ins_drop_obj(builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
+    let func = builder.ins().iconst(I64, data_types::drop_obj as i64);
+    let sig = builder.import_signature({
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I64));
+        sig
+    });
+    let mem_ptr = builder.ins().iconst(
+        I64,
+        MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
+    );
+
+    builder.ins().call_indirect(sig, func, &[mem_ptr]);
+}

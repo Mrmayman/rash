@@ -130,6 +130,7 @@ pub extern "C" fn to_string_from_bool(i1: i64, out: *mut ScratchObject) {
 
 pub extern "C" fn drop_obj(i1: *mut ScratchObject) {
     unsafe {
+        // println!("dropping obj {}", *i1);
         // println!("setting var: force drop obj: {}", *i1);
         std::ptr::drop_in_place(i1);
     }

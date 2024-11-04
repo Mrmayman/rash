@@ -1,15 +1,17 @@
+use std::collections::HashMap;
+
 use codegen::ir::StackSlot;
 use cranelift::prelude::*;
 use isa::CallConv;
 use types::{F64, I32, I64};
 
 use crate::{
-    compiler::{compile_block, ScratchBlock},
+    compiler::{compile_block, ScratchBlock, VarType},
     data_types::{self, ScratchObject},
     ins_shortcuts::{ins_call_to_num, ins_create_string_stack_slot},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
 
 #[derive(Debug)]
@@ -19,15 +21,29 @@ pub enum Input {
 }
 
 impl Input {
-    pub fn get_number(&self, builder: &mut FunctionBuilder<'_>, code_block: &mut Block) -> Value {
+    pub fn new_num(num: f64) -> Self {
+        Input::Obj(ScratchObject::Number(num))
+    }
+
+    pub fn new_block(block: ScratchBlock) -> Self {
+        Input::Block(Box::new(block))
+    }
+
+    pub fn get_number(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        code_block: &mut Block,
+        variable_type_data: &mut HashMap<Ptr, VarType>,
+    ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
                 let o = scratch_object.to_number();
                 builder.ins().f64const(o)
             }
             Input::Block(scratch_block) => {
-                println!("compiling block: {:?}", scratch_block);
-                let o = compile_block(scratch_block, builder, code_block).unwrap();
+                let o =
+                    compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
+                println!("compiling block: {:?}", o);
                 o.get_number(builder)
             }
         }
@@ -37,6 +53,7 @@ impl Input {
         &self,
         builder: &mut FunctionBuilder<'_>,
         code_block: &mut Block,
+        variable_type_data: &mut HashMap<Ptr, VarType>,
     ) -> (Value, bool) {
         match self {
             Input::Obj(scratch_object) => {
@@ -64,7 +81,8 @@ impl Input {
                 (stack_ptr, true)
             }
             Input::Block(scratch_block) => {
-                let o = compile_block(scratch_block, builder, code_block).unwrap();
+                let o =
+                    compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
                 (o.get_string(builder), false)
             }
         }
@@ -155,6 +173,10 @@ impl ReturnValue {
                 get_string_from_obj(builder, i1, i2, i3, i4)
             }
         }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        matches!(self, ReturnValue::Bool(_))
     }
 }
 
