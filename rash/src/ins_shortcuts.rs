@@ -4,8 +4,9 @@ use isa::CallConv;
 use types::{F64, I64};
 
 use crate::{
+    callbacks,
     compiler::MEMORY,
-    data_types::{self, ScratchObject, ID_BOOL, ID_NUMBER, ID_STRING},
+    data_types::{ScratchObject, ID_BOOL, ID_NUMBER, ID_STRING},
     input_primitives::Ptr,
 };
 
@@ -16,7 +17,9 @@ pub fn ins_call_to_num(
     i3: Value,
     i4: Value,
 ) -> Inst {
-    let to_num_func = builder.ins().iconst(I64, data_types::to_number as i64);
+    let to_num_func = builder
+        .ins()
+        .iconst(I64, callbacks::types::to_number as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -91,7 +94,7 @@ pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value 
 }
 
 pub fn ins_drop_obj(builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
-    let func = builder.ins().iconst(I64, data_types::drop_obj as i64);
+    let func = builder.ins().iconst(I64, callbacks::types::drop_obj as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));

@@ -1,5 +1,8 @@
 use crate::data_types::ScratchObject;
 
+pub mod types;
+
+/// Callback from JIT code to join two strings
 pub extern "C" fn op_join_string(
     a: *mut String,
     b: *mut String,
@@ -21,9 +24,23 @@ pub extern "C" fn op_join_string(
             *(b as *const i64).offset(2)
         );
     }*/
-    let a_ref = unsafe { &*a };
-    let b_ref = unsafe { &*b };
-    // println!("joining string {a_ref}, {b_ref}");
+    let a_ref = unsafe { &mut *a };
+    let b_ref = unsafe { &mut *b };
+
+    if a_is_const == 0 {
+        a_ref.push_str(b_ref);
+        if b_is_const == 0 {
+            unsafe { std::ptr::drop_in_place(b) };
+        }
+
+        unsafe {
+            out.write((a as *const usize).read());
+            out.offset(1).write((a as *const usize).offset(1).read());
+            out.offset(2).write((a as *const usize).offset(2).read());
+        }
+        return;
+    }
+
     let result = format!("{}{}", a_ref, b_ref);
     let data: [usize; 3] = unsafe { std::mem::transmute(result) };
     unsafe {

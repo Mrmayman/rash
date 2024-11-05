@@ -1,18 +1,33 @@
+//! # Scratch Data Types
+//! This module contains the data types used in the interpreter.
+//! The data types are:
+//! - Number: A 64 bit floating point number.
+//! - String: A UTF-8 string.
+//! - Bool: A boolean value.
+//!
+//! This module aims to accurately mirror the behaviour of
+//! the Scratch programming language, both in terms of the
+//! types themselves and the conversion behaviour between them.
+//!
+//! Side note: This module is probably the best documented part
+//! of the entire project lol.
+
 use colored::Colorize;
 
-/// The enum variant data type used to represent dynamically typed objects in the interpreter.
-/// # Conversion
-/// * `to_string() -> String`
-/// * `to_number() -> f64`
-/// * `to_bool() -> bool`
+/// The enum variant data type used to represent dynamically typed
+/// objects in the interpreter.
+///
+/// There are a few methods to convert between the different types,
+/// that accurately mirror the behaviour of the Scratch programming language.
 #[repr(C)]
 pub enum ScratchObject {
     Number(f64),
     String(String),
     Bool(bool),
-    // Pointer(usize),
 }
 
+// Debugging code for checking if the objects are being dropped
+// Lets you know when the object is being dropped by the JIT compiled code
 // impl Drop for ScratchObject {
 //     fn drop(&mut self) {
 //         println!("Dropping self: {self}");
@@ -22,7 +37,6 @@ pub enum ScratchObject {
 pub const ID_NUMBER: usize = 0;
 pub const ID_STRING: usize = 1;
 pub const ID_BOOL: usize = 2;
-// pub const ID_POINTER: usize = 3;
 
 // I know #[derive(Clone)] does the same thing.
 // But this made it faster by 20 milliseconds
@@ -32,7 +46,6 @@ impl Clone for ScratchObject {
             Self::Number(arg0) => Self::Number(arg0),
             Self::String(ref arg0) => Self::String(arg0.to_owned()),
             Self::Bool(arg0) => Self::Bool(arg0),
-            // Self::Pointer(arg0) => Self::Pointer(arg0),
         }
     }
 }
@@ -55,84 +68,7 @@ impl std::fmt::Debug for ScratchObject {
                 "\"".yellow()
             ),
             Self::Bool(b) => write!(f, "{}", b.to_string().cyan()),
-            // Self::Pointer(p) => write!(
-            //     f,
-            //     "{}{}",
-            //     "*".purple(),
-            //     p.to_string().bright_purple().bold()
-            // ),
         }
-    }
-}
-
-impl std::fmt::Display for ScratchObject {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f)
-    }
-}
-
-pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
-    let i1 = (i1 as i32) as i64;
-    #[cfg(debug_assertions)]
-    {
-        if !(0..4).contains(&i1) {
-            eprintln!("error converting to number - enum id: {i1}");
-            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-            eprintln!("hex: {:X} {:X} (bitshift)", i1 << 32, i2 << 32);
-        }
-    }
-    debug_assert!(i1 < 4);
-    debug_assert!(i1 >= 0);
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
-    obj.to_number()
-}
-
-pub extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut i64) {
-    let i1 = (i1 as i32) as i64;
-    // println!("{i1}");
-    #[cfg(debug_assertions)]
-    {
-        if !(0..4).contains(&i1) {
-            eprintln!("error converting to string - enum id: {i1}");
-            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-            eprintln!("hex: {:X} {:X} (bitshift)", i1 << 32, i2 << 32);
-        }
-    }
-    debug_assert!(i1 < 4);
-    debug_assert!(i1 >= 0);
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
-    let string = obj.to_str();
-    // println!("to string: {obj}, {string}");
-    let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
-    // print!("writing: ");
-    // for byte in bytes {
-    // print!("{byte:X}, ")
-    // }
-    // println!();
-    unsafe {
-        out.write(bytes[0]);
-        out.offset(1).write(bytes[1]);
-        out.offset(2).write(bytes[2]);
-    };
-}
-
-pub extern "C" fn to_string_from_num(i1: f64, out: *mut ScratchObject) {
-    let obj = ScratchObject::Number(i1);
-    let string = obj.to_str();
-    unsafe { out.write(ScratchObject::String(string)) }
-}
-
-pub extern "C" fn to_string_from_bool(i1: i64, out: *mut ScratchObject) {
-    let obj = ScratchObject::Bool(i1 != 0);
-    let string = obj.to_str();
-    unsafe { out.write(ScratchObject::String(string)) }
-}
-
-pub extern "C" fn drop_obj(i1: *mut ScratchObject) {
-    unsafe {
-        // println!("dropping obj {}", *i1);
-        // println!("setting var: force drop obj: {}", *i1);
-        std::ptr::drop_in_place(i1);
     }
 }
 
@@ -140,37 +76,15 @@ impl ScratchObject {
     /// Gets a number from a ScratchObject using implicit convertion.
     /// Supports `0x` hexadecimal and `0b` binary literal strings.
     /// # Examples
-    /// * `Number(2.0) -> 2.0`
-    /// * `String("5") -> 5.0`
-    /// * `String("0x10") -> 16.0`
-    /// * `String("0b10") -> 2.0`
-    /// * `String("something") -> 0.0` (a default value if not valid)
-    /// * `Bool(true) -> 1.0`
-    pub fn to_number(&self) -> f64 {
-        // Why two functions?
-        // If I just use one function `to_number()` for everything,
-        // then if a pointer is hit, it would call to_number()
-        // on the data pointed by the pointer, being recursive.
-
-        // The calling would be:
-        // to_number(pointer) -> to_number(*pointer) -> actual value
-
-        // However, we know there is only one level of nesting.
-        // The calling WON'T be:
-        // to_number(pointer) -> to_number(*pointer) -> to_number(*pointer) -> actual value
-
-        // So, we can just use a different function for pointers.
-        // This way, the calling will be:
-        // to_number(pointer) -> to_number_flattened(*pointer) -> actual value
-
-        // if let ScratchObject::Pointer(ptr) = self {
-        // memory[*ptr].to_number_inner()
-        // } else {
-        self.to_number_inner()
-        // }
-    }
-
-    fn to_number_inner(&self) -> f64 {
+    /// ```
+    /// assert_eq!(ScratchObject::Number(2.0).convert_to_number(), 2.0);
+    /// assert_eq!(ScratchObject::String("5".to_owned()).convert_to_number(), 5.0);
+    /// assert_eq!(ScratchObject::String("0x10".to_owned()).convert_to_number(), 16.0);
+    /// assert_eq!(ScratchObject::String("0b10".to_owned()).convert_to_number(), 2.0);
+    /// assert_eq!(ScratchObject::String("something".to_owned()).convert_to_number(), 0.0);
+    /// assert_eq!(ScratchObject::Bool(true).convert_to_number(), 1.0);
+    /// ```
+    pub fn convert_to_number(&self) -> f64 {
         match self {
             ScratchObject::Number(number) => *number,
             ScratchObject::String(string) => string.parse().unwrap_or({
@@ -185,70 +99,51 @@ impl ScratchObject {
                 }
             }),
             ScratchObject::Bool(boolean) => *boolean as i32 as f64,
-            // ScratchObject::Pointer(_) => unreachable!(),
         }
     }
-
-    // /// Extracts a number from a [`ScratchObject::Number`].
-    // ///
-    // /// # Warning
-    // /// Only use this if you are *100% absolutely* sure that
-    // /// the data is a Number. If it is a string or bool, it
-    // /// won't get converted.
-    // ///
-    // /// # Safety
-    // /// Running this on a String, Bool or Pointer is
-    // /// *UNDEFINED BEHAVIOUR* and may cause bugs and crashes.
-    // ///
-    // /// Let me reiterate, only use this if you're sure the value
-    // /// is a number.
-    // ///
-    // /// # Why?
-    // /// Sometimes, if a variable is known to be a number, it
-    // /// makes sense to directly extract the [`f64`] from it,
-    // /// instead of checking for types and conversions.
-    // pub unsafe fn to_number_unchecked(&self) -> f64 {
-    //     // if let ScratchObject::Pointer(ptr) = self {
-    //     // memory[*ptr].to_number_unchecked_inner()
-    //     // } else {
-    //     self.to_number_unchecked_inner()
-    //     // }
-    // }
-
-    // unsafe fn to_number_unchecked_inner(&self) -> f64 {
-    //     match self {
-    //         ScratchObject::Number(number) => *number,
-    //         _ => unreachable!(),
-    //     }
-    // }
 
     /// Gets a bool from a ScratchObject using implicit convertion.
     /// # Rules
     /// * All non zero and NaN numbers are truthy.
     /// * All strings except for "false" and "0" are truthy.
     /// # Examples
-    /// * `Number(1.0) -> true`
-    /// * `Number(NaN) -> false`
-    /// * `Number(0.0) -> false`
-    /// * `Number(-0.0) -> true`
-    /// * `String("true") -> true`
-    /// * `String("something") -> true`
-    /// * `String("false") -> false`
-    /// * `String("0") -> false`
-    /// * `String("0.0") -> true`
-    /// * `Bool(true) -> true`
-    /// * `Bool(false) -> false`
-    pub fn to_bool(&self) -> bool {
-        // We don't use the above trick because it's slower here?
+    /// ```
+    /// assert_eq!(ScratchObject::Number(1.0).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::Number(std::f64::NAN).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::Number(0.0).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::Number(-0.0).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::String("true".to_owned()).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::String("something".to_owned()).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::String("false".to_owned()).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::String("0".to_owned()).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::String("0.0".to_owned()).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::Bool(true).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::Bool(false).convert_to_bool(), false);
+    /// ```
+    pub fn convert_to_bool(&self) -> bool {
         match self {
             ScratchObject::Number(n) => *n != 0.0 && !n.is_nan(),
             ScratchObject::String(s) => s != "0" && s != "false",
             ScratchObject::Bool(b) => *b,
-            // ScratchObject::Pointer(p) => memory[*p].to_bool(memory),
         }
     }
 
-    pub fn to_str(&self) -> String {
+    /// Converts a ScratchObject to a string.
+    ///
+    /// Not to be confused with [`ScratchObject::to_string`]
+    /// as that is for pretty-printing whereas this is for conversion
+    /// in the actual interpreter.
+    ///
+    /// # Examples
+    /// ```
+    /// assert_eq!(ScratchObject::Number(0.0).convert_to_string(), "0");
+    /// assert_eq!(ScratchObject::Number(6.9).convert_to_string(), "6.9");
+    /// assert_eq!(ScratchObject::Number(2e22).convert_to_string(), "2e+22");
+    /// assert_eq!(ScratchObject::Number(2e-22).convert_to_string(), "2e-22");
+    /// assert_eq!(ScratchObject::Bool(true).convert_to_string(), "true");
+    /// assert_eq!(ScratchObject::Bool(false).convert_to_string(), "false");
+    /// ```
+    pub fn convert_to_string(&self) -> String {
         // If number is bigger than this then represent as exponentials.
         const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
         // If number is smaller than this then represent as exponentials.
@@ -279,7 +174,6 @@ impl ScratchObject {
             }
             ScratchObject::String(s) => s.to_owned(), // Faster than s.to_string()
             ScratchObject::Bool(b) => b.to_string(),
-            // ScratchObject::Pointer(p) => memory[*p].to_string(memory),
         }
     }
 }
@@ -298,47 +192,81 @@ mod tests {
 
     #[test]
     fn conversion_bool() {
-        // let memory: [ScratchObject; 0] = [];
+        assert_eq!(
+            ScratchObject::String("true".to_owned()).convert_to_bool(),
+            true
+        );
+        assert_eq!(
+            ScratchObject::String("false".to_owned()).convert_to_bool(),
+            false
+        );
 
-        assert_eq!(ScratchObject::String("true".to_owned()).to_bool(), true);
-        assert_eq!(ScratchObject::String("false".to_owned()).to_bool(), false);
+        assert_eq!(
+            ScratchObject::String("1".to_owned()).convert_to_bool(),
+            true
+        );
+        assert_eq!(
+            ScratchObject::String("0".to_owned()).convert_to_bool(),
+            false
+        );
 
-        assert_eq!(ScratchObject::String("1".to_owned()).to_bool(), true);
-        assert_eq!(ScratchObject::String("0".to_owned()).to_bool(), false);
-
-        assert_eq!(ScratchObject::String("1.0".to_owned()).to_bool(), true);
-        assert_eq!(ScratchObject::String("0.0".to_owned()).to_bool(), true);
-        assert_eq!(ScratchObject::String("-1".to_owned()).to_bool(), true);
-        assert_eq!(ScratchObject::String("-1.0".to_owned()).to_bool(), true);
-        assert_eq!(ScratchObject::String("0e10".to_owned()).to_bool(), true);
+        assert_eq!(
+            ScratchObject::String("1.0".to_owned()).convert_to_bool(),
+            true
+        );
+        assert_eq!(
+            ScratchObject::String("0.0".to_owned()).convert_to_bool(),
+            true
+        );
+        assert_eq!(
+            ScratchObject::String("-1".to_owned()).convert_to_bool(),
+            true
+        );
+        assert_eq!(
+            ScratchObject::String("-1.0".to_owned()).convert_to_bool(),
+            true
+        );
+        assert_eq!(
+            ScratchObject::String("0e10".to_owned()).convert_to_bool(),
+            true
+        );
     }
 
     #[test]
     fn conversion_number() {
-        // let memory: [ScratchObject; 0] = [];
-
-        assert_eq!(ScratchObject::Number(69.0).to_number(), 69.0);
-        assert_eq!(ScratchObject::String("69.0".to_owned()).to_number(), 69.0);
-
-        assert_eq!(ScratchObject::String("1e3".to_owned()).to_number(), 1000.0);
+        assert_eq!(ScratchObject::Number(69.0).convert_to_number(), 69.0);
         assert_eq!(
-            ScratchObject::String("1.2e3".to_owned()).to_number(),
+            ScratchObject::String("69.0".to_owned()).convert_to_number(),
+            69.0
+        );
+
+        assert_eq!(
+            ScratchObject::String("1e3".to_owned()).convert_to_number(),
+            1000.0
+        );
+        assert_eq!(
+            ScratchObject::String("1.2e3".to_owned()).convert_to_number(),
             1200.0
         );
 
-        assert_eq!(ScratchObject::String("0x10".to_owned()).to_number(), 16.0);
-        assert_eq!(ScratchObject::String("0b10".to_owned()).to_number(), 2.0);
+        assert_eq!(
+            ScratchObject::String("0x10".to_owned()).convert_to_number(),
+            16.0
+        );
+        assert_eq!(
+            ScratchObject::String("0b10".to_owned()).convert_to_number(),
+            2.0
+        );
     }
 
     #[test]
     fn conversion_string() {
-        // let memory: [ScratchObject; 0] = [];
+        assert_eq!(ScratchObject::Number(0.0).convert_to_string(), "0");
+        assert_eq!(ScratchObject::Number(6.9).convert_to_string(), "6.9");
+        assert_eq!(ScratchObject::Number(2e22).convert_to_string(), "2e+22");
+        assert_eq!(ScratchObject::Number(2e-22).convert_to_string(), "2e-22");
 
-        assert_eq!(ScratchObject::Number(6.9).to_str(), "6.9");
-        assert_eq!(ScratchObject::Number(2e22).to_str(), "2e+22");
-        assert_eq!(ScratchObject::Number(2e-22).to_str(), "2e-22");
-
-        assert_eq!(ScratchObject::Bool(true).to_str(), "true");
-        assert_eq!(ScratchObject::Bool(false).to_str(), "false");
+        assert_eq!(ScratchObject::Bool(true).convert_to_string(), "true");
+        assert_eq!(ScratchObject::Bool(false).convert_to_string(), "false");
     }
 }

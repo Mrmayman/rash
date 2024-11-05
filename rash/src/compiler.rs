@@ -15,7 +15,6 @@ use crate::{
     compiler_blocks::{c_var_read, c_var_set},
     data_types::{self, ScratchObject, ID_NUMBER, ID_STRING},
     input_primitives::{Input, Ptr, ReturnValue},
-    ins_shortcuts::{ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string},
     test_programs,
 };
 
@@ -33,6 +32,7 @@ pub struct Compiler {
 pub enum ScratchBlock {
     WhenFlagClicked,
     VarSet(Ptr, Input),
+    VarChange(Ptr, Input),
     VarRead(Ptr),
     OpAdd(Input, Input),
     OpSub(Input, Input),
@@ -88,7 +88,7 @@ impl Compiler {
 
         // let code_sprites = self.get_block_code();
         let code_sprites = vec![CodeSprite {
-            scripts: vec![test_programs::pi()],
+            scripts: vec![test_programs::repeated_join_string()],
         }];
         for sprite in &code_sprites {
             for script in &sprite.scripts {
@@ -99,7 +99,6 @@ impl Compiler {
                 let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
 
                 let mut code_block = builder.create_block();
-                // builder.seal_block(code_block);
 
                 builder.append_block_params_for_function_params(code_block);
                 builder.switch_to_block(code_block);
@@ -137,15 +136,14 @@ impl Compiler {
 
                 buffer.copy_from_slice(code.code_buffer());
 
-                let ptr = buffer.as_ptr();
-                let bytes = unsafe { std::slice::from_raw_parts(ptr, code.code_buffer().len()) };
-
-                std::fs::write("func.bin", bytes).unwrap();
-
-                for (_i, byte) in bytes.iter().enumerate() {
-                    print!("{:#04x} ", byte);
-                }
-                println!();
+                // Machine code dump
+                // let ptr = buffer.as_ptr();
+                // let bytes = unsafe { std::slice::from_raw_parts(ptr, code.code_buffer().len()) };
+                // for (_i, byte) in bytes.iter().enumerate() {
+                //     print!("{:#04x} ", byte);
+                // }
+                // println!();
+                // std::fs::write("func.bin", bytes).unwrap();
 
                 let buffer = buffer.make_exec().unwrap();
 
@@ -287,17 +285,35 @@ pub fn compile_block(
                 .brif(condition, body_block, &[counter], end_block, &[]);
 
             builder.switch_to_block(body_block);
+            let counter = builder.block_params(body_block)[0];
+            let incremented = builder.ins().iadd_imm(counter, 1);
             for block in vec {
                 compile_block(block, builder, &mut body_block, variable_type_data);
             }
-            let counter = builder.block_params(body_block)[0];
-            let incremented = builder.ins().iadd_imm(counter, 1);
             builder.ins().jump(loop_block, &[incremented]);
             builder.seal_block(body_block);
             builder.seal_block(loop_block);
 
             builder.switch_to_block(end_block);
             *code_block = end_block;
+        }
+        ScratchBlock::VarChange(ptr, input) => {
+            let input = input.get_number(builder, code_block, variable_type_data);
+            let old_value = c_var_read(builder, *ptr, variable_type_data);
+            let old_value = old_value.get_number(builder);
+            let new_value = builder.ins().fadd(old_value, input);
+
+            let mem_ptr = builder
+                .ins()
+                .iconst(I64, unsafe { MEMORY.as_ptr().offset(ptr.0 as isize) }
+                    as i64);
+
+            builder.ins().store(MemFlags::new(), new_value, mem_ptr, 8);
+
+            if !matches!(variable_type_data.get(ptr), Some(VarType::Number)) {
+                let id = builder.ins().iconst(I64, ID_NUMBER as i64);
+                builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
+            }
         }
     }
     None
@@ -308,13 +324,13 @@ pub fn print_func_addresses() {
     println!("op_join_string: {:X}", callbacks::op_join_string as usize);
     println!(
         "to_string_from_num: {:X}",
-        data_types::to_string_from_num as usize
+        callbacks::types::to_string_from_num as usize
     );
-    println!("to_string: {:X}", data_types::to_string as usize);
+    println!("to_string: {:X}", callbacks::types::to_string as usize);
     println!(
         "to_string_from_bool: {:X}",
-        data_types::to_string_from_bool as usize
+        callbacks::types::to_string_from_bool as usize
     );
-    println!("to_number: {:X}", data_types::to_number as usize);
-    println!("drop_obj: {:X}", data_types::drop_obj as usize);
+    println!("to_number: {:X}", callbacks::types::to_number as usize);
+    println!("drop_obj: {:X}", callbacks::types::drop_obj as usize);
 }

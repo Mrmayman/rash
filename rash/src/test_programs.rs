@@ -90,6 +90,35 @@ pub fn repeated_sum() -> Vec<ScratchBlock> {
     ]
 }
 
+pub fn repeated_join_string() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(7),
+            Input::Obj(ScratchObject::String("hello ".to_owned())),
+        ),
+        ScratchBlock::ControlRepeat(
+            Input::Obj(ScratchObject::Number(100.0)),
+            vec![
+                ScratchBlock::VarSet(
+                    Ptr(7),
+                    Input::Block(Box::new(ScratchBlock::OpJoin(
+                        Input::new_block(ScratchBlock::VarRead(Ptr(7))),
+                        Input::Obj(ScratchObject::String("world".to_owned())),
+                    ))),
+                ),
+                ScratchBlock::VarSet(
+                    Ptr(7),
+                    Input::Block(Box::new(ScratchBlock::OpJoin(
+                        Input::new_block(ScratchBlock::VarRead(Ptr(7))),
+                        Input::Obj(ScratchObject::String(", ".to_owned())),
+                    ))),
+                ),
+            ],
+        ),
+    ]
+}
+
 pub fn pi() -> Vec<ScratchBlock> {
     const PI: Ptr = Ptr(0);
     const D: Ptr = Ptr(1);
@@ -99,45 +128,55 @@ pub fn pi() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(PI, Input::new_num(0.0)),
         ScratchBlock::VarSet(D, Input::new_num(1.0)),
         ScratchBlock::VarSet(I, Input::new_num(0.0)),
+        // A test of nested repeat loops
         ScratchBlock::ControlRepeat(
-            Input::new_num(1000000.0),
-            vec![
-                ScratchBlock::VarSet(
-                    PI,
-                    Input::new_block(ScratchBlock::OpAdd(
-                        Input::new_block(ScratchBlock::VarRead(PI)),
-                        Input::new_block(ScratchBlock::OpDiv(
-                            Input::new_block(ScratchBlock::OpSub(
-                                Input::new_block(ScratchBlock::OpMul(
-                                    Input::new_num(8.0),
-                                    Input::new_block(ScratchBlock::OpMod(
-                                        // Input::new_num(2.0),
-                                        Input::new_block(ScratchBlock::VarRead(I)),
-                                        Input::new_num(2.0),
+            Input::new_num(1000.0),
+            vec![ScratchBlock::ControlRepeat(
+                Input::new_num(1000.0),
+                vec![
+                    // PI += ((8 * (I % 2)) - 4) / D
+                    ScratchBlock::VarSet(
+                        PI,
+                        Input::new_block(ScratchBlock::OpAdd(
+                            Input::new_block(ScratchBlock::VarRead(PI)),
+                            Input::new_block(ScratchBlock::OpDiv(
+                                Input::new_block(ScratchBlock::OpSub(
+                                    Input::new_block(ScratchBlock::OpMul(
+                                        Input::new_num(8.0),
+                                        Input::new_block(ScratchBlock::OpMod(
+                                            Input::new_block(ScratchBlock::VarRead(I)),
+                                            Input::new_num(2.0),
+                                        )),
                                     )),
+                                    Input::new_num(4.0),
                                 )),
-                                Input::new_num(4.0),
+                                Input::new_block(ScratchBlock::VarRead(D)),
                             )),
-                            Input::new_block(ScratchBlock::VarRead(D)),
                         )),
+                    ),
+                    ScratchBlock::VarChange(D, Input::new_num(2.0)),
+                    ScratchBlock::VarChange(I, Input::new_num(1.0)),
+                ],
+            )],
+        ),
+    ]
+}
+
+pub fn test_nested_repeat() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::ControlRepeat(
+            Input::Obj(ScratchObject::Number(9.0)),
+            vec![ScratchBlock::ControlRepeat(
+                Input::Obj(ScratchObject::Number(11.0)),
+                vec![ScratchBlock::VarSet(
+                    Ptr(0),
+                    Input::new_block(ScratchBlock::OpJoin(
+                        Input::new_block(ScratchBlock::VarRead(Ptr(0))),
+                        Input::Obj(ScratchObject::String("H".to_owned())),
                     )),
-                ),
-                ScratchBlock::VarSet(
-                    D,
-                    Input::new_block(ScratchBlock::OpAdd(
-                        Input::new_block(ScratchBlock::VarRead(D)),
-                        Input::new_num(2.0),
-                    )),
-                ),
-                ScratchBlock::VarSet(
-                    I,
-                    // Input::new_num(2.0),
-                    Input::new_block(ScratchBlock::OpAdd(
-                        Input::new_block(ScratchBlock::VarRead(I)),
-                        Input::new_num(1.0),
-                    )),
-                ),
-            ],
+                )],
+            )],
         ),
     ]
 }

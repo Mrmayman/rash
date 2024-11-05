@@ -6,14 +6,32 @@ use isa::CallConv;
 use types::{F64, I32, I64};
 
 use crate::{
+    callbacks,
     compiler::{compile_block, ScratchBlock, VarType},
-    data_types::{self, ScratchObject},
+    data_types::ScratchObject,
     ins_shortcuts::{ins_call_to_num, ins_create_string_stack_slot},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
 
+/// The input to a [`ScratchBlock`]
+///
+/// This can be either a [`ScratchObject`] object (number/string/bool)
+/// or a [`ScratchBlock`] with another block inside.
+///
+/// This is used to represent the inputs to a block in the Scratch program.
+///
+/// # Examples
+/// ```no_run
+/// ScratchBlock::SetVar(Ptr(0), Input::new_num(5.0));
+/// ScratchBlock::ChangeVar(
+///     Ptr(1),
+///     Input::new_block(
+///         ScratchBlock::Add(Input::new_num(5.0), Input::new_num(3.0))
+///     )
+/// );
+/// ```
 #[derive(Debug)]
 pub enum Input {
     Obj(ScratchObject),
@@ -37,13 +55,12 @@ impl Input {
     ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
-                let o = scratch_object.to_number();
+                let o = scratch_object.convert_to_number();
                 builder.ins().f64const(o)
             }
             Input::Block(scratch_block) => {
                 let o =
                     compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
-                println!("compiling block: {:?}", o);
                 o.get_number(builder)
             }
         }
@@ -66,7 +83,7 @@ impl Input {
                 let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
                 // Transmute the String into a [i64; 3] array
-                let string = scratch_object.to_str();
+                let string = scratch_object.convert_to_string();
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
 
                 let val1 = builder.ins().iconst(I64, bytes[0]);
@@ -106,14 +123,8 @@ impl ReturnValue {
                 builder.inst_results(num)[0]
             }
             ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
-            ReturnValue::ObjectPointer(value, slot) => {
-                // Get 4 i64 from pointer
-
-                // The "tag" of a Rust enum is surprisingly i32 but aligned as i64
-                // So we must load an i32 and convert it to i64
-                let i1 = builder.ins().stack_load(I32, slot, 0);
-                let i1 = builder.ins().sextend(I64, i1);
-
+            ReturnValue::ObjectPointer(_value, slot) => {
+                let i1 = builder.ins().stack_load(I64, slot, 0);
                 let i2 = builder.ins().stack_load(I64, slot, 8);
                 let i3 = builder.ins().stack_load(I64, slot, 16);
                 let i4 = builder.ins().stack_load(I64, slot, 24);
@@ -126,12 +137,11 @@ impl ReturnValue {
     }
 
     pub fn get_string(self, builder: &mut FunctionBuilder<'_>) -> Value {
-        // println!("get_string {self:?}");
         match self {
             ReturnValue::Num(value) => {
                 let func = builder
                     .ins()
-                    .iconst(I64, data_types::to_string_from_num as i64);
+                    .iconst(I64, callbacks::types::to_string_from_num as i64);
 
                 let stack_ptr = ins_create_string_stack_slot(builder);
 
@@ -142,14 +152,13 @@ impl ReturnValue {
                     sig
                 });
                 builder.ins().call_indirect(sig, func, &[value, stack_ptr]);
-                // let results = builder.inst_results(num);
                 stack_ptr
             }
             ReturnValue::Object((i1, i2, i3, i4)) => get_string_from_obj(builder, i1, i2, i3, i4),
             ReturnValue::Bool(value) => {
                 let func = builder
                     .ins()
-                    .iconst(I64, data_types::to_string_from_bool as i64);
+                    .iconst(I64, callbacks::types::to_string_from_bool as i64);
 
                 let stack_ptr = ins_create_string_stack_slot(builder);
 
@@ -163,7 +172,7 @@ impl ReturnValue {
                 // let results = builder.inst_results(num);
                 stack_ptr
             }
-            ReturnValue::ObjectPointer(value, slot) => {
+            ReturnValue::ObjectPointer(_value, slot) => {
                 // read 4 i64 from pointer
                 let i1 = builder.ins().stack_load(I64, slot, 0);
                 let i2 = builder.ins().stack_load(I64, slot, 8);
@@ -187,7 +196,9 @@ fn get_string_from_obj(
     i3: Value,
     i4: Value,
 ) -> Value {
-    let func = builder.ins().iconst(I64, data_types::to_string as i64);
+    let func = builder
+        .ins()
+        .iconst(I64, callbacks::types::to_string as i64);
 
     let stack_ptr = ins_create_string_stack_slot(builder);
 

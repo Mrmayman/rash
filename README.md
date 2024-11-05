@@ -1,2 +1,2 @@
 # rash
-A fast Scratch interpreter written in rust
+A Scratch JIT compiler written in rust using [cranelift](https://cranelift.dev/).

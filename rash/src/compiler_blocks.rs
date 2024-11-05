@@ -19,7 +19,7 @@ pub fn c_var_read(
 ) -> ReturnValue {
     match variable_type_data.get(&ptr) {
         Some(VarType::Number) => {
-            println!("reading number {}", ptr.0);
+            // println!("reading number {}", ptr.0);
             // if ptr.0 == 2 {
             //     return ReturnValue::Num(builder.ins().f64const(10.0));
             // }
@@ -81,7 +81,12 @@ pub fn c_var_set(
 ) {
     match obj {
         Input::Obj(obj) => {
-            ins_drop_obj(builder, *ptr);
+            if !matches!(
+                variable_type_data.get(ptr),
+                Some(VarType::Number) | Some(VarType::Bool)
+            ) {
+                ins_drop_obj(builder, *ptr);
+            }
             match obj {
                 ScratchObject::Number(num) => {
                     ins_mem_write_f64(builder, *ptr, *num);
