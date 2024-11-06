@@ -104,6 +104,25 @@ impl Input {
             }
         }
     }
+
+    pub fn get_bool(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        code_block: &mut Block,
+        variable_type_data: &mut HashMap<Ptr, VarType>,
+    ) -> Value {
+        match self {
+            Input::Obj(scratch_object) => {
+                let b = scratch_object.convert_to_bool() as i64;
+                builder.ins().iconst(I64, b)
+            }
+            Input::Block(scratch_block) => {
+                let b =
+                    compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
+                b.get_bool(builder)
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -186,6 +205,57 @@ impl ReturnValue {
 
     pub fn is_bool(&self) -> bool {
         matches!(self, ReturnValue::Bool(_))
+    }
+
+    fn get_bool(&self, builder: &mut FunctionBuilder<'_>) -> Value {
+        match self {
+            ReturnValue::Num(value) => {
+                // (*n != 0.0 && !n.is_nan()) as i64
+                let zero = builder.ins().f64const(0.0);
+                let nan = builder.ins().f64const(f64::NAN);
+                let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
+                let is_not_nan = builder.ins().fcmp(FloatCC::NotEqual, *value, nan);
+                builder.ins().band(is_not_zero, is_not_nan)
+            }
+            ReturnValue::Bool(value) => *value,
+            ReturnValue::Object((i1, i2, i3, i4)) => {
+                let func = builder.ins().iconst(I64, callbacks::types::to_bool as i64);
+
+                let sig = builder.import_signature({
+                    let mut sig = Signature::new(CallConv::SystemV);
+                    sig.params.push(AbiParam::new(I64));
+                    sig.params.push(AbiParam::new(I64));
+                    sig.params.push(AbiParam::new(I64));
+                    sig.params.push(AbiParam::new(I64));
+                    sig.returns.push(AbiParam::new(I64));
+                    sig
+                });
+                let ins = builder
+                    .ins()
+                    .call_indirect(sig, func, &[*i1, *i2, *i3, *i4]);
+                builder.inst_results(ins)[0]
+            }
+            ReturnValue::ObjectPointer(_value, stack_slot) => {
+                let i1 = builder.ins().stack_load(I64, *stack_slot, 0);
+                let i2 = builder.ins().stack_load(I64, *stack_slot, 8);
+                let i3 = builder.ins().stack_load(I64, *stack_slot, 16);
+                let i4 = builder.ins().stack_load(I64, *stack_slot, 24);
+
+                let func = builder.ins().iconst(I64, callbacks::types::to_bool as i64);
+
+                let sig = builder.import_signature({
+                    let mut sig = Signature::new(CallConv::SystemV);
+                    sig.params.push(AbiParam::new(I64));
+                    sig.params.push(AbiParam::new(I64));
+                    sig.params.push(AbiParam::new(I64));
+                    sig.params.push(AbiParam::new(I64));
+                    sig.returns.push(AbiParam::new(I64));
+                    sig
+                });
+                let ins = builder.ins().call_indirect(sig, func, &[i1, i2, i3, i4]);
+                builder.inst_results(ins)[0]
+            }
+        }
     }
 }
 

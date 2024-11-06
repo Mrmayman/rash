@@ -117,13 +117,14 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::String("false".to_owned()).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::String("0".to_owned()).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::String("0.0".to_owned()).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::String("".to_owned()).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::Bool(true).convert_to_bool(), true);
     /// assert_eq!(ScratchObject::Bool(false).convert_to_bool(), false);
     /// ```
     pub fn convert_to_bool(&self) -> bool {
         match self {
             ScratchObject::Number(n) => *n != 0.0 && !n.is_nan(),
-            ScratchObject::String(s) => s != "0" && s != "false",
+            ScratchObject::String(s) => s != "0" && s != "false" && !s.is_empty(),
             ScratchObject::Bool(b) => *b,
         }
     }
@@ -229,6 +230,10 @@ mod tests {
         assert_eq!(
             ScratchObject::String("0e10".to_owned()).convert_to_bool(),
             true
+        );
+        assert_eq!(
+            ScratchObject::String(String::new()).convert_to_bool(),
+            false
         );
     }
 

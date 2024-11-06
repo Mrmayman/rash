@@ -119,6 +119,88 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
     ]
 }
 
+pub fn if_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::ControlIf(
+            Input::new_num(1.0),
+            vec![ScratchBlock::VarSet(
+                Ptr(0),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::new_num(0.0),
+            vec![ScratchBlock::VarSet(
+                Ptr(1),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::Bool(true)),
+            vec![ScratchBlock::VarSet(
+                Ptr(2),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::Bool(false)),
+            vec![ScratchBlock::VarSet(
+                Ptr(3),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::String("hello".to_owned())),
+            vec![ScratchBlock::VarSet(
+                Ptr(4),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::String(String::new())),
+            vec![ScratchBlock::VarSet(
+                Ptr(5),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::String("true".to_owned())),
+            vec![ScratchBlock::VarSet(
+                Ptr(6),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::String("false".to_owned())),
+            vec![ScratchBlock::VarSet(
+                Ptr(7),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        // nested statements
+        ScratchBlock::ControlIf(
+            Input::Obj(ScratchObject::Bool(true)),
+            vec![
+                ScratchBlock::ControlIf(
+                    Input::Obj(ScratchObject::Bool(true)),
+                    vec![ScratchBlock::VarSet(
+                        Ptr(8),
+                        Input::Obj(ScratchObject::Number(1.0)),
+                    )],
+                ),
+                ScratchBlock::ControlIf(
+                    Input::Obj(ScratchObject::Bool(false)),
+                    vec![ScratchBlock::VarSet(
+                        Ptr(9),
+                        Input::Obj(ScratchObject::Number(1.0)),
+                    )],
+                ),
+            ],
+        ),
+    ]
+}
+
 pub fn pi() -> Vec<ScratchBlock> {
     const PI: Ptr = Ptr(0);
     const D: Ptr = Ptr(1);

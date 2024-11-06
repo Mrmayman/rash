@@ -40,6 +40,7 @@ pub enum ScratchBlock {
     OpDiv(Input, Input),
     OpJoin(Input, Input),
     OpMod(Input, Input),
+    ControlIf(Input, Vec<ScratchBlock>),
     ControlRepeat(Input, Vec<ScratchBlock>),
 }
 
@@ -88,7 +89,7 @@ impl Compiler {
 
         // let code_sprites = self.get_block_code();
         let code_sprites = vec![CodeSprite {
-            scripts: vec![test_programs::repeated_join_string()],
+            scripts: vec![test_programs::if_test()],
         }];
         for sprite in &code_sprites {
             for script in &sprite.scripts {
@@ -314,6 +315,24 @@ pub fn compile_block(
                 let id = builder.ins().iconst(I64, ID_NUMBER as i64);
                 builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
             }
+        }
+        ScratchBlock::ControlIf(input, vec) => {
+            let input = input.get_bool(builder, code_block, variable_type_data);
+            let mut inside_block = builder.create_block();
+            let end_block = builder.create_block();
+
+            builder.ins().brif(input, inside_block, &[], end_block, &[]);
+            builder.seal_block(*code_block);
+
+            builder.switch_to_block(inside_block);
+            for block in vec {
+                compile_block(block, builder, &mut inside_block, variable_type_data);
+            }
+            builder.ins().jump(end_block, &[]);
+            builder.seal_block(inside_block);
+
+            builder.switch_to_block(end_block);
+            *code_block = end_block;
         }
     }
     None

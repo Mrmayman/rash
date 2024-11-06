@@ -1,5 +1,21 @@
 use crate::data_types::ScratchObject;
 
+pub extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
+    let i1 = (i1 as i32) as i64;
+    #[cfg(debug_assertions)]
+    {
+        if !(0..4).contains(&i1) {
+            eprintln!("error converting to bool - enum id: {i1}");
+            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
+            eprintln!("hex: {:X} {:X} (bitshift)", i1 << 32, i2 << 32);
+        }
+    }
+    debug_assert!(i1 < 4);
+    debug_assert!(i1 >= 0);
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    obj.convert_to_bool() as i64
+}
+
 pub extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
     let i1 = (i1 as i32) as i64;
     #[cfg(debug_assertions)]
