@@ -119,6 +119,7 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
     ]
 }
 
+// Pass: 1,0,1,0 pattern until *9
 pub fn if_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
@@ -197,6 +198,79 @@ pub fn if_test() -> Vec<ScratchBlock> {
                     )],
                 ),
             ],
+        ),
+    ]
+}
+
+// Pass: *1-*5 true
+pub fn if_else_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::ControlIfElse(
+            Input::Obj(ScratchObject::Bool(true)),
+            vec![ScratchBlock::VarSet(
+                Ptr(0),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+            vec![ScratchBlock::VarSet(
+                Ptr(0),
+                Input::Obj(ScratchObject::Number(0.0)),
+            )],
+        ),
+        ScratchBlock::ControlIfElse(
+            Input::Obj(ScratchObject::Bool(false)),
+            vec![ScratchBlock::VarSet(
+                Ptr(1),
+                Input::Obj(ScratchObject::Number(0.0)),
+            )],
+            vec![ScratchBlock::VarSet(
+                Ptr(1),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIfElse(
+            Input::Obj(ScratchObject::String("hello".to_owned())),
+            vec![ScratchBlock::VarSet(
+                Ptr(2),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+            vec![ScratchBlock::VarSet(
+                Ptr(2),
+                Input::Obj(ScratchObject::Number(0.0)),
+            )],
+        ),
+        ScratchBlock::ControlIfElse(
+            Input::Obj(ScratchObject::String(String::new())),
+            vec![ScratchBlock::VarSet(
+                Ptr(3),
+                Input::Obj(ScratchObject::Number(0.0)),
+            )],
+            vec![ScratchBlock::VarSet(
+                Ptr(3),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+        ),
+        ScratchBlock::ControlIfElse(
+            Input::Obj(ScratchObject::String("true".to_owned())),
+            vec![ScratchBlock::VarSet(
+                Ptr(4),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
+            vec![ScratchBlock::VarSet(
+                Ptr(4),
+                Input::Obj(ScratchObject::Number(0.0)),
+            )],
+        ),
+        ScratchBlock::ControlIfElse(
+            Input::Obj(ScratchObject::String("false".to_owned())),
+            vec![ScratchBlock::VarSet(
+                Ptr(5),
+                Input::Obj(ScratchObject::Number(0.0)),
+            )],
+            vec![ScratchBlock::VarSet(
+                Ptr(5),
+                Input::Obj(ScratchObject::Number(1.0)),
+            )],
         ),
     ]
 }
