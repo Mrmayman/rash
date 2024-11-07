@@ -40,9 +40,12 @@ pub enum ScratchBlock {
     OpDiv(Input, Input),
     OpJoin(Input, Input),
     OpMod(Input, Input),
+    OpGreater(Input, Input),
+    OpLesser(Input, Input),
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
     ControlRepeat(Input, Vec<ScratchBlock>),
+    ControlRepeatUntil(Input, Vec<ScratchBlock>),
 }
 
 #[derive(Debug)]
@@ -90,7 +93,7 @@ impl Compiler {
 
         // let code_sprites = self.get_block_code();
         let code_sprites = vec![CodeSprite {
-            scripts: vec![test_programs::if_else_test()],
+            scripts: vec![test_programs::repeat_until()],
         }];
         for sprite in &code_sprites {
             for script in &sprite.scripts {
@@ -362,6 +365,42 @@ pub fn compile_block(
 
             builder.switch_to_block(end_block);
             *code_block = end_block;
+        }
+        ScratchBlock::ControlRepeatUntil(input, vec) => {
+            let loop_block = builder.create_block();
+            let mut body_block = builder.create_block();
+            let end_block = builder.create_block();
+            builder.ins().jump(loop_block, &[]);
+            builder.seal_block(*code_block);
+
+            builder.switch_to_block(loop_block);
+            let condition = input.get_bool(builder, code_block, variable_type_data);
+            builder
+                .ins()
+                .brif(condition, end_block, &[], body_block, &[]);
+
+            builder.switch_to_block(body_block);
+            for block in vec {
+                compile_block(block, builder, &mut body_block, variable_type_data);
+            }
+            builder.ins().jump(loop_block, &[]);
+            builder.seal_block(body_block);
+            builder.seal_block(loop_block);
+
+            builder.switch_to_block(end_block);
+            *code_block = end_block;
+        }
+        ScratchBlock::OpGreater(a, b) => {
+            let a = a.get_number(builder, code_block, variable_type_data);
+            let b = b.get_number(builder, code_block, variable_type_data);
+            let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
+            return Some(ReturnValue::Bool(res));
+        }
+        ScratchBlock::OpLesser(a, b) => {
+            let a = a.get_number(builder, code_block, variable_type_data);
+            let b = b.get_number(builder, code_block, variable_type_data);
+            let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
+            return Some(ReturnValue::Bool(res));
         }
     }
     None

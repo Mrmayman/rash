@@ -336,3 +336,27 @@ pub fn test_nested_repeat() -> Vec<ScratchBlock> {
         ),
     ]
 }
+
+pub fn repeat_until() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), Input::new_num(0.0)),
+        ScratchBlock::ControlRepeatUntil(
+            Input::new_block(ScratchBlock::OpGreater(
+                Input::new_block(ScratchBlock::VarRead(Ptr(0))),
+                Input::new_num(10.0),
+            )),
+            vec![
+                ScratchBlock::VarSet(Ptr(1), Input::new_num(0.0)),
+                ScratchBlock::ControlRepeatUntil(
+                    Input::new_block(ScratchBlock::OpGreater(
+                        Input::new_block(ScratchBlock::VarRead(Ptr(1))),
+                        Input::new_num(20.0),
+                    )),
+                    vec![ScratchBlock::VarChange(Ptr(1), Input::new_num(1.0))],
+                ),
+                ScratchBlock::VarChange(Ptr(0), Input::new_num(1.0)),
+            ],
+        ),
+    ]
+}
