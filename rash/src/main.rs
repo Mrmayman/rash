@@ -1,6 +1,7 @@
 use compiler::{print_func_addresses, Compiler, MEMORY};
 use input_primitives::STRINGS_TO_DROP;
 
+mod block_test;
 mod blocks;
 mod callbacks;
 mod compiler;
@@ -8,11 +9,12 @@ mod data_types;
 mod input_primitives;
 mod ins_shortcuts;
 mod json;
-mod test_programs;
 
 fn main() {
     // let arg1 = std::env::args().nth(1).unwrap();
     // println!("opening dir {arg1}");
+
+    assert_eq!(std::mem::size_of::<usize>(), 8);
 
     print_func_addresses();
 
@@ -22,7 +24,7 @@ fn main() {
     drop_strings();
 
     // print memory
-    for (i, obj) in MEMORY.iter().enumerate().take(10) {
+    for (i, obj) in MEMORY.lock().unwrap().iter().enumerate().take(10) {
         println!("{}: {:?}", i, obj);
     }
 }

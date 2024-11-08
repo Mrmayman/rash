@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use codegen::{
     control::ControlPlane,
@@ -11,15 +11,14 @@ use target_lexicon::Triple;
 use types::{F64, I64};
 
 use crate::{
-    blocks, callbacks,
+    block_test, blocks, callbacks,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ReturnValue},
-    test_programs,
 };
 
 lazy_static! {
-    pub static ref MEMORY: Box<[ScratchObject]> =
-        vec![ScratchObject::Number(0.0); 1024].into_boxed_slice();
+    pub static ref MEMORY: Mutex<Box<[ScratchObject]>> =
+        Mutex::new(vec![ScratchObject::Number(0.0); 1024].into_boxed_slice());
 }
 
 pub struct Compiler {
@@ -49,14 +48,14 @@ pub enum ScratchBlock {
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum VarType {
     Number,
     Bool,
     String,
 }
 
-struct CodeSprite {
+pub struct CodeSprite {
     pub scripts: Vec<Vec<ScratchBlock>>,
 }
 
@@ -94,7 +93,7 @@ impl Compiler {
 
         // let code_sprites = self.get_block_code();
         let code_sprites = vec![CodeSprite {
-            scripts: vec![test_programs::str_ops()],
+            scripts: vec![block_test::str_ops()],
         }];
         for sprite in &code_sprites {
             for script in &sprite.scripts {
@@ -111,12 +110,14 @@ impl Compiler {
 
                 let mut variable_type_data: HashMap<Ptr, VarType> = HashMap::new();
 
+                let lock = MEMORY.lock().unwrap();
                 for block in script {
                     compile_block(
                         block,
                         &mut builder,
                         &mut code_block,
                         &mut variable_type_data,
+                        &lock,
                     );
                 }
 
@@ -171,58 +172,66 @@ pub fn compile_block(
     builder: &mut FunctionBuilder<'_>,
     code_block: &mut Block,
     variable_type_data: &mut HashMap<Ptr, VarType>,
+    memory: &[ScratchObject],
 ) -> Option<ReturnValue> {
     match block {
         ScratchBlock::WhenFlagClicked => {}
         ScratchBlock::VarSet(ptr, obj) => {
-            blocks::var::set(obj, builder, ptr, variable_type_data, code_block);
+            blocks::var::set(obj, builder, ptr, variable_type_data, code_block, memory);
         }
         ScratchBlock::OpAdd(a, b) => {
-            let a = a.get_number(builder, code_block, variable_type_data);
-            let b = b.get_number(builder, code_block, variable_type_data);
+            let a = a.get_number(builder, code_block, variable_type_data, memory);
+            let b = b.get_number(builder, code_block, variable_type_data, memory);
             let res = builder.ins().fadd(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpSub(a, b) => {
-            let a = a.get_number(builder, code_block, variable_type_data);
-            let b = b.get_number(builder, code_block, variable_type_data);
+            let a = a.get_number(builder, code_block, variable_type_data, memory);
+            let b = b.get_number(builder, code_block, variable_type_data, memory);
             let res = builder.ins().fsub(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpMul(a, b) => {
-            let a = a.get_number(builder, code_block, variable_type_data);
-            let b = b.get_number(builder, code_block, variable_type_data);
+            let a = a.get_number(builder, code_block, variable_type_data, memory);
+            let b = b.get_number(builder, code_block, variable_type_data, memory);
             let res = builder.ins().fmul(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpDiv(a, b) => {
-            let a = a.get_number(builder, code_block, variable_type_data);
-            let b = b.get_number(builder, code_block, variable_type_data);
+            let a = a.get_number(builder, code_block, variable_type_data, memory);
+            let b = b.get_number(builder, code_block, variable_type_data, memory);
             let res = builder.ins().fdiv(a, b);
             return Some(ReturnValue::Num(res));
         }
         ScratchBlock::OpMod(a, b) => {
-            let modulo = blocks::op::modulo(a, b, builder, code_block, variable_type_data);
+            let modulo = blocks::op::modulo(a, b, builder, code_block, variable_type_data, memory);
             return Some(ReturnValue::Num(modulo));
         }
         ScratchBlock::VarRead(ptr) => {
-            return Some(blocks::var::read(builder, *ptr, variable_type_data));
+            return Some(blocks::var::read(builder, *ptr, variable_type_data, memory));
         }
         ScratchBlock::OpStrJoin(a, b) => {
-            let obj = blocks::op::str_join(a, b, builder, code_block, variable_type_data);
+            let obj = blocks::op::str_join(a, b, builder, code_block, variable_type_data, memory);
             return Some(ReturnValue::Object(obj));
         }
         ScratchBlock::ControlRepeat(input, vec) => {
-            blocks::control::repeat(builder, input, code_block, variable_type_data, vec);
+            blocks::control::repeat(builder, input, code_block, variable_type_data, vec, memory);
         }
         ScratchBlock::VarChange(ptr, input) => {
-            blocks::var::change(input, builder, code_block, variable_type_data, ptr);
+            blocks::var::change(input, builder, code_block, variable_type_data, ptr, memory);
         }
         ScratchBlock::ControlIf(input, vec) => {
-            blocks::control::if_statement(input, builder, code_block, variable_type_data, vec);
+            blocks::control::if_statement(
+                input,
+                builder,
+                code_block,
+                variable_type_data,
+                vec,
+                memory,
+            );
         }
         ScratchBlock::ControlIfElse(input, vec, vec1) => {
-            let input = input.get_bool(builder, code_block, variable_type_data);
+            let input = input.get_bool(builder, code_block, variable_type_data, memory);
             let mut inside_block = builder.create_block();
             let mut else_block = builder.create_block();
             let end_block = builder.create_block();
@@ -234,14 +243,20 @@ pub fn compile_block(
 
             builder.switch_to_block(inside_block);
             for block in vec {
-                compile_block(block, builder, &mut inside_block, variable_type_data);
+                compile_block(
+                    block,
+                    builder,
+                    &mut inside_block,
+                    variable_type_data,
+                    memory,
+                );
             }
             builder.ins().jump(end_block, &[]);
             builder.seal_block(inside_block);
 
             builder.switch_to_block(else_block);
             for block in vec1 {
-                compile_block(block, builder, &mut else_block, variable_type_data);
+                compile_block(block, builder, &mut else_block, variable_type_data, memory);
             }
             builder.ins().jump(end_block, &[]);
             builder.seal_block(else_block);
@@ -257,14 +272,14 @@ pub fn compile_block(
             builder.seal_block(*code_block);
 
             builder.switch_to_block(loop_block);
-            let condition = input.get_bool(builder, code_block, variable_type_data);
+            let condition = input.get_bool(builder, code_block, variable_type_data, memory);
             builder
                 .ins()
                 .brif(condition, end_block, &[], body_block, &[]);
 
             builder.switch_to_block(body_block);
             for block in vec {
-                compile_block(block, builder, &mut body_block, variable_type_data);
+                compile_block(block, builder, &mut body_block, variable_type_data, memory);
             }
             builder.ins().jump(loop_block, &[]);
             builder.seal_block(body_block);
@@ -274,19 +289,20 @@ pub fn compile_block(
             *code_block = end_block;
         }
         ScratchBlock::OpCmpGreater(a, b) => {
-            let a = a.get_number(builder, code_block, variable_type_data);
-            let b = b.get_number(builder, code_block, variable_type_data);
+            let a = a.get_number(builder, code_block, variable_type_data, memory);
+            let b = b.get_number(builder, code_block, variable_type_data, memory);
             let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
             return Some(ReturnValue::Bool(res));
         }
         ScratchBlock::OpCmpLesser(a, b) => {
-            let a = a.get_number(builder, code_block, variable_type_data);
-            let b = b.get_number(builder, code_block, variable_type_data);
+            let a = a.get_number(builder, code_block, variable_type_data, memory);
+            let b = b.get_number(builder, code_block, variable_type_data, memory);
             let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
             return Some(ReturnValue::Bool(res));
         }
         ScratchBlock::OpStrLen(input) => {
-            let (input, is_const) = input.get_string(builder, code_block, variable_type_data);
+            let (input, is_const) =
+                input.get_string(builder, code_block, variable_type_data, memory);
 
             let func = builder.ins().iconst(I64, callbacks::op_str_len as i64);
             let sig = builder.import_signature({

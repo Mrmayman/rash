@@ -5,6 +5,7 @@ use types::I64;
 
 use crate::{
     compiler::{compile_block, ScratchBlock, VarType},
+    data_types::ScratchObject,
     input_primitives::{Input, Ptr},
 };
 
@@ -14,6 +15,7 @@ pub fn repeat(
     code_block: &mut Block,
     variable_type_data: &mut HashMap<Ptr, VarType>,
     vec: &Vec<ScratchBlock>,
+    memory: &[ScratchObject],
 ) {
     let loop_block = builder.create_block();
     builder.append_block_param(loop_block, I64);
@@ -21,7 +23,7 @@ pub fn repeat(
     builder.append_block_param(body_block, I64);
     let end_block = builder.create_block();
 
-    let number = input.get_number(builder, code_block, variable_type_data);
+    let number = input.get_number(builder, code_block, variable_type_data, memory);
     let number = builder.ins().fcvt_to_sint(I64, number);
 
     let counter = builder.ins().iconst(I64, 0);
@@ -42,7 +44,7 @@ pub fn repeat(
     let counter = builder.block_params(body_block)[0];
     let incremented = builder.ins().iadd_imm(counter, 1);
     for block in vec {
-        compile_block(block, builder, &mut body_block, variable_type_data);
+        compile_block(block, builder, &mut body_block, variable_type_data, memory);
     }
     builder.ins().jump(loop_block, &[incremented]);
     builder.seal_block(body_block);
@@ -58,8 +60,9 @@ pub fn if_statement(
     code_block: &mut Block,
     variable_type_data: &mut HashMap<Ptr, VarType>,
     vec: &Vec<ScratchBlock>,
+    memory: &[ScratchObject],
 ) {
-    let input = input.get_bool(builder, code_block, variable_type_data);
+    let input = input.get_bool(builder, code_block, variable_type_data, memory);
     let mut inside_block = builder.create_block();
     let end_block = builder.create_block();
 
@@ -68,7 +71,13 @@ pub fn if_statement(
 
     builder.switch_to_block(inside_block);
     for block in vec {
-        compile_block(block, builder, &mut inside_block, variable_type_data);
+        compile_block(
+            block,
+            builder,
+            &mut inside_block,
+            variable_type_data,
+            memory,
+        );
     }
     builder.ins().jump(end_block, &[]);
     builder.seal_block(inside_block);

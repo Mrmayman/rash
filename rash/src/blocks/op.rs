@@ -7,7 +7,7 @@ use types::{F64, I64};
 use crate::{
     callbacks,
     compiler::VarType,
-    data_types::ID_STRING,
+    data_types::{ScratchObject, ID_STRING},
     input_primitives::{Input, Ptr},
 };
 
@@ -17,10 +17,11 @@ pub fn str_join(
     builder: &mut FunctionBuilder<'_>,
     code_block: &mut Block,
     variable_type_data: &mut HashMap<Ptr, VarType>,
+    memory: &[ScratchObject],
 ) -> (Value, Value, Value, Value) {
     // Get strings
-    let (a, a_is_const) = a.get_string(builder, code_block, variable_type_data);
-    let (b, b_is_const) = b.get_string(builder, code_block, variable_type_data);
+    let (a, a_is_const) = a.get_string(builder, code_block, variable_type_data, memory);
+    let (b, b_is_const) = b.get_string(builder, code_block, variable_type_data, memory);
 
     // Create stack slot for result
     let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
@@ -61,9 +62,10 @@ pub fn modulo(
     builder: &mut FunctionBuilder<'_>,
     code_block: &mut Block,
     variable_type_data: &mut HashMap<Ptr, VarType>,
+    memory: &[ScratchObject],
 ) -> Value {
-    let a = a.get_number(builder, code_block, variable_type_data);
-    let b = b.get_number(builder, code_block, variable_type_data);
+    let a = a.get_number(builder, code_block, variable_type_data, memory);
+    let b = b.get_number(builder, code_block, variable_type_data, memory);
     let div = builder.ins().fdiv(a, b);
 
     // Step 1: Truncate the division to an integer (simulates `floor` for positive values)

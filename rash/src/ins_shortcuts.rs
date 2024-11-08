@@ -5,7 +5,6 @@ use types::{F64, I64};
 
 use crate::{
     callbacks,
-    compiler::MEMORY,
     data_types::{ScratchObject, ID_BOOL, ID_NUMBER, ID_STRING},
     input_primitives::Ptr,
 };
@@ -34,7 +33,12 @@ pub fn ins_call_to_num(
         .call_indirect(sig, to_num_func, &[i1, i2, i3, i4])
 }
 
-pub fn ins_mem_write_string(string: &str, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
+pub fn ins_mem_write_string(
+    string: &str,
+    builder: &mut FunctionBuilder<'_>,
+    ptr: Ptr,
+    memory: &[ScratchObject],
+) {
     let string = string.to_owned();
 
     // Transmute the String into a [i64; 4] array
@@ -43,10 +47,7 @@ pub fn ins_mem_write_string(string: &str, builder: &mut FunctionBuilder<'_>, ptr
     let i2 = builder.ins().iconst(I64, arr[1]);
     let i3 = builder.ins().iconst(I64, arr[2]);
 
-    let mem_ptr = builder.ins().iconst(
-        I64,
-        MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
-    );
+    let mem_ptr = ptr.constant(builder, memory);
 
     builder.ins().store(MemFlags::new(), i1, mem_ptr, 8);
     builder.ins().store(MemFlags::new(), i2, mem_ptr, 16);
@@ -56,11 +57,13 @@ pub fn ins_mem_write_string(string: &str, builder: &mut FunctionBuilder<'_>, ptr
     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 }
 
-pub fn ins_mem_write_bool(builder: &mut FunctionBuilder<'_>, ptr: Ptr, num: bool) {
-    let mem_ptr = builder.ins().iconst(
-        I64,
-        MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
-    );
+pub fn ins_mem_write_bool(
+    builder: &mut FunctionBuilder<'_>,
+    ptr: Ptr,
+    num: bool,
+    memory: &[ScratchObject],
+) {
+    let mem_ptr = ptr.constant(builder, memory);
 
     let num = builder.ins().iconst(I64, num as i64);
     builder.ins().store(MemFlags::new(), num, mem_ptr, 8);
@@ -69,11 +72,13 @@ pub fn ins_mem_write_bool(builder: &mut FunctionBuilder<'_>, ptr: Ptr, num: bool
     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 }
 
-pub fn ins_mem_write_f64(builder: &mut FunctionBuilder<'_>, ptr: Ptr, num: f64) {
-    let mem_ptr = builder.ins().iconst(
-        I64,
-        MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
-    );
+pub fn ins_mem_write_f64(
+    builder: &mut FunctionBuilder<'_>,
+    ptr: Ptr,
+    num: f64,
+    memory: &[ScratchObject],
+) {
+    let mem_ptr = ptr.constant(builder, memory);
 
     // write to the ptr
     let num = builder.ins().f64const(num);
@@ -93,17 +98,14 @@ pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value 
     stack_ptr
 }
 
-pub fn ins_drop_obj(builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
+pub fn ins_drop_obj(builder: &mut FunctionBuilder<'_>, ptr: Ptr, memory: &[ScratchObject]) {
     let func = builder.ins().iconst(I64, callbacks::types::drop_obj as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
         sig
     });
-    let mem_ptr = builder.ins().iconst(
-        I64,
-        MEMORY.as_ptr() as i64 + (ptr.0 * std::mem::size_of::<ScratchObject>()) as i64,
-    );
+    let mem_ptr = ptr.constant(builder, memory);
 
     builder.ins().call_indirect(sig, func, &[mem_ptr]);
 }

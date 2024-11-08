@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Mutex};
 use codegen::ir::StackSlot;
 use cranelift::prelude::*;
 use isa::CallConv;
-use types::{F64, I32, I64};
+use types::{F64, I64};
 
 use crate::{
     callbacks,
@@ -16,6 +16,14 @@ pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
+
+impl Ptr {
+    pub fn constant(&self, builder: &mut FunctionBuilder<'_>, memory: &[ScratchObject]) -> Value {
+        builder
+            .ins()
+            .iconst(I64, unsafe { memory.as_ptr().add(self.0) } as i64)
+    }
+}
 
 /// The input to a [`ScratchBlock`]
 ///
@@ -54,6 +62,7 @@ impl Input {
         builder: &mut FunctionBuilder<'_>,
         code_block: &mut Block,
         variable_type_data: &mut HashMap<Ptr, VarType>,
+        memory: &[ScratchObject],
     ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
@@ -61,8 +70,14 @@ impl Input {
                 builder.ins().f64const(o)
             }
             Input::Block(scratch_block) => {
-                let o =
-                    compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
+                let o = compile_block(
+                    scratch_block,
+                    builder,
+                    code_block,
+                    variable_type_data,
+                    memory,
+                )
+                .unwrap();
                 o.get_number(builder)
             }
         }
@@ -73,6 +88,7 @@ impl Input {
         builder: &mut FunctionBuilder<'_>,
         code_block: &mut Block,
         variable_type_data: &mut HashMap<Ptr, VarType>,
+        memory: &[ScratchObject],
     ) -> (Value, bool) {
         match self {
             Input::Obj(scratch_object) => {
@@ -103,8 +119,14 @@ impl Input {
                 (stack_ptr, true)
             }
             Input::Block(scratch_block) => {
-                let o =
-                    compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
+                let o = compile_block(
+                    scratch_block,
+                    builder,
+                    code_block,
+                    variable_type_data,
+                    memory,
+                )
+                .unwrap();
                 (o.get_string(builder), false)
             }
         }
@@ -115,6 +137,7 @@ impl Input {
         builder: &mut FunctionBuilder<'_>,
         code_block: &mut Block,
         variable_type_data: &mut HashMap<Ptr, VarType>,
+        memory: &[ScratchObject],
     ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
@@ -122,8 +145,14 @@ impl Input {
                 builder.ins().iconst(I64, b)
             }
             Input::Block(scratch_block) => {
-                let b =
-                    compile_block(scratch_block, builder, code_block, variable_type_data).unwrap();
+                let b = compile_block(
+                    scratch_block,
+                    builder,
+                    code_block,
+                    variable_type_data,
+                    memory,
+                )
+                .unwrap();
                 b.get_bool(builder)
             }
         }
