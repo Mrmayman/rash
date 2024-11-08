@@ -3,7 +3,7 @@ use crate::data_types::ScratchObject;
 pub mod types;
 
 /// Callback from JIT code to join two strings
-pub extern "C" fn op_join_string(
+pub extern "C" fn op_str_join(
     a: *mut String,
     b: *mut String,
     out: *mut usize,
@@ -58,6 +58,16 @@ pub extern "C" fn op_join_string(
             std::ptr::drop_in_place(b);
         }
     }
+}
+
+pub extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
+    let len = unsafe { (*s).len() };
+    if is_const == 0 {
+        unsafe {
+            std::ptr::drop_in_place(s);
+        }
+    }
+    len
 }
 
 pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut i64) {

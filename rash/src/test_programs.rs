@@ -4,7 +4,9 @@ use crate::{
     input_primitives::{Input, Ptr},
 };
 
-pub fn test_math() -> Vec<ScratchBlock> {
+#[allow(unused)]
+
+pub fn arithmetic() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), Input::Obj(ScratchObject::Number(2.0))),
@@ -102,14 +104,14 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
             vec![
                 ScratchBlock::VarSet(
                     Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpJoin(
+                    Input::Block(Box::new(ScratchBlock::OpStrJoin(
                         Input::new_block(ScratchBlock::VarRead(Ptr(7))),
                         Input::Obj(ScratchObject::String("world".to_owned())),
                     ))),
                 ),
                 ScratchBlock::VarSet(
                     Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpJoin(
+                    Input::Block(Box::new(ScratchBlock::OpStrJoin(
                         Input::new_block(ScratchBlock::VarRead(Ptr(7))),
                         Input::Obj(ScratchObject::String(", ".to_owned())),
                     ))),
@@ -318,7 +320,7 @@ pub fn pi() -> Vec<ScratchBlock> {
     ]
 }
 
-pub fn test_nested_repeat() -> Vec<ScratchBlock> {
+pub fn nested_repeat() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::ControlRepeat(
@@ -327,7 +329,7 @@ pub fn test_nested_repeat() -> Vec<ScratchBlock> {
                 Input::Obj(ScratchObject::Number(11.0)),
                 vec![ScratchBlock::VarSet(
                     Ptr(0),
-                    Input::new_block(ScratchBlock::OpJoin(
+                    Input::new_block(ScratchBlock::OpStrJoin(
                         Input::new_block(ScratchBlock::VarRead(Ptr(0))),
                         Input::Obj(ScratchObject::String("H".to_owned())),
                     )),
@@ -342,14 +344,14 @@ pub fn repeat_until() -> Vec<ScratchBlock> {
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), Input::new_num(0.0)),
         ScratchBlock::ControlRepeatUntil(
-            Input::new_block(ScratchBlock::OpGreater(
+            Input::new_block(ScratchBlock::OpCmpGreater(
                 Input::new_block(ScratchBlock::VarRead(Ptr(0))),
                 Input::new_num(10.0),
             )),
             vec![
                 ScratchBlock::VarSet(Ptr(1), Input::new_num(0.0)),
                 ScratchBlock::ControlRepeatUntil(
-                    Input::new_block(ScratchBlock::OpGreater(
+                    Input::new_block(ScratchBlock::OpCmpGreater(
                         Input::new_block(ScratchBlock::VarRead(Ptr(1))),
                         Input::new_num(20.0),
                     )),
@@ -357,6 +359,46 @@ pub fn repeat_until() -> Vec<ScratchBlock> {
                 ),
                 ScratchBlock::VarChange(Ptr(0), Input::new_num(1.0)),
             ],
+        ),
+    ]
+}
+
+pub fn str_ops() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(0),
+            Input::Block(Box::new(ScratchBlock::OpStrJoin(
+                Input::Obj(ScratchObject::String("hello".to_owned())),
+                Input::Obj(ScratchObject::String("world".to_owned())),
+            ))),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            Input::Block(Box::new(ScratchBlock::OpStrJoin(
+                Input::Obj(ScratchObject::String("hello".to_owned())),
+                Input::Obj(ScratchObject::Number(1.0)),
+            ))),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            Input::Block(Box::new(ScratchBlock::OpStrJoin(
+                Input::Obj(ScratchObject::Number(1.0)),
+                Input::Obj(ScratchObject::String("world".to_owned())),
+            ))),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(3),
+            Input::Block(Box::new(ScratchBlock::OpStrJoin(
+                Input::Obj(ScratchObject::Bool(true)),
+                Input::Obj(ScratchObject::Number(2.0)),
+            ))),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(4),
+            Input::Block(Box::new(ScratchBlock::OpStrLen(Input::Obj(
+                ScratchObject::Bool(true),
+            )))),
         ),
     ]
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use codegen::ir::StackSlot;
 use cranelift::prelude::*;
@@ -11,6 +11,8 @@ use crate::{
     data_types::ScratchObject,
     ins_shortcuts::{ins_call_to_num, ins_create_string_stack_slot},
 };
+
+pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
@@ -83,8 +85,11 @@ impl Input {
                 let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
                 // Transmute the String into a [i64; 3] array
+                println!("Getting string {scratch_object:?}");
                 let string = scratch_object.convert_to_string();
+
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
+                STRINGS_TO_DROP.lock().unwrap().push(bytes);
 
                 let val1 = builder.ins().iconst(I64, bytes[0]);
                 let val2 = builder.ins().iconst(I64, bytes[1]);

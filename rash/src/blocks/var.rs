@@ -12,7 +12,7 @@ use crate::{
     ins_shortcuts::{ins_drop_obj, ins_mem_write_bool, ins_mem_write_f64, ins_mem_write_string},
 };
 
-pub fn c_var_read(
+pub fn read(
     builder: &mut FunctionBuilder<'_>,
     ptr: Ptr,
     variable_type_data: &HashMap<Ptr, VarType>,
@@ -72,7 +72,7 @@ pub fn c_var_read(
     // return Some(ReturnValue::Object((i1, i2, i3, i4)));
 }
 
-pub fn c_var_set(
+pub fn set(
     obj: &Input,
     builder: &mut FunctionBuilder<'_>,
     ptr: &Ptr,
@@ -169,4 +169,29 @@ pub fn c_var_set(
             }
         }
     };
+}
+
+pub fn change(
+    input: &Input,
+    builder: &mut FunctionBuilder<'_>,
+    code_block: &mut Block,
+    variable_type_data: &mut HashMap<Ptr, VarType>,
+    ptr: &Ptr,
+) {
+    let input = input.get_number(builder, code_block, variable_type_data);
+    let old_value = read(builder, *ptr, variable_type_data);
+    let old_value = old_value.get_number(builder);
+    let new_value = builder.ins().fadd(old_value, input);
+
+    let mem_ptr = builder
+        .ins()
+        .iconst(I64, unsafe { MEMORY.as_ptr().offset(ptr.0 as isize) }
+            as i64);
+
+    builder.ins().store(MemFlags::new(), new_value, mem_ptr, 8);
+
+    if !matches!(variable_type_data.get(ptr), Some(VarType::Number)) {
+        let id = builder.ins().iconst(I64, ID_NUMBER as i64);
+        builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
+    }
 }

@@ -14,6 +14,8 @@
 
 use colored::Colorize;
 
+use crate::compiler::VarType;
+
 /// The enum variant data type used to represent dynamically typed
 /// objects in the interpreter.
 ///
@@ -73,6 +75,15 @@ impl std::fmt::Debug for ScratchObject {
 }
 
 impl ScratchObject {
+    /// Gets the data type of the ScratchObject.
+    pub fn get_type(&self) -> VarType {
+        match self {
+            ScratchObject::Number(_) => VarType::Number,
+            ScratchObject::String(_) => VarType::String,
+            ScratchObject::Bool(_) => VarType::Bool,
+        }
+    }
+
     /// Gets a number from a ScratchObject using implicit convertion.
     /// Supports `0x` hexadecimal and `0b` binary literal strings.
     /// # Examples
@@ -174,7 +185,8 @@ impl ScratchObject {
                 }
             }
             ScratchObject::String(s) => s.to_owned(), // Faster than s.to_string()
-            ScratchObject::Bool(b) => b.to_string(),
+            ScratchObject::Bool(true) => "true".to_owned(),
+            ScratchObject::Bool(false) => "false".to_owned(),
         }
     }
 }
