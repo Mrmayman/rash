@@ -114,6 +114,27 @@ impl ScratchObject {
         }
     }
 
+    pub fn convert_to_number_with_decimal_check(&self) -> (f64, bool) {
+        match self {
+            ScratchObject::Number(number) => (*number, number.fract() != 0.0),
+            ScratchObject::String(string) => (
+                string.parse().unwrap_or({
+                    // Couldn't parse the string normally, so it must be typed strangely.
+                    // Checking some edge cases.
+                    if string.starts_with("0x") {
+                        convert_base_literal(string, 16)
+                    } else if string.starts_with("0b") {
+                        convert_base_literal(string, 2)
+                    } else {
+                        Default::default()
+                    }
+                }),
+                string.contains('.'),
+            ),
+            ScratchObject::Bool(boolean) => (*boolean as i32 as f64, false),
+        }
+    }
+
     /// Gets a bool from a ScratchObject using implicit convertion.
     /// # Rules
     /// * All non zero and NaN numbers are truthy.

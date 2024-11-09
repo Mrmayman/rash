@@ -9,7 +9,9 @@ use crate::{
     callbacks,
     compiler::{compile_block, ScratchBlock, VarType},
     data_types::ScratchObject,
-    ins_shortcuts::{ins_call_to_num, ins_create_string_stack_slot},
+    ins_shortcuts::{
+        ins_call_to_num, ins_call_to_num_with_decimal_check, ins_create_string_stack_slot,
+    },
 };
 
 pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
@@ -154,6 +156,51 @@ impl Input {
                 )
                 .unwrap();
                 b.get_bool(builder)
+            }
+        }
+    }
+
+    pub fn get_number_with_decimal_check(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        code_block: &mut Block,
+        variable_type_data: &mut HashMap<Ptr, VarType>,
+        memory: &[ScratchObject],
+    ) -> (Value, Value) {
+        match self {
+            Input::Obj(scratch_object) => {
+                let (n, b) = scratch_object.convert_to_number_with_decimal_check();
+                let n = builder.ins().f64const(n);
+                let b = builder.ins().iconst(I64, b as i64);
+                (n, b)
+            }
+            Input::Block(scratch_block) => {
+                let o = compile_block(
+                    scratch_block,
+                    builder,
+                    code_block,
+                    variable_type_data,
+                    memory,
+                )
+                .unwrap();
+                match o {
+                    ReturnValue::Num(value) => (value, builder.ins().iconst(I64, 0)),
+                    ReturnValue::Object((i1, i2, i3, i4)) => {
+                        ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                    }
+                    ReturnValue::Bool(value) => (
+                        builder.ins().fcvt_from_sint(F64, value),
+                        builder.ins().iconst(I64, 0),
+                    ),
+                    ReturnValue::ObjectPointer(_value, slot) => {
+                        let i1 = builder.ins().stack_load(I64, slot, 0);
+                        let i2 = builder.ins().stack_load(I64, slot, 8);
+                        let i3 = builder.ins().stack_load(I64, slot, 16);
+                        let i4 = builder.ins().stack_load(I64, slot, 24);
+
+                        ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                    }
+                }
             }
         }
     }

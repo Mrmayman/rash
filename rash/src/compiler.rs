@@ -8,7 +8,6 @@ use cranelift::prelude::*;
 use isa::CallConv;
 use lazy_static::lazy_static;
 use target_lexicon::Triple;
-use types::{F64, I64};
 
 use crate::{
     block_test, blocks, callbacks,
@@ -42,6 +41,7 @@ pub enum ScratchBlock {
     OpStrLen(Input),
     OpCmpGreater(Input, Input),
     OpCmpLesser(Input, Input),
+    OpRandom(Input, Input),
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
     ControlRepeat(Input, Vec<ScratchBlock>),
@@ -93,7 +93,7 @@ impl Compiler {
 
         // let code_sprites = self.get_block_code();
         let code_sprites = vec![CodeSprite {
-            scripts: vec![block_test::str_ops()],
+            scripts: vec![block_test::random()],
         }];
         for sprite in &code_sprites {
             for script in &sprite.scripts {
@@ -230,63 +230,26 @@ pub fn compile_block(
                 memory,
             );
         }
-        ScratchBlock::ControlIfElse(input, vec, vec1) => {
-            let input = input.get_bool(builder, code_block, variable_type_data, memory);
-            let mut inside_block = builder.create_block();
-            let mut else_block = builder.create_block();
-            let end_block = builder.create_block();
-
-            builder
-                .ins()
-                .brif(input, inside_block, &[], else_block, &[]);
-            builder.seal_block(*code_block);
-
-            builder.switch_to_block(inside_block);
-            for block in vec {
-                compile_block(
-                    block,
-                    builder,
-                    &mut inside_block,
-                    variable_type_data,
-                    memory,
-                );
-            }
-            builder.ins().jump(end_block, &[]);
-            builder.seal_block(inside_block);
-
-            builder.switch_to_block(else_block);
-            for block in vec1 {
-                compile_block(block, builder, &mut else_block, variable_type_data, memory);
-            }
-            builder.ins().jump(end_block, &[]);
-            builder.seal_block(else_block);
-
-            builder.switch_to_block(end_block);
-            *code_block = end_block;
+        ScratchBlock::ControlIfElse(condition, then, r#else) => {
+            blocks::control::if_else(
+                condition,
+                builder,
+                code_block,
+                variable_type_data,
+                memory,
+                then,
+                r#else,
+            );
         }
         ScratchBlock::ControlRepeatUntil(input, vec) => {
-            let loop_block = builder.create_block();
-            let mut body_block = builder.create_block();
-            let end_block = builder.create_block();
-            builder.ins().jump(loop_block, &[]);
-            builder.seal_block(*code_block);
-
-            builder.switch_to_block(loop_block);
-            let condition = input.get_bool(builder, code_block, variable_type_data, memory);
-            builder
-                .ins()
-                .brif(condition, end_block, &[], body_block, &[]);
-
-            builder.switch_to_block(body_block);
-            for block in vec {
-                compile_block(block, builder, &mut body_block, variable_type_data, memory);
-            }
-            builder.ins().jump(loop_block, &[]);
-            builder.seal_block(body_block);
-            builder.seal_block(loop_block);
-
-            builder.switch_to_block(end_block);
-            *code_block = end_block;
+            blocks::control::repeat_until(
+                builder,
+                code_block,
+                input,
+                variable_type_data,
+                memory,
+                vec,
+            );
         }
         ScratchBlock::OpCmpGreater(a, b) => {
             let a = a.get_number(builder, code_block, variable_type_data, memory);
@@ -301,25 +264,23 @@ pub fn compile_block(
             return Some(ReturnValue::Bool(res));
         }
         ScratchBlock::OpStrLen(input) => {
-            let (input, is_const) =
-                input.get_string(builder, code_block, variable_type_data, memory);
-
-            let func = builder.ins().iconst(I64, callbacks::op_str_len as i64);
-            let sig = builder.import_signature({
-                let mut sig = Signature::new(CallConv::SystemV);
-                sig.params.push(AbiParam::new(I64));
-                sig.params.push(AbiParam::new(I64));
-                sig.returns.push(AbiParam::new(I64));
-                sig
-            });
-
-            let is_const = builder.ins().iconst(I64, is_const as i64);
-            let inst = builder.ins().call_indirect(sig, func, &[input, is_const]);
-
-            let res = builder.inst_results(inst)[0];
-            let res = builder.ins().fcvt_from_sint(F64, res);
-
-            return Some(ReturnValue::Num(res));
+            return Some(blocks::op::str_len(
+                input,
+                builder,
+                code_block,
+                variable_type_data,
+                memory,
+            ));
+        }
+        ScratchBlock::OpRandom(a, b) => {
+            return Some(blocks::op::op_random(
+                a,
+                b,
+                builder,
+                code_block,
+                variable_type_data,
+                memory,
+            ))
         }
     }
     None

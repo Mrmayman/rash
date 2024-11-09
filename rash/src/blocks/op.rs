@@ -8,7 +8,7 @@ use crate::{
     callbacks,
     compiler::VarType,
     data_types::{ScratchObject, ID_STRING},
-    input_primitives::{Input, Ptr},
+    input_primitives::{Input, Ptr, ReturnValue},
 };
 
 pub fn str_join(
@@ -85,4 +85,55 @@ pub fn modulo(
     let decimal_part = builder.ins().fsub(div, floor_div);
     let modulo = builder.ins().fmul(decimal_part, b);
     modulo
+}
+
+pub fn str_len(
+    input: &Input,
+    builder: &mut FunctionBuilder<'_>,
+    code_block: &mut Block,
+    variable_type_data: &mut HashMap<Ptr, VarType>,
+    memory: &[ScratchObject],
+) -> ReturnValue {
+    let (input, is_const) = input.get_string(builder, code_block, variable_type_data, memory);
+    let func = builder.ins().iconst(I64, callbacks::op_str_len as i64);
+    let sig = builder.import_signature({
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I64));
+        sig.params.push(AbiParam::new(I64));
+        sig.returns.push(AbiParam::new(I64));
+        sig
+    });
+    let is_const = builder.ins().iconst(I64, is_const as i64);
+    let inst = builder.ins().call_indirect(sig, func, &[input, is_const]);
+    let res = builder.inst_results(inst)[0];
+    let res = builder.ins().fcvt_from_sint(F64, res);
+    ReturnValue::Num(res)
+}
+
+pub fn op_random(
+    a: &Input,
+    b: &Input,
+    builder: &mut FunctionBuilder<'_>,
+    code_block: &mut Block,
+    variable_type_data: &mut HashMap<Ptr, VarType>,
+    memory: &[ScratchObject],
+) -> ReturnValue {
+    let (a, a_is_decimal) =
+        a.get_number_with_decimal_check(builder, code_block, variable_type_data, memory);
+    let (b, b_is_decimal) =
+        b.get_number_with_decimal_check(builder, code_block, variable_type_data, memory);
+
+    let is_decimal = builder.ins().bor(a_is_decimal, b_is_decimal);
+    let func = builder.ins().iconst(I64, callbacks::op_random as i64);
+    let sig = builder.import_signature({
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(F64));
+        sig.params.push(AbiParam::new(F64));
+        sig.params.push(AbiParam::new(I64));
+        sig.returns.push(AbiParam::new(F64));
+        sig
+    });
+    let inst = builder.ins().call_indirect(sig, func, &[a, b, is_decimal]);
+    let res = builder.inst_results(inst)[0];
+    ReturnValue::Num(res)
 }
