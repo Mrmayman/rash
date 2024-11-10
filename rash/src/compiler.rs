@@ -93,7 +93,7 @@ impl Compiler {
 
         // let code_sprites = self.get_block_code();
         let code_sprites = vec![CodeSprite {
-            scripts: vec![block_test::random()],
+            scripts: vec![block_test::pi()],
         }];
         for sprite in &code_sprites {
             for script in &sprite.scripts {

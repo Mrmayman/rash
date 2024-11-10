@@ -12,6 +12,7 @@ use crate::{
     ins_shortcuts::{
         ins_call_to_num, ins_call_to_num_with_decimal_check, ins_create_string_stack_slot,
     },
+    ARITHMETIC_NAN_CHECK,
 };
 
 pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
@@ -50,6 +51,30 @@ pub enum Input {
     Block(Box<ScratchBlock>),
 }
 
+impl From<ScratchObject> for Input {
+    fn from(obj: ScratchObject) -> Self {
+        Input::Obj(obj)
+    }
+}
+
+impl From<f64> for Input {
+    fn from(num: f64) -> Self {
+        Input::Obj(ScratchObject::Number(num))
+    }
+}
+
+impl From<bool> for Input {
+    fn from(b: bool) -> Self {
+        Input::Obj(ScratchObject::Bool(b))
+    }
+}
+
+impl From<ScratchBlock> for Input {
+    fn from(block: ScratchBlock) -> Self {
+        Input::Block(Box::new(block))
+    }
+}
+
 impl Input {
     pub fn new_num(num: f64) -> Self {
         Input::Obj(ScratchObject::Number(num))
@@ -66,7 +91,7 @@ impl Input {
         variable_type_data: &mut HashMap<Ptr, VarType>,
         memory: &[ScratchObject],
     ) -> Value {
-        match self {
+        let mut num = match self {
             Input::Obj(scratch_object) => {
                 let o = scratch_object.convert_to_number();
                 builder.ins().f64const(o)
@@ -82,7 +107,14 @@ impl Input {
                 .unwrap();
                 o.get_number(builder)
             }
+        };
+        if ARITHMETIC_NAN_CHECK {
+            let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
+            let zero_value = builder.ins().f64const(0.0);
+            num = builder.ins().select(is_not_nan, num, zero_value);
         }
+
+        num
     }
 
     pub fn get_string(

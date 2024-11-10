@@ -1,16 +1,34 @@
+//! # JSON structures for Scratch projects.
+//!
+//! This module contains the structures that represent the
+//! JSON data of a Scratch project.
+//!
+//! Scratch `.sb3` files are just ZIP files that
+//! contain a JSON file called `project.json`,
+//! as well as the costumes and sounds.
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// # The main JSON structure of a Scratch project.
+///
+/// This is the structure of the `project.json` file
+/// located in the root of the `.sb3` file.
+///
+/// It contains the information and code of a project.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonStruct {
+    /// A list of targets (Scratch sprites).
     pub targets: Vec<Target>,
+    /// A list of variable monitors (the boxes showing the values).
     pub monitors: Vec<Monitor>,
     pub extensions: Vec<Value>,
     pub meta: Value,
 }
 
+/// # A Scratch sprite.
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct Target {

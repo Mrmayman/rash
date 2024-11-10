@@ -10,6 +10,23 @@ mod input_primitives;
 mod ins_shortcuts;
 mod json;
 
+/// Scratch has a special edge case for math with NaN.
+/// Any operation with NaN will be treated as
+/// an operation with 0.
+///
+/// For example, `NaN + 1` will be `0 + 1`.
+///
+/// This is a special case for Scratch, and is not
+/// a standard behavior for most programming languages.
+/// Enabling this check adds special behavior for NaN in the
+/// compiled code, making it more correct but slower.
+///
+/// # Performance
+/// Pi benchmark:
+/// - Without NaN check: `4.6 ms`
+/// - With NaN check: `8.8 ms`
+const ARITHMETIC_NAN_CHECK: bool = true;
+
 fn main() {
     // let arg1 = std::env::args().nth(1).unwrap();
     // println!("opening dir {arg1}");

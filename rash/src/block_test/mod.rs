@@ -396,6 +396,304 @@ pub fn random() -> Vec<ScratchBlock> {
 }
 
 #[allow(unused)]
+pub fn math_add_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(0),
+            Input::new_block(ScratchBlock::OpAdd(
+                Input::new_num(50.0),
+                Input::new_num(25.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            Input::new_block(ScratchBlock::OpAdd(
+                Input::new_num(-500.0),
+                Input::new_num(25.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            Input::new_block(ScratchBlock::OpAdd(
+                Input::new_num(-500.0),
+                Input::new_num(-25.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(3),
+            Input::new_block(ScratchBlock::OpAdd(
+                Input::new_num(2.54),
+                Input::new_num(6.28),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(4),
+            ScratchBlock::OpAdd(2.54.into(), (-6.28).into()).into(),
+        ),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpAdd(true.into(), true.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpAdd((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpAdd((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(8),
+            ScratchBlock::OpAdd((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(9),
+            ScratchBlock::OpAdd((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(10),
+            ScratchBlock::OpAdd(1.0.into(), (0.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(11),
+            ScratchBlock::OpAdd((0.0 / 0.0).into(), 1.0.into()).into(),
+        ),
+    ]
+}
+
+#[allow(unused)]
+pub fn math_sub_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(0),
+            Input::new_block(ScratchBlock::OpSub(
+                Input::new_num(50.0),
+                Input::new_num(25.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            Input::new_block(ScratchBlock::OpSub(
+                Input::new_num(-500.0),
+                Input::new_num(25.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            Input::new_block(ScratchBlock::OpSub(
+                Input::new_num(-500.0),
+                Input::new_num(-25.0),
+            )),
+        ),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpSub(2.54.into(), 6.28.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(4),
+            ScratchBlock::OpSub(2.54.into(), (-6.28).into()).into(),
+        ),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpSub(true.into(), true.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpSub((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpSub((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(8),
+            ScratchBlock::OpSub((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(9),
+            ScratchBlock::OpSub((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(10),
+            ScratchBlock::OpSub(1.0.into(), (0.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(11),
+            ScratchBlock::OpSub((0.0 / 0.0).into(), 1.0.into()).into(),
+        ),
+    ]
+}
+
+#[allow(unused)]
+pub fn math_mul_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(0),
+            Input::new_block(ScratchBlock::OpMul(
+                Input::new_num(50.0),
+                Input::new_num(2.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            Input::new_block(ScratchBlock::OpMul(
+                Input::new_num(-50.0),
+                Input::new_num(2.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            Input::new_block(ScratchBlock::OpMul(
+                Input::new_num(-50.0),
+                Input::new_num(-2.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(3),
+            Input::new_block(ScratchBlock::OpMul(
+                Input::new_num(2.54),
+                Input::new_num(6.28),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(4),
+            ScratchBlock::OpMul(2.54.into(), (-6.28).into()).into(),
+        ),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpMul(true.into(), true.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), 0.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(8),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), 2.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(9),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), (-2.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(10),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(11),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(12),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), 0.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(13),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), 2.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(14),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), (-2.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(15),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(16),
+            ScratchBlock::OpMul(1.0.into(), (0.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(17),
+            ScratchBlock::OpMul((0.0 / 0.0).into(), 1.0.into()).into(),
+        ),
+    ]
+}
+
+#[allow(unused)]
+pub fn math_div_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(0),
+            Input::new_block(ScratchBlock::OpDiv(
+                Input::new_num(50.0),
+                Input::new_num(2.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            Input::new_block(ScratchBlock::OpDiv(
+                Input::new_num(-50.0),
+                Input::new_num(2.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            Input::new_block(ScratchBlock::OpDiv(
+                Input::new_num(-50.0),
+                Input::new_num(-2.0),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(3),
+            Input::new_block(ScratchBlock::OpDiv(
+                Input::new_num(3.5),
+                Input::new_num(2.5),
+            )),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(4),
+            ScratchBlock::OpDiv(3.5.into(), (-2.5).into()).into(),
+        ),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpDiv(true.into(), true.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), 0.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(8),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), 2.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(9),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), (-2.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(10),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(11),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(12),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), 0.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(13),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), 2.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(14),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), (-2.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(15),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(16),
+            ScratchBlock::OpDiv(1.0.into(), (0.0 / 0.0).into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(17),
+            ScratchBlock::OpDiv((0.0 / 0.0).into(), 1.0.into()).into(),
+        ),
+    ]
+}
+
+#[allow(unused)]
 fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
     let mut builder = settings::builder();
     builder.set("opt_level", "speed").unwrap();
@@ -464,10 +762,7 @@ fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
 
     unsafe {
         let code_fn: unsafe extern "sysv64" fn() = std::mem::transmute(buffer.as_ptr());
-
         code_fn();
-        // println!("Time: {:?}", instant.elapsed());
-        // println!("Types: {variable_type_data:?}");
     }
 }
 
@@ -481,7 +776,7 @@ mod tests {
 
     fn run_code<'a>(code: Vec<ScratchBlock>) -> MutexGuard<'a, Box<[ScratchObject]>> {
         let mut memory = MEMORY.lock().unwrap();
-        *memory = vec![ScratchObject::Number(0.0); 10].into_boxed_slice();
+        *memory = vec![ScratchObject::Number(0.0); 256].into_boxed_slice();
         run(code, &memory);
         memory
     }
@@ -594,5 +889,129 @@ mod tests {
         assert!(memory[4].convert_to_number() >= 0.0);
         assert!(memory[4].convert_to_number() <= 100.0);
         assert_eq!(memory[4].convert_to_number().fract(), 0.0);
+    }
+
+    #[test]
+    pub fn b_math_add_test() {
+        let memory = run_code(math_add_test());
+        assert_eq!(memory[0].convert_to_number(), 75.0);
+        assert_eq!(memory[1].convert_to_number(), -475.0);
+        assert_eq!(memory[2].convert_to_number(), -525.0);
+        assert_eq!(memory[3].convert_to_number(), 8.82);
+        assert_eq!(memory[4].convert_to_number(), -3.74);
+        assert_eq!(memory[5].convert_to_number(), 2.0);
+
+        assert!(memory[6].convert_to_number().is_infinite());
+        assert!(memory[7].convert_to_number().is_nan());
+        assert!(memory[8].convert_to_number().is_nan());
+        assert!(memory[9].convert_to_number().is_infinite());
+        assert!(memory[9].convert_to_number().is_sign_negative());
+
+        assert_eq!(memory[10].convert_to_number(), 1.0);
+        assert_eq!(memory[11].convert_to_number(), 1.0);
+    }
+
+    #[test]
+    pub fn b_math_sub_test() {
+        let memory = run_code(math_sub_test());
+        assert_eq!(memory[0].convert_to_number(), 25.0);
+        assert_eq!(memory[1].convert_to_number(), -525.0);
+        assert_eq!(memory[2].convert_to_number(), -475.0);
+        assert_eq!(memory[3].convert_to_number(), -3.74);
+        assert_eq!(memory[4].convert_to_number(), 8.82);
+        assert_eq!(memory[5].convert_to_number(), 0.0);
+
+        assert!(memory[6].convert_to_number().is_nan());
+        assert!(memory[7].convert_to_number().is_infinite());
+        assert!(memory[7].convert_to_number().is_sign_positive());
+        assert!(memory[8].convert_to_number().is_infinite());
+        assert!(memory[8].convert_to_number().is_sign_negative());
+        assert!(memory[9].convert_to_number().is_nan());
+
+        assert_eq!(memory[10].convert_to_number(), 1.0);
+        assert_eq!(memory[11].convert_to_number(), -1.0);
+    }
+
+    #[test]
+    pub fn b_math_mul_test() {
+        let memory = run_code(math_mul_test());
+        assert_eq!(memory[0].convert_to_number(), 100.0);
+        assert_eq!(memory[1].convert_to_number(), -100.0);
+        assert_eq!(memory[2].convert_to_number(), 100.0);
+        assert_eq!(memory[3].convert_to_number(), 15.9512);
+        assert_eq!(memory[4].convert_to_number(), -15.9512);
+        assert_eq!(memory[5].convert_to_number(), 1.0);
+
+        assert!(memory[6].convert_to_number().is_infinite());
+        assert!(memory[6].convert_to_number().is_sign_positive());
+
+        assert!(memory[7].convert_to_number().is_nan());
+
+        assert!(memory[8].convert_to_number().is_infinite());
+        assert!(memory[8].convert_to_number().is_sign_positive());
+
+        assert!(memory[9].convert_to_number().is_infinite());
+        assert!(memory[9].convert_to_number().is_sign_negative());
+
+        assert!(memory[10].convert_to_number().is_infinite());
+        assert!(memory[10].convert_to_number().is_sign_negative());
+
+        assert!(memory[11].convert_to_number().is_infinite());
+        assert!(memory[11].convert_to_number().is_sign_negative());
+
+        assert!(memory[12].convert_to_number().is_nan());
+
+        assert!(memory[13].convert_to_number().is_infinite());
+        assert!(memory[13].convert_to_number().is_sign_negative());
+
+        assert!(memory[14].convert_to_number().is_infinite());
+        assert!(memory[14].convert_to_number().is_sign_positive());
+
+        assert!(memory[15].convert_to_number().is_infinite());
+        assert!(memory[15].convert_to_number().is_sign_positive());
+
+        assert_eq!(memory[16].convert_to_number(), 0.0);
+        assert_eq!(memory[17].convert_to_number(), 0.0);
+    }
+
+    #[test]
+    pub fn b_math_div_test() {
+        let memory = run_code(math_div_test());
+        assert_eq!(memory[0].convert_to_number(), 25.0);
+        assert_eq!(memory[1].convert_to_number(), -25.0);
+        assert_eq!(memory[2].convert_to_number(), 25.0);
+        assert_eq!(memory[3].convert_to_number(), 1.4);
+        assert_eq!(memory[4].convert_to_number(), -1.4);
+        assert_eq!(memory[5].convert_to_number(), 1.0);
+
+        assert!(memory[6].convert_to_number().is_nan());
+
+        assert!(memory[7].convert_to_number().is_infinite());
+        assert!(memory[7].convert_to_number().is_sign_positive());
+
+        assert!(memory[8].convert_to_number().is_infinite());
+        assert!(memory[8].convert_to_number().is_sign_positive());
+
+        assert!(memory[9].convert_to_number().is_infinite());
+        assert!(memory[9].convert_to_number().is_sign_negative());
+
+        assert!(memory[10].convert_to_number().is_nan());
+        assert!(memory[11].convert_to_number().is_nan());
+
+        assert!(memory[12].convert_to_number().is_infinite());
+        assert!(memory[12].convert_to_number().is_sign_negative());
+
+        assert!(memory[13].convert_to_number().is_infinite());
+        assert!(memory[13].convert_to_number().is_sign_negative());
+
+        assert!(memory[14].convert_to_number().is_infinite());
+        assert!(memory[14].convert_to_number().is_sign_positive());
+
+        assert!(memory[15].convert_to_number().is_nan());
+
+        assert!(memory[16].convert_to_number().is_infinite());
+        assert!(memory[16].convert_to_number().is_sign_positive());
+
+        assert_eq!(memory[17].convert_to_number(), 0.0);
     }
 }
