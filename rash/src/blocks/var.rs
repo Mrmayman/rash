@@ -164,5 +164,6 @@ pub fn change(
     if !matches!(variable_type_data.get(ptr), Some(VarType::Number)) {
         let id = builder.ins().iconst(I64, ID_NUMBER as i64);
         builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
+        variable_type_data.insert(*ptr, VarType::Number);
     }
 }

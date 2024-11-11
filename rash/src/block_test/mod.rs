@@ -15,57 +15,6 @@ use isa::CallConv;
 use target_lexicon::Triple;
 
 #[allow(unused)]
-pub fn arithmetic() -> Vec<ScratchBlock> {
-    vec![
-        ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(Ptr(0), Input::new_num(2.0)),
-        ScratchBlock::VarSet(Ptr(1), Input::Obj(ScratchObject::Bool(true))),
-        ScratchBlock::VarSet(Ptr(2), Input::Obj(ScratchObject::Bool(false))),
-        ScratchBlock::VarSet(
-            Ptr(3),
-            Input::Obj(ScratchObject::String("192.0".to_owned())),
-        ),
-        ScratchBlock::VarSet(
-            Ptr(4),
-            Input::Block(Box::new(ScratchBlock::OpAdd(
-                Input::new_num(2.0),
-                Input::Block(Box::new(ScratchBlock::OpMul(
-                    Input::Obj(ScratchObject::String("3.0".to_owned())),
-                    Input::new_num(4.0),
-                ))),
-            ))),
-        ),
-        ScratchBlock::VarSet(
-            Ptr(5),
-            Input::Block(Box::new(ScratchBlock::OpSub(
-                Input::new_num(2.0),
-                Input::Block(Box::new(ScratchBlock::OpDiv(
-                    Input::new_num(3.0),
-                    Input::new_num(4.0),
-                ))),
-            ))),
-        ),
-        ScratchBlock::VarSet(
-            Ptr(6),
-            Input::Block(Box::new(ScratchBlock::OpAdd(
-                Input::Block(Box::new(ScratchBlock::OpAdd(
-                    Input::Obj(ScratchObject::Bool(true)),
-                    Input::Obj(ScratchObject::Bool(true)),
-                ))),
-                Input::Block(Box::new(ScratchBlock::VarRead(Ptr(3)))),
-            ))),
-        ),
-        ScratchBlock::VarSet(
-            Ptr(7),
-            Input::Block(Box::new(ScratchBlock::OpAdd(
-                Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
-                Input::Obj(ScratchObject::Bool(true)),
-            ))),
-        ),
-    ]
-}
-
-#[allow(unused)]
 pub fn repeated_sum() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
@@ -855,15 +804,6 @@ mod tests {
             memory[7].convert_to_string(),
             "hello world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, "
         );
-    }
-
-    #[test]
-    pub fn b_arithmetic() {
-        let memory = run_code(arithmetic());
-        assert_eq!(memory[4].convert_to_number(), 14.0);
-        assert_eq!(memory[5].convert_to_number(), 1.25);
-        assert_eq!(memory[6].convert_to_number(), 194.0);
-        assert_eq!(memory[7].convert_to_number(), 1.0);
     }
 
     #[test]

@@ -48,7 +48,114 @@ pub enum ScratchBlock {
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
+pub enum VarTypeChecked {
+    Number,
+    Bool,
+    String,
+    Unknown,
+}
+
+impl From<VarType> for VarTypeChecked {
+    fn from(value: VarType) -> Self {
+        match value {
+            VarType::Number => Self::Number,
+            VarType::Bool => Self::Bool,
+            VarType::String => Self::String,
+        }
+    }
+}
+
+impl ScratchBlock {
+    pub fn return_type(
+        &self,
+        variable_type_data: &HashMap<Ptr, VarType>,
+    ) -> Option<VarTypeChecked> {
+        match self {
+            ScratchBlock::VarRead(ptr) => match variable_type_data.get(ptr) {
+                Some(vartype) => Some((*vartype).into()),
+                None => Some(VarTypeChecked::Unknown),
+            },
+            ScratchBlock::OpAdd(_, _)
+            | ScratchBlock::OpSub(_, _)
+            | ScratchBlock::OpMul(_, _)
+            | ScratchBlock::OpDiv(_, _)
+            | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpRandom(_, _)
+            | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
+            ScratchBlock::OpStrJoin(_, _) => Some(VarTypeChecked::String),
+            ScratchBlock::OpCmpGreater(_, _) | ScratchBlock::OpCmpLesser(_, _) => {
+                Some(VarTypeChecked::Bool)
+            }
+            ScratchBlock::WhenFlagClicked => None,
+            ScratchBlock::VarSet(_, _) => None,
+            ScratchBlock::VarChange(_, _) => None,
+            ScratchBlock::ControlIf(_, _) => None,
+            ScratchBlock::ControlIfElse(_, _, _) => None,
+            ScratchBlock::ControlRepeat(_, _) => None,
+            ScratchBlock::ControlRepeatUntil(_, _) => None,
+        }
+    }
+
+    pub fn affects_var(
+        &self,
+        var_ptr: Ptr,
+        variable_type_data: &HashMap<Ptr, VarType>,
+    ) -> Option<VarTypeChecked> {
+        // println!("check affect var {var_ptr:?} : {self:?}");
+        match self {
+            ScratchBlock::VarSet(ptr, input) => {
+                if var_ptr == *ptr {
+                    // println!("yeah, {var_ptr:?}, {ptr:?}");
+                    let t = match input {
+                        Input::Obj(scratch_object) => Some(scratch_object.get_type().into()),
+                        Input::Block(scratch_block) => {
+                            scratch_block.return_type(variable_type_data)
+                        }
+                    };
+                    // println!("{t:?}");
+                    t
+                } else {
+                    None
+                }
+            }
+            ScratchBlock::VarChange(ptr, _) => {
+                if var_ptr == *ptr {
+                    Some(VarTypeChecked::Number)
+                } else {
+                    None
+                }
+            }
+            ScratchBlock::ControlIf(_, vec)
+            | ScratchBlock::ControlRepeat(_, vec)
+            | ScratchBlock::ControlRepeatUntil(_, vec) => vec
+                .iter()
+                .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
+                .last(),
+            ScratchBlock::ControlIfElse(_, then, else_block) => {
+                let then = then
+                    .iter()
+                    .map(|n| n.affects_var(var_ptr, variable_type_data))
+                    .last()
+                    .flatten();
+                let else_block = else_block
+                    .iter()
+                    .map(|n| n.affects_var(var_ptr, variable_type_data))
+                    .last()
+                    .flatten();
+
+                match (then, else_block) {
+                    (None, None) => None,
+                    (None, Some(n)) | (Some(n), None) => Some(n),
+                    (Some(a), Some(b)) => (a == b).then_some(a),
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum VarType {
     Number,
     Bool,
@@ -84,6 +191,9 @@ impl Compiler {
     pub fn compile(&self) {
         let mut builder = settings::builder();
         builder.set("opt_level", "speed").unwrap();
+        // for setting in builder.iter() {
+        //     println!("{setting:?}");
+        // }
         let flags = settings::Flags::new(builder);
 
         let isa = match isa::lookup(Triple::host()) {
