@@ -36,9 +36,9 @@ pub enum ScratchObject {
 //     }
 // }
 
-pub const ID_NUMBER: usize = 0;
-pub const ID_STRING: usize = 1;
-pub const ID_BOOL: usize = 2;
+pub const ID_NUMBER: i64 = 0;
+pub const ID_STRING: i64 = 1;
+pub const ID_BOOL: i64 = 2;
 
 // I know #[derive(Clone)] does the same thing.
 // But this made it faster by 20 milliseconds
@@ -75,7 +75,7 @@ impl std::fmt::Debug for ScratchObject {
 }
 
 impl ScratchObject {
-    /// Gets the data type of the ScratchObject.
+    /// Gets the data type of the `ScratchObject`.
     #[allow(unused)]
     pub fn get_type(&self) -> VarType {
         match self {
@@ -85,7 +85,7 @@ impl ScratchObject {
         }
     }
 
-    /// Gets a number from a ScratchObject using implicit convertion.
+    /// Gets a number from a `ScratchObject` using implicit convertion.
     /// Supports `0x` hexadecimal and `0b` binary literal strings.
     /// # Examples
     /// ```
@@ -123,7 +123,13 @@ impl ScratchObject {
                     s
                 }
             }
-            ScratchObject::Bool(boolean) => *boolean as i32 as f64,
+            ScratchObject::Bool(boolean) => {
+                if *boolean {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
         }
     }
 
@@ -136,7 +142,7 @@ impl ScratchObject {
         (self.convert_to_number(), decimal)
     }
 
-    /// Gets a bool from a ScratchObject using implicit convertion.
+    /// Gets a bool from a `ScratchObject` using implicit convertion.
     /// # Rules
     /// * All non zero and NaN numbers are truthy.
     /// * All strings except for "false" and "0" are truthy.
@@ -163,7 +169,7 @@ impl ScratchObject {
         }
     }
 
-    /// Converts a ScratchObject to a string.
+    /// Converts a `ScratchObject` to a string.
     ///
     /// Not to be confused with [`ScratchObject::to_string`]
     /// as that is for pretty-printing whereas this is for conversion
@@ -197,18 +203,18 @@ impl ScratchObject {
                 } else if num.abs() >= POSITIVE_EXPONENTIAL_THRESHOLD {
                     // Number so big it is exponential
                     // Eg: 1000000000000000000000 is 1e+21
-                    let formatted = format!("{:e}", num);
-                    if !formatted.contains("e-") {
+                    let formatted = format!("{num:e}");
+                    if formatted.contains("e-") {
+                        formatted
+                    } else {
                         // Rust formats it as 1e21, ignoring the plus
                         // So we must add it ourselves to match Scratch
                         formatted.replace('e', "e+")
-                    } else {
-                        formatted
                     }
                 } else if num.abs() < NEGATIVE_EXPONENTIAL_THRESHOLD {
                     // Number so small it is exponential
                     // Eg: 0.0000001 is 1e-7
-                    format!("{:e}", num)
+                    format!("{num:e}")
                 } else {
                     num.to_string()
                 }
@@ -228,7 +234,7 @@ fn convert_base_literal(string: &str, base: u32) -> f64 {
     if hex_number.starts_with('+') || hex_number.starts_with('-') {
         return 0.0;
     }
-    u32::from_str_radix(hex_number, base).unwrap_or_default() as f64
+    f64::from(u32::from_str_radix(hex_number, base).unwrap_or_default())
 }
 
 /// Tests for checking the conversion between values of different types.

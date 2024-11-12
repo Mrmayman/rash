@@ -69,6 +69,18 @@ impl From<bool> for Input {
     }
 }
 
+impl From<String> for Input {
+    fn from(s: String) -> Self {
+        Input::Obj(ScratchObject::String(s))
+    }
+}
+
+impl From<&str> for Input {
+    fn from(s: &str) -> Self {
+        Input::Obj(ScratchObject::String(s.to_owned()))
+    }
+}
+
 impl From<ScratchBlock> for Input {
     fn from(block: ScratchBlock) -> Self {
         Input::Block(Box::new(block))
@@ -76,14 +88,6 @@ impl From<ScratchBlock> for Input {
 }
 
 impl Input {
-    pub fn new_num(num: f64) -> Self {
-        Input::Obj(ScratchObject::Number(num))
-    }
-
-    pub fn new_block(block: ScratchBlock) -> Self {
-        Input::Block(Box::new(block))
-    }
-
     pub fn get_number(
         &self,
         builder: &mut FunctionBuilder<'_>,
@@ -175,7 +179,7 @@ impl Input {
     ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
-                let b = scratch_object.convert_to_bool() as i64;
+                let b = i64::from(scratch_object.convert_to_bool());
                 builder.ins().iconst(I64, b)
             }
             Input::Block(scratch_block) => {
@@ -203,7 +207,7 @@ impl Input {
             Input::Obj(scratch_object) => {
                 let (n, b) = scratch_object.convert_to_number_with_decimal_check();
                 let n = builder.ins().f64const(n);
-                let b = builder.ins().iconst(I64, b as i64);
+                let b = builder.ins().iconst(I64, i64::from(b));
                 (n, b)
             }
             Input::Block(scratch_block) => {
@@ -273,7 +277,7 @@ impl ReturnValue {
             ReturnValue::Num(value) => {
                 let func = builder
                     .ins()
-                    .iconst(I64, callbacks::types::to_string_from_num as i64);
+                    .iconst(I64, callbacks::types::to_string_from_num as usize as i64);
 
                 let stack_ptr = ins_create_string_stack_slot(builder);
 
@@ -290,7 +294,7 @@ impl ReturnValue {
             ReturnValue::Bool(value) => {
                 let func = builder
                     .ins()
-                    .iconst(I64, callbacks::types::to_string_from_bool as i64);
+                    .iconst(I64, callbacks::types::to_string_from_bool as usize as i64);
 
                 let stack_ptr = ins_create_string_stack_slot(builder);
 
@@ -332,7 +336,9 @@ impl ReturnValue {
             }
             ReturnValue::Bool(value) => *value,
             ReturnValue::Object((i1, i2, i3, i4)) => {
-                let func = builder.ins().iconst(I64, callbacks::types::to_bool as i64);
+                let func = builder
+                    .ins()
+                    .iconst(I64, callbacks::types::to_bool as usize as i64);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -354,7 +360,9 @@ impl ReturnValue {
                 let i3 = builder.ins().stack_load(I64, *stack_slot, 16);
                 let i4 = builder.ins().stack_load(I64, *stack_slot, 24);
 
-                let func = builder.ins().iconst(I64, callbacks::types::to_bool as i64);
+                let func = builder
+                    .ins()
+                    .iconst(I64, callbacks::types::to_bool as usize as i64);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -381,7 +389,7 @@ fn get_string_from_obj(
 ) -> Value {
     let func = builder
         .ins()
-        .iconst(I64, callbacks::types::to_string as i64);
+        .iconst(I64, callbacks::types::to_string as usize as i64);
 
     let stack_ptr = ins_create_string_stack_slot(builder);
 

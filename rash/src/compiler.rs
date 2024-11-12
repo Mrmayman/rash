@@ -87,13 +87,13 @@ impl ScratchBlock {
             ScratchBlock::OpCmpGreater(_, _) | ScratchBlock::OpCmpLesser(_, _) => {
                 Some(VarTypeChecked::Bool)
             }
-            ScratchBlock::WhenFlagClicked => None,
-            ScratchBlock::VarSet(_, _) => None,
-            ScratchBlock::VarChange(_, _) => None,
-            ScratchBlock::ControlIf(_, _) => None,
-            ScratchBlock::ControlIfElse(_, _, _) => None,
-            ScratchBlock::ControlRepeat(_, _) => None,
-            ScratchBlock::ControlRepeatUntil(_, _) => None,
+            ScratchBlock::WhenFlagClicked
+            | ScratchBlock::VarSet(_, _)
+            | ScratchBlock::VarChange(_, _)
+            | ScratchBlock::ControlIf(_, _)
+            | ScratchBlock::ControlIfElse(_, _, _)
+            | ScratchBlock::ControlRepeat(_, _)
+            | ScratchBlock::ControlRepeatUntil(_, _) => None,
         }
     }
 
@@ -102,19 +102,15 @@ impl ScratchBlock {
         var_ptr: Ptr,
         variable_type_data: &HashMap<Ptr, VarType>,
     ) -> Option<VarTypeChecked> {
-        // println!("check affect var {var_ptr:?} : {self:?}");
         match self {
             ScratchBlock::VarSet(ptr, input) => {
                 if var_ptr == *ptr {
-                    // println!("yeah, {var_ptr:?}, {ptr:?}");
-                    let t = match input {
+                    match input {
                         Input::Obj(scratch_object) => Some(scratch_object.get_type().into()),
                         Input::Block(scratch_block) => {
                             scratch_block.return_type(variable_type_data)
                         }
-                    };
-                    // println!("{t:?}");
-                    t
+                    }
                 } else {
                     None
                 }
@@ -167,28 +163,28 @@ pub struct CodeSprite {
 }
 
 impl Compiler {
-    pub fn new() -> Self {
-        // let file_bytes = std::fs::read(path).unwrap();
+    // pub fn new() -> Self {
+    //     // let file_bytes = std::fs::read(path).unwrap();
 
-        // let loaded_project_dir = tempfile::TempDir::new().unwrap();
+    //     // let loaded_project_dir = tempfile::TempDir::new().unwrap();
 
-        // zip_extract::extract(
-        //     std::io::Cursor::new(file_bytes),
-        //     loaded_project_dir.path(),
-        //     false,
-        // )
-        // .unwrap();
+    //     // zip_extract::extract(
+    //     //     std::io::Cursor::new(file_bytes),
+    //     //     loaded_project_dir.path(),
+    //     //     false,
+    //     // )
+    //     // .unwrap();
 
-        // let json = std::fs::read_to_string(loaded_project_dir.path().join("project.json")).unwrap();
-        // let json: JsonStruct = serde_json::from_str(&json).unwrap();
+    //     // let json = std::fs::read_to_string(loaded_project_dir.path().join("project.json")).unwrap();
+    //     // let json: JsonStruct = serde_json::from_str(&json).unwrap();
 
-        Self {
-            // json,
-            // project_dir: loaded_project_dir,
-        }
-    }
+    //     Self {
+    //         // json,
+    //         // project_dir: loaded_project_dir,
+    //     }
+    // }
 
-    pub fn compile(&self) {
+    pub fn compile(/*&self*/) {
         let mut builder = settings::builder();
         builder.set("opt_level", "speed").unwrap();
         // for setting in builder.iter() {
@@ -197,7 +193,7 @@ impl Compiler {
         let flags = settings::Flags::new(builder);
 
         let isa = match isa::lookup(Triple::host()) {
-            Err(err) => panic!("Error looking up target: {}", err),
+            Err(err) => panic!("Error looking up target: {err}"),
             Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
         };
 
@@ -287,7 +283,7 @@ pub fn compile_block(
     match block {
         ScratchBlock::WhenFlagClicked => {}
         ScratchBlock::VarSet(ptr, obj) => {
-            blocks::var::set(obj, builder, ptr, variable_type_data, code_block, memory);
+            blocks::var::set(obj, builder, *ptr, variable_type_data, code_block, memory);
         }
         ScratchBlock::OpAdd(a, b) => {
             let a = a.get_number(builder, code_block, variable_type_data, memory);
@@ -328,7 +324,7 @@ pub fn compile_block(
             blocks::control::repeat(builder, input, code_block, variable_type_data, vec, memory);
         }
         ScratchBlock::VarChange(ptr, input) => {
-            blocks::var::change(input, builder, code_block, variable_type_data, ptr, memory);
+            blocks::var::change(input, builder, code_block, variable_type_data, *ptr, memory);
         }
         ScratchBlock::ControlIf(input, vec) => {
             blocks::control::if_statement(
@@ -383,7 +379,7 @@ pub fn compile_block(
             ));
         }
         ScratchBlock::OpRandom(a, b) => {
-            return Some(blocks::op::op_random(
+            return Some(blocks::op::random(
                 a,
                 b,
                 builder,

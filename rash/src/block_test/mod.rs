@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     compiler::{compile_block, ScratchBlock, VarType},
     data_types::ScratchObject,
-    input_primitives::{Input, Ptr},
+    input_primitives::Ptr,
 };
 
 use codegen::{
@@ -20,27 +20,18 @@ pub fn repeated_sum() -> Vec<ScratchBlock> {
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(7),
-            Input::Block(Box::new(ScratchBlock::OpAdd(
-                Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
-                Input::Obj(ScratchObject::Bool(false)),
-            ))),
+            ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), false.into()).into(),
         ),
         ScratchBlock::ControlRepeat(
-            Input::new_num(100000.0),
+            100_000.0.into(),
             vec![
                 ScratchBlock::VarSet(
                     Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpAdd(
-                        Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
-                        Input::Obj(ScratchObject::Bool(true)),
-                    ))),
+                    ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), true.into()).into(),
                 ),
                 ScratchBlock::VarSet(
                     Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpAdd(
-                        Input::Block(Box::new(ScratchBlock::VarRead(Ptr(7)))),
-                        Input::Obj(ScratchObject::Bool(true)),
-                    ))),
+                    ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), true.into()).into(),
                 ),
             ],
         ),
@@ -51,26 +42,19 @@ pub fn repeated_sum() -> Vec<ScratchBlock> {
 pub fn repeated_join_string() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(
-            Ptr(7),
-            Input::Obj(ScratchObject::String("hello ".to_owned())),
-        ),
+        ScratchBlock::VarSet(Ptr(7), "hello ".into()),
         ScratchBlock::ControlRepeat(
-            Input::new_num(100.0),
+            100.0.into(),
             vec![
                 ScratchBlock::VarSet(
                     Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpStrJoin(
-                        Input::new_block(ScratchBlock::VarRead(Ptr(7))),
-                        Input::Obj(ScratchObject::String("world".to_owned())),
-                    ))),
+                    ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(7)).into(), "world".into())
+                        .into(),
                 ),
                 ScratchBlock::VarSet(
                     Ptr(7),
-                    Input::Block(Box::new(ScratchBlock::OpStrJoin(
-                        Input::new_block(ScratchBlock::VarRead(Ptr(7))),
-                        Input::Obj(ScratchObject::String(", ".to_owned())),
-                    ))),
+                    ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(7)).into(), ", ".into())
+                        .into(),
                 ),
             ],
         ),
@@ -82,49 +66,37 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
 pub fn if_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
+        ScratchBlock::ControlIf(1.0.into(), vec![ScratchBlock::VarSet(Ptr(0), 1.0.into())]),
+        ScratchBlock::ControlIf(0.0.into(), vec![ScratchBlock::VarSet(Ptr(1), 1.0.into())]),
+        ScratchBlock::ControlIf(true.into(), vec![ScratchBlock::VarSet(Ptr(2), 1.0.into())]),
+        ScratchBlock::ControlIf(false.into(), vec![ScratchBlock::VarSet(Ptr(3), 1.0.into())]),
         ScratchBlock::ControlIf(
-            Input::new_num(1.0),
-            vec![ScratchBlock::VarSet(Ptr(0), Input::new_num(1.0))],
+            "hello".into(),
+            vec![ScratchBlock::VarSet(Ptr(4), 1.0.into())],
         ),
         ScratchBlock::ControlIf(
-            Input::new_num(0.0),
-            vec![ScratchBlock::VarSet(Ptr(1), Input::new_num(1.0))],
+            String::new().into(),
+            vec![ScratchBlock::VarSet(Ptr(5), 1.0.into())],
         ),
         ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::Bool(true)),
-            vec![ScratchBlock::VarSet(Ptr(2), Input::new_num(1.0))],
+            "true".into(),
+            vec![ScratchBlock::VarSet(Ptr(6), 1.0.into())],
         ),
         ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::Bool(false)),
-            vec![ScratchBlock::VarSet(Ptr(3), Input::new_num(1.0))],
-        ),
-        ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::String("hello".to_owned())),
-            vec![ScratchBlock::VarSet(Ptr(4), Input::new_num(1.0))],
-        ),
-        ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::String(String::new())),
-            vec![ScratchBlock::VarSet(Ptr(5), Input::new_num(1.0))],
-        ),
-        ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::String("true".to_owned())),
-            vec![ScratchBlock::VarSet(Ptr(6), Input::new_num(1.0))],
-        ),
-        ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::String("false".to_owned())),
-            vec![ScratchBlock::VarSet(Ptr(7), Input::new_num(1.0))],
+            "false".into(),
+            vec![ScratchBlock::VarSet(Ptr(7), 1.0.into())],
         ),
         // nested statements
         ScratchBlock::ControlIf(
-            Input::Obj(ScratchObject::Bool(true)),
+            true.into(),
             vec![
                 ScratchBlock::ControlIf(
-                    Input::Obj(ScratchObject::Bool(true)),
-                    vec![ScratchBlock::VarSet(Ptr(8), Input::new_num(1.0))],
+                    true.into(),
+                    vec![ScratchBlock::VarSet(Ptr(8), 1.0.into())],
                 ),
                 ScratchBlock::ControlIf(
-                    Input::Obj(ScratchObject::Bool(false)),
-                    vec![ScratchBlock::VarSet(Ptr(9), Input::new_num(1.0))],
+                    false.into(),
+                    vec![ScratchBlock::VarSet(Ptr(9), 1.0.into())],
                 ),
             ],
         ),
@@ -137,34 +109,34 @@ pub fn if_else_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::ControlIfElse(
-            Input::Obj(ScratchObject::Bool(true)),
-            vec![ScratchBlock::VarSet(Ptr(0), Input::new_num(1.0))],
-            vec![ScratchBlock::VarSet(Ptr(0), Input::new_num(0.0))],
+            true.into(),
+            vec![ScratchBlock::VarSet(Ptr(0), 1.0.into())],
+            vec![ScratchBlock::VarSet(Ptr(0), 0.0.into())],
         ),
         ScratchBlock::ControlIfElse(
-            Input::Obj(ScratchObject::Bool(false)),
-            vec![ScratchBlock::VarSet(Ptr(1), Input::new_num(0.0))],
-            vec![ScratchBlock::VarSet(Ptr(1), Input::new_num(1.0))],
+            false.into(),
+            vec![ScratchBlock::VarSet(Ptr(1), 0.0.into())],
+            vec![ScratchBlock::VarSet(Ptr(1), 1.0.into())],
         ),
         ScratchBlock::ControlIfElse(
-            Input::Obj(ScratchObject::String("hello".to_owned())),
-            vec![ScratchBlock::VarSet(Ptr(2), Input::new_num(1.0))],
-            vec![ScratchBlock::VarSet(Ptr(2), Input::new_num(0.0))],
+            "hello".into(),
+            vec![ScratchBlock::VarSet(Ptr(2), 1.0.into())],
+            vec![ScratchBlock::VarSet(Ptr(2), 0.0.into())],
         ),
         ScratchBlock::ControlIfElse(
-            Input::Obj(ScratchObject::String(String::new())),
-            vec![ScratchBlock::VarSet(Ptr(3), Input::new_num(0.0))],
-            vec![ScratchBlock::VarSet(Ptr(3), Input::new_num(1.0))],
+            String::new().into(),
+            vec![ScratchBlock::VarSet(Ptr(3), 0.0.into())],
+            vec![ScratchBlock::VarSet(Ptr(3), 1.0.into())],
         ),
         ScratchBlock::ControlIfElse(
-            Input::Obj(ScratchObject::String("true".to_owned())),
-            vec![ScratchBlock::VarSet(Ptr(4), Input::new_num(1.0))],
-            vec![ScratchBlock::VarSet(Ptr(4), Input::new_num(0.0))],
+            "true".into(),
+            vec![ScratchBlock::VarSet(Ptr(4), 1.0.into())],
+            vec![ScratchBlock::VarSet(Ptr(4), 0.0.into())],
         ),
         ScratchBlock::ControlIfElse(
-            Input::Obj(ScratchObject::String("false".to_owned())),
-            vec![ScratchBlock::VarSet(Ptr(5), Input::new_num(0.0))],
-            vec![ScratchBlock::VarSet(Ptr(5), Input::new_num(1.0))],
+            "false".into(),
+            vec![ScratchBlock::VarSet(Ptr(5), 0.0.into())],
+            vec![ScratchBlock::VarSet(Ptr(5), 1.0.into())],
         ),
     ]
 }
@@ -176,37 +148,42 @@ pub fn pi() -> Vec<ScratchBlock> {
     const I: Ptr = Ptr(2);
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(PI, Input::new_num(0.0)),
-        ScratchBlock::VarSet(D, Input::new_num(1.0)),
-        ScratchBlock::VarSet(I, Input::new_num(0.0)),
+        ScratchBlock::VarSet(PI, 0.0.into()),
+        ScratchBlock::VarSet(D, 1.0.into()),
+        ScratchBlock::VarSet(I, 0.0.into()),
         // A test of nested repeat loops
         ScratchBlock::ControlRepeat(
-            Input::new_num(1000.0),
+            1000.0.into(),
             vec![ScratchBlock::ControlRepeat(
-                Input::new_num(1000.0),
+                1000.0.into(),
                 vec![
                     // PI += ((8 * (I % 2)) - 4) / D
                     ScratchBlock::VarSet(
                         PI,
-                        Input::new_block(ScratchBlock::OpAdd(
-                            Input::new_block(ScratchBlock::VarRead(PI)),
-                            Input::new_block(ScratchBlock::OpDiv(
-                                Input::new_block(ScratchBlock::OpSub(
-                                    Input::new_block(ScratchBlock::OpMul(
-                                        Input::new_num(8.0),
-                                        Input::new_block(ScratchBlock::OpMod(
-                                            Input::new_block(ScratchBlock::VarRead(I)),
-                                            Input::new_num(2.0),
-                                        )),
-                                    )),
-                                    Input::new_num(4.0),
-                                )),
-                                Input::new_block(ScratchBlock::VarRead(D)),
-                            )),
-                        )),
+                        ScratchBlock::OpAdd(
+                            ScratchBlock::VarRead(PI).into(),
+                            ScratchBlock::OpDiv(
+                                ScratchBlock::OpSub(
+                                    ScratchBlock::OpMul(
+                                        8.0.into(),
+                                        ScratchBlock::OpMod(
+                                            ScratchBlock::VarRead(I).into(),
+                                            2.0.into(),
+                                        )
+                                        .into(),
+                                    )
+                                    .into(),
+                                    4.0.into(),
+                                )
+                                .into(),
+                                ScratchBlock::VarRead(D).into(),
+                            )
+                            .into(),
+                        )
+                        .into(),
                     ),
-                    ScratchBlock::VarChange(D, Input::new_num(2.0)),
-                    ScratchBlock::VarChange(I, Input::new_num(1.0)),
+                    ScratchBlock::VarChange(D, 2.0.into()),
+                    ScratchBlock::VarChange(I, 1.0.into()),
                 ],
             )],
         ),
@@ -218,15 +195,13 @@ pub fn nested_repeat() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::ControlRepeat(
-            Input::new_num(9.0),
+            9.0.into(),
             vec![ScratchBlock::ControlRepeat(
-                Input::new_num(11.0),
+                11.0.into(),
                 vec![ScratchBlock::VarSet(
                     Ptr(0),
-                    Input::new_block(ScratchBlock::OpStrJoin(
-                        Input::new_block(ScratchBlock::VarRead(Ptr(0))),
-                        Input::Obj(ScratchObject::String("H".to_owned())),
-                    )),
+                    ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(0)).into(), "H".into())
+                        .into(),
                 )],
             )],
         ),
@@ -237,22 +212,17 @@ pub fn nested_repeat() -> Vec<ScratchBlock> {
 pub fn repeat_until() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(Ptr(0), Input::new_num(0.0)),
+        ScratchBlock::VarSet(Ptr(0), 0.0.into()),
         ScratchBlock::ControlRepeatUntil(
-            Input::new_block(ScratchBlock::OpCmpGreater(
-                Input::new_block(ScratchBlock::VarRead(Ptr(0))),
-                Input::new_num(10.0),
-            )),
+            ScratchBlock::OpCmpGreater(ScratchBlock::VarRead(Ptr(0)).into(), 10.0.into()).into(),
             vec![
-                ScratchBlock::VarSet(Ptr(1), Input::new_num(0.0)),
+                ScratchBlock::VarSet(Ptr(1), 0.0.into()),
                 ScratchBlock::ControlRepeatUntil(
-                    Input::new_block(ScratchBlock::OpCmpGreater(
-                        Input::new_block(ScratchBlock::VarRead(Ptr(1))),
-                        Input::new_num(20.0),
-                    )),
-                    vec![ScratchBlock::VarChange(Ptr(1), Input::new_num(1.0))],
+                    ScratchBlock::OpCmpGreater(ScratchBlock::VarRead(Ptr(1)).into(), 20.0.into())
+                        .into(),
+                    vec![ScratchBlock::VarChange(Ptr(1), 1.0.into())],
                 ),
-                ScratchBlock::VarChange(Ptr(0), Input::new_num(1.0)),
+                ScratchBlock::VarChange(Ptr(0), 1.0.into()),
             ],
         ),
     ]
@@ -264,38 +234,21 @@ pub fn str_ops() -> Vec<ScratchBlock> {
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(0),
-            Input::Block(Box::new(ScratchBlock::OpStrJoin(
-                Input::Obj(ScratchObject::String("hello".to_owned())),
-                Input::Obj(ScratchObject::String("world".to_owned())),
-            ))),
+            ScratchBlock::OpStrJoin("hello".into(), "world".into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(1),
-            Input::Block(Box::new(ScratchBlock::OpStrJoin(
-                Input::Obj(ScratchObject::String("hello".to_owned())),
-                Input::new_num(1.0),
-            ))),
+            ScratchBlock::OpStrJoin("hello".into(), 1.0.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(2),
-            Input::Block(Box::new(ScratchBlock::OpStrJoin(
-                Input::new_num(1.0),
-                Input::Obj(ScratchObject::String("world".to_owned())),
-            ))),
+            ScratchBlock::OpStrJoin(1.0.into(), "world".into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(3),
-            Input::Block(Box::new(ScratchBlock::OpStrJoin(
-                Input::Obj(ScratchObject::Bool(true)),
-                Input::new_num(2.0),
-            ))),
+            ScratchBlock::OpStrJoin(true.into(), 2.0.into()).into(),
         ),
-        ScratchBlock::VarSet(
-            Ptr(4),
-            Input::Block(Box::new(ScratchBlock::OpStrLen(Input::Obj(
-                ScratchObject::Bool(true),
-            )))),
-        ),
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpStrLen(true.into()).into()),
     ]
 }
 
@@ -305,40 +258,25 @@ pub fn random() -> Vec<ScratchBlock> {
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(0),
-            Input::new_block(ScratchBlock::OpRandom(
-                Input::new_num(0.0),
-                Input::new_num(100.0),
-            )),
+            ScratchBlock::OpRandom(0.0.into(), 100.0.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(1),
-            Input::new_block(ScratchBlock::OpRandom(
-                Input::new_num(1.0),
-                Input::new_num(2.5),
-            )),
+            ScratchBlock::OpRandom(1.0.into(), 2.5.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(2),
-            Input::new_block(ScratchBlock::OpRandom(
-                Input::Obj(ScratchObject::String("1".to_owned())),
-                Input::Obj(ScratchObject::String("2".to_owned())),
-            )),
+            ScratchBlock::OpRandom("1".into(), "2".into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(3),
-            Input::new_block(ScratchBlock::OpRandom(
-                Input::Obj(ScratchObject::String("1.0".to_owned())),
-                Input::Obj(ScratchObject::String("2".to_owned())),
-            )),
+            ScratchBlock::OpRandom("1.0".into(), "2".into()).into(),
         ),
         ScratchBlock::ControlRepeat(
-            Input::new_num(100_000.0),
+            100_000.0.into(),
             vec![ScratchBlock::VarSet(
                 Ptr(4),
-                Input::new_block(ScratchBlock::OpRandom(
-                    Input::new_num(0.0),
-                    Input::new_num(100.0),
-                )),
+                ScratchBlock::OpRandom(0.0.into(), 100.0.into()).into(),
             )],
         ),
     ]
@@ -348,37 +286,19 @@ pub fn random() -> Vec<ScratchBlock> {
 pub fn math_add_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(
-            Ptr(0),
-            Input::new_block(ScratchBlock::OpAdd(
-                Input::new_num(50.0),
-                Input::new_num(25.0),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpAdd(50.0.into(), 25.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
-            Input::new_block(ScratchBlock::OpAdd(
-                Input::new_num(-500.0),
-                Input::new_num(25.0),
-            )),
+            ScratchBlock::OpAdd((-500.0).into(), 25.0.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(2),
-            Input::new_block(ScratchBlock::OpAdd(
-                Input::new_num(-500.0),
-                Input::new_num(-25.0),
-            )),
+            ScratchBlock::OpAdd((-500.0).into(), (-25.0).into()).into(),
         ),
-        ScratchBlock::VarSet(
-            Ptr(3),
-            Input::new_block(ScratchBlock::OpAdd(
-                Input::new_num(2.54),
-                Input::new_num(6.28),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpAdd(2.54.into(), 6.25.into()).into()),
         ScratchBlock::VarSet(
             Ptr(4),
-            ScratchBlock::OpAdd(2.54.into(), (-6.28).into()).into(),
+            ScratchBlock::OpAdd(2.54.into(), (-6.25).into()).into(),
         ),
         ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpAdd(true.into(), true.into()).into()),
         ScratchBlock::VarSet(
@@ -399,11 +319,11 @@ pub fn math_add_test() -> Vec<ScratchBlock> {
         ),
         ScratchBlock::VarSet(
             Ptr(10),
-            ScratchBlock::OpAdd(1.0.into(), (0.0 / 0.0).into()).into(),
+            ScratchBlock::OpAdd(1.0.into(), f64::NAN.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(11),
-            ScratchBlock::OpAdd((0.0 / 0.0).into(), 1.0.into()).into(),
+            ScratchBlock::OpAdd(f64::NAN.into(), 1.0.into()).into(),
         ),
     ]
 }
@@ -412,31 +332,19 @@ pub fn math_add_test() -> Vec<ScratchBlock> {
 pub fn math_sub_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(
-            Ptr(0),
-            Input::new_block(ScratchBlock::OpSub(
-                Input::new_num(50.0),
-                Input::new_num(25.0),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpSub(50.0.into(), 25.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
-            Input::new_block(ScratchBlock::OpSub(
-                Input::new_num(-500.0),
-                Input::new_num(25.0),
-            )),
+            ScratchBlock::OpSub((-500.0).into(), 25.0.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(2),
-            Input::new_block(ScratchBlock::OpSub(
-                Input::new_num(-500.0),
-                Input::new_num(-25.0),
-            )),
+            ScratchBlock::OpSub((-500.0).into(), (-25.0).into()).into(),
         ),
-        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpSub(2.54.into(), 6.28.into()).into()),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpSub(2.54.into(), 6.25.into()).into()),
         ScratchBlock::VarSet(
             Ptr(4),
-            ScratchBlock::OpSub(2.54.into(), (-6.28).into()).into(),
+            ScratchBlock::OpSub(2.54.into(), (-6.25).into()).into(),
         ),
         ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpSub(true.into(), true.into()).into()),
         ScratchBlock::VarSet(
@@ -457,11 +365,11 @@ pub fn math_sub_test() -> Vec<ScratchBlock> {
         ),
         ScratchBlock::VarSet(
             Ptr(10),
-            ScratchBlock::OpSub(1.0.into(), (0.0 / 0.0).into()).into(),
+            ScratchBlock::OpSub(1.0.into(), f64::NAN.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(11),
-            ScratchBlock::OpSub((0.0 / 0.0).into(), 1.0.into()).into(),
+            ScratchBlock::OpSub(f64::NAN.into(), 1.0.into()).into(),
         ),
     ]
 }
@@ -470,37 +378,19 @@ pub fn math_sub_test() -> Vec<ScratchBlock> {
 pub fn math_mul_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(
-            Ptr(0),
-            Input::new_block(ScratchBlock::OpMul(
-                Input::new_num(50.0),
-                Input::new_num(2.0),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMul(50.0.into(), 2.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
-            Input::new_block(ScratchBlock::OpMul(
-                Input::new_num(-50.0),
-                Input::new_num(2.0),
-            )),
+            ScratchBlock::OpMul((-50.0).into(), 2.0.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(2),
-            Input::new_block(ScratchBlock::OpMul(
-                Input::new_num(-50.0),
-                Input::new_num(-2.0),
-            )),
+            ScratchBlock::OpMul((-50.0).into(), (-2.0).into()).into(),
         ),
-        ScratchBlock::VarSet(
-            Ptr(3),
-            Input::new_block(ScratchBlock::OpMul(
-                Input::new_num(2.54),
-                Input::new_num(6.28),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpMul(2.54.into(), 6.25.into()).into()),
         ScratchBlock::VarSet(
             Ptr(4),
-            ScratchBlock::OpMul(2.54.into(), (-6.28).into()).into(),
+            ScratchBlock::OpMul(2.54.into(), (-6.25).into()).into(),
         ),
         ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpMul(true.into(), true.into()).into()),
         ScratchBlock::VarSet(
@@ -545,11 +435,11 @@ pub fn math_mul_test() -> Vec<ScratchBlock> {
         ),
         ScratchBlock::VarSet(
             Ptr(16),
-            ScratchBlock::OpMul(1.0.into(), (0.0 / 0.0).into()).into(),
+            ScratchBlock::OpMul(1.0.into(), f64::NAN.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(17),
-            ScratchBlock::OpMul((0.0 / 0.0).into(), 1.0.into()).into(),
+            ScratchBlock::OpMul(f64::NAN.into(), 1.0.into()).into(),
         ),
     ]
 }
@@ -558,34 +448,16 @@ pub fn math_mul_test() -> Vec<ScratchBlock> {
 pub fn math_div_test() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
-        ScratchBlock::VarSet(
-            Ptr(0),
-            Input::new_block(ScratchBlock::OpDiv(
-                Input::new_num(50.0),
-                Input::new_num(2.0),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpDiv(50.0.into(), 2.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
-            Input::new_block(ScratchBlock::OpDiv(
-                Input::new_num(-50.0),
-                Input::new_num(2.0),
-            )),
+            ScratchBlock::OpDiv((-50.0).into(), 2.0.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(2),
-            Input::new_block(ScratchBlock::OpDiv(
-                Input::new_num(-50.0),
-                Input::new_num(-2.0),
-            )),
+            ScratchBlock::OpDiv((-50.0).into(), (-2.0).into()).into(),
         ),
-        ScratchBlock::VarSet(
-            Ptr(3),
-            Input::new_block(ScratchBlock::OpDiv(
-                Input::new_num(3.5),
-                Input::new_num(2.5),
-            )),
-        ),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpDiv(3.5.into(), 2.5.into()).into()),
         ScratchBlock::VarSet(
             Ptr(4),
             ScratchBlock::OpDiv(3.5.into(), (-2.5).into()).into(),
@@ -633,23 +505,23 @@ pub fn math_div_test() -> Vec<ScratchBlock> {
         ),
         ScratchBlock::VarSet(
             Ptr(16),
-            ScratchBlock::OpDiv(1.0.into(), (0.0 / 0.0).into()).into(),
+            ScratchBlock::OpDiv(1.0.into(), f64::NAN.into()).into(),
         ),
         ScratchBlock::VarSet(
             Ptr(17),
-            ScratchBlock::OpDiv((0.0 / 0.0).into(), 1.0.into()).into(),
+            ScratchBlock::OpDiv(f64::NAN.into(), 1.0.into()).into(),
         ),
     ]
 }
 
 #[allow(unused)]
-fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
+fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     let mut builder = settings::builder();
     builder.set("opt_level", "speed").unwrap();
     let flags = settings::Flags::new(builder);
 
     let isa = match isa::lookup(Triple::host()) {
-        Err(err) => panic!("Error looking up target: {}", err),
+        Err(err) => panic!("Error looking up target: {err}"),
         Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
     };
 
@@ -666,7 +538,7 @@ fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
 
     let mut variable_type_data: HashMap<Ptr, VarType> = HashMap::new();
 
-    for block in &program {
+    for block in program {
         compile_block(
             block,
             &mut builder,
@@ -726,7 +598,7 @@ mod tests {
     fn run_code<'a>(code: Vec<ScratchBlock>) -> MutexGuard<'a, Box<[ScratchObject]>> {
         let mut memory = MEMORY.lock().unwrap();
         *memory = vec![ScratchObject::Number(0.0); 256].into_boxed_slice();
-        run(code, &memory);
+        run(&code, &memory);
         memory
     }
 
@@ -837,8 +709,8 @@ mod tests {
         assert_eq!(memory[0].convert_to_number(), 75.0);
         assert_eq!(memory[1].convert_to_number(), -475.0);
         assert_eq!(memory[2].convert_to_number(), -525.0);
-        assert_eq!(memory[3].convert_to_number(), 8.82);
-        assert_eq!(memory[4].convert_to_number(), -3.74);
+        assert_eq!(memory[3].convert_to_number(), 8.79);
+        assert_eq!(memory[4].convert_to_number(), -3.71);
         assert_eq!(memory[5].convert_to_number(), 2.0);
 
         assert!(memory[6].convert_to_number().is_infinite());
@@ -857,8 +729,8 @@ mod tests {
         assert_eq!(memory[0].convert_to_number(), 25.0);
         assert_eq!(memory[1].convert_to_number(), -525.0);
         assert_eq!(memory[2].convert_to_number(), -475.0);
-        assert_eq!(memory[3].convert_to_number(), -3.74);
-        assert_eq!(memory[4].convert_to_number(), 8.82);
+        assert_eq!(memory[3].convert_to_number(), -3.71);
+        assert_eq!(memory[4].convert_to_number(), 8.79);
         assert_eq!(memory[5].convert_to_number(), 0.0);
 
         assert!(memory[6].convert_to_number().is_nan());
@@ -878,8 +750,8 @@ mod tests {
         assert_eq!(memory[0].convert_to_number(), 100.0);
         assert_eq!(memory[1].convert_to_number(), -100.0);
         assert_eq!(memory[2].convert_to_number(), 100.0);
-        assert_eq!(memory[3].convert_to_number(), 15.9512);
-        assert_eq!(memory[4].convert_to_number(), -15.9512);
+        assert_eq!(memory[3].convert_to_number(), 15.875);
+        assert_eq!(memory[4].convert_to_number(), -15.875);
         assert_eq!(memory[5].convert_to_number(), 1.0);
 
         assert!(memory[6].convert_to_number().is_infinite());

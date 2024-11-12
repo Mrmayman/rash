@@ -32,7 +32,7 @@ pub extern "C" fn op_str_join(
     }
 
     // Otherwise we create a new string.
-    let result = format!("{}{}", a_ref, b_ref);
+    let result = format!("{a_ref}{b_ref}");
     unsafe {
         out.write(result);
 
@@ -65,7 +65,7 @@ pub extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
 /// * `ptr` - The pointer to the variable (supplied from the
 ///   MEMORY array beforehand by the compiler).
 /// * `dest` - The pointer to the destination memory location.
-///   (not a pointer to ScratchObject for simplicity sake)
+///   (not a pointer to `ScratchObject` for simplicity sake)
 pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut i64) {
     let obj = unsafe { (*ptr).clone() };
     let data: [i64; 4] = unsafe { std::mem::transmute(obj) };

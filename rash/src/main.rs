@@ -35,14 +35,14 @@ fn main() {
 
     print_func_addresses();
 
-    let compiler = Compiler::new();
-    compiler.compile();
+    // let compiler = Compiler::new();
+    Compiler::compile();
 
     drop_strings();
 
     // print memory
     for (i, obj) in MEMORY.lock().unwrap().iter().enumerate().take(10) {
-        println!("{}: {:?}", i, obj);
+        println!("{i}: {obj:?}");
     }
 }
 
@@ -51,9 +51,9 @@ fn drop_strings() {
     let mut strings: Vec<[i64; 3]> = Vec::new();
     std::mem::swap(strings_buf.as_mut(), &mut strings);
 
-    for string in strings.into_iter() {
+    for string in strings {
         let _string: String = unsafe { std::mem::transmute(string) };
-        println!("Dropping string {_string}");
+        // println!("Dropping string {_string}");
         // Drop string
     }
 }

@@ -65,7 +65,7 @@ fn update_type_data_for_block(
     vec: &[ScratchBlock],
 ) {
     variable_type_data.clear();
-    for var in (0..memory.len()).into_iter().map(Ptr) {
+    for var in (0..memory.len()).map(Ptr) {
         if let Some(var_type) = vec
             .iter()
             .filter_map(|block| block.affects_var(var, variable_type_data))

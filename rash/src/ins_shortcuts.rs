@@ -18,7 +18,7 @@ pub fn ins_call_to_num(
 ) -> Inst {
     let to_num_func = builder
         .ins()
-        .iconst(I64, callbacks::types::to_number as i64);
+        .iconst(I64, callbacks::types::to_number as usize as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -53,7 +53,7 @@ pub fn ins_mem_write_string(
     builder.ins().store(MemFlags::new(), i2, mem_ptr, 16);
     builder.ins().store(MemFlags::new(), i3, mem_ptr, 24);
 
-    let id = builder.ins().iconst(I64, ID_STRING as i64);
+    let id = builder.ins().iconst(I64, ID_STRING);
     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 }
 
@@ -65,10 +65,10 @@ pub fn ins_mem_write_bool(
 ) {
     let mem_ptr = ptr.constant(builder, memory);
 
-    let num = builder.ins().iconst(I64, num as i64);
+    let num = builder.ins().iconst(I64, i64::from(num));
     builder.ins().store(MemFlags::new(), num, mem_ptr, 8);
 
-    let id = builder.ins().iconst(I64, ID_BOOL as i64);
+    let id = builder.ins().iconst(I64, ID_BOOL);
     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 }
 
@@ -84,7 +84,7 @@ pub fn ins_mem_write_f64(
     let num = builder.ins().f64const(num);
     builder.ins().store(MemFlags::new(), num, mem_ptr, 8);
 
-    let id = builder.ins().iconst(I64, ID_NUMBER as i64);
+    let id = builder.ins().iconst(I64, ID_NUMBER);
     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 }
 
@@ -99,7 +99,9 @@ pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value 
 }
 
 pub fn ins_drop_obj(builder: &mut FunctionBuilder<'_>, ptr: Ptr, memory: &[ScratchObject]) {
-    let func = builder.ins().iconst(I64, callbacks::types::drop_obj as i64);
+    let func = builder
+        .ins()
+        .iconst(I64, callbacks::types::drop_obj as usize as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -117,9 +119,10 @@ pub fn ins_call_to_num_with_decimal_check(
     i3: Value,
     i4: Value,
 ) -> (Value, Value) {
-    let to_num_func = builder
-        .ins()
-        .iconst(I64, callbacks::types::to_number_with_decimal_check as i64);
+    let to_num_func = builder.ins().iconst(
+        I64,
+        callbacks::types::to_number_with_decimal_check as usize as i64,
+    );
     let stack_slot = builder.create_sized_stack_slot(StackSlotData {
         kind: StackSlotKind::ExplicitSlot,
         size: 2 * std::mem::size_of::<i64>() as u32,

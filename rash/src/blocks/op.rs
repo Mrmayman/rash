@@ -32,7 +32,9 @@ pub fn str_join(
     let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
     // Call join_string function
-    let func = builder.ins().iconst(I64, callbacks::op_str_join as i64);
+    let func = builder
+        .ins()
+        .iconst(I64, callbacks::op_str_join as usize as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -42,14 +44,14 @@ pub fn str_join(
         sig.params.push(AbiParam::new(I64));
         sig
     });
-    let a_is_const = builder.ins().iconst(I64, a_is_const as i64);
-    let b_is_const = builder.ins().iconst(I64, b_is_const as i64);
+    let a_is_const = builder.ins().iconst(I64, i64::from(a_is_const));
+    let b_is_const = builder.ins().iconst(I64, i64::from(b_is_const));
     builder
         .ins()
         .call_indirect(sig, func, &[a, b, stack_ptr, a_is_const, b_is_const]);
 
     // Read resulting string
-    let id = builder.ins().iconst(I64, ID_STRING as i64);
+    let id = builder.ins().iconst(I64, ID_STRING);
     let i1 = builder.ins().stack_load(I64, stack_slot, 0);
     let i2 = builder.ins().stack_load(I64, stack_slot, 8);
     let i3 = builder.ins().stack_load(I64, stack_slot, 16);
@@ -95,7 +97,9 @@ pub fn str_len(
     memory: &[ScratchObject],
 ) -> ReturnValue {
     let (input, is_const) = input.get_string(builder, code_block, variable_type_data, memory);
-    let func = builder.ins().iconst(I64, callbacks::op_str_len as i64);
+    let func = builder
+        .ins()
+        .iconst(I64, callbacks::op_str_len as usize as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -103,14 +107,14 @@ pub fn str_len(
         sig.returns.push(AbiParam::new(I64));
         sig
     });
-    let is_const = builder.ins().iconst(I64, is_const as i64);
+    let is_const = builder.ins().iconst(I64, i64::from(is_const));
     let inst = builder.ins().call_indirect(sig, func, &[input, is_const]);
     let res = builder.inst_results(inst)[0];
     let res = builder.ins().fcvt_from_sint(F64, res);
     ReturnValue::Num(res)
 }
 
-pub fn op_random(
+pub fn random(
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
@@ -124,7 +128,9 @@ pub fn op_random(
         b.get_number_with_decimal_check(builder, code_block, variable_type_data, memory);
 
     let is_decimal = builder.ins().bor(a_is_decimal, b_is_decimal);
-    let func = builder.ins().iconst(I64, callbacks::op_random as i64);
+    let func = builder
+        .ins()
+        .iconst(I64, callbacks::op_random as usize as i64);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(F64));

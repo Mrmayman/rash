@@ -34,7 +34,9 @@ pub fn read(
             ReturnValue::Bool(value)
         }
         _ => {
-            let func = builder.ins().iconst(I64, callbacks::var_read as i64);
+            let func = builder
+                .ins()
+                .iconst(I64, callbacks::var_read as usize as i64);
             let sig = builder.import_signature({
                 let mut sig = Signature::new(CallConv::SystemV);
                 sig.params.push(AbiParam::new(I64));
@@ -59,7 +61,7 @@ pub fn read(
 pub fn set(
     obj: &Input,
     builder: &mut FunctionBuilder<'_>,
-    ptr: &Ptr,
+    ptr: Ptr,
     variable_type_data: &mut HashMap<Ptr, VarType>,
     code_block: &mut Block,
     memory: &[ScratchObject],
@@ -67,23 +69,23 @@ pub fn set(
     match obj {
         Input::Obj(obj) => {
             if !matches!(
-                variable_type_data.get(ptr),
-                Some(VarType::Number) | Some(VarType::Bool)
+                variable_type_data.get(&ptr),
+                Some(VarType::Number | VarType::Bool)
             ) {
-                ins_drop_obj(builder, *ptr, memory);
+                ins_drop_obj(builder, ptr, memory);
             }
             match obj {
                 ScratchObject::Number(num) => {
-                    ins_mem_write_f64(builder, *ptr, *num, memory);
-                    variable_type_data.insert(*ptr, VarType::Number);
+                    ins_mem_write_f64(builder, ptr, *num, memory);
+                    variable_type_data.insert(ptr, VarType::Number);
                 }
                 ScratchObject::Bool(num) => {
-                    ins_mem_write_bool(builder, *ptr, *num, memory);
-                    variable_type_data.insert(*ptr, VarType::Bool);
+                    ins_mem_write_bool(builder, ptr, *num, memory);
+                    variable_type_data.insert(ptr, VarType::Bool);
                 }
                 ScratchObject::String(string) => {
-                    ins_mem_write_string(string, builder, *ptr, memory);
-                    variable_type_data.insert(*ptr, VarType::String);
+                    ins_mem_write_string(string, builder, ptr, memory);
+                    variable_type_data.insert(ptr, VarType::String);
                 }
             }
         }
@@ -92,10 +94,10 @@ pub fn set(
             let val = compile_block(block, builder, code_block, variable_type_data, memory);
             let val = val.unwrap();
             if !matches!(
-                variable_type_data.get(ptr),
-                Some(VarType::Number) | Some(VarType::Bool)
+                variable_type_data.get(&ptr),
+                Some(VarType::Number | VarType::Bool)
             ) {
-                ins_drop_obj(builder, *ptr, memory);
+                ins_drop_obj(builder, ptr, memory);
             }
             match val {
                 ReturnValue::Num(value) | ReturnValue::Bool(value) => {
@@ -104,11 +106,11 @@ pub fn set(
 
                     let id = builder
                         .ins()
-                        .iconst(I64, if val.is_bool() { ID_BOOL } else { ID_NUMBER } as i64);
+                        .iconst(I64, if val.is_bool() { ID_BOOL } else { ID_NUMBER });
                     builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
 
                     variable_type_data.insert(
-                        *ptr,
+                        ptr,
                         if val.is_bool() {
                             VarType::Bool
                         } else {
@@ -123,7 +125,7 @@ pub fn set(
                     builder.ins().store(MemFlags::new(), i2, mem_ptr, 8);
                     builder.ins().store(MemFlags::new(), i3, mem_ptr, 16);
                     builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
-                    variable_type_data.remove(ptr);
+                    variable_type_data.remove(&ptr);
                 }
                 ReturnValue::ObjectPointer(_value, slot) => {
                     let i1 = builder.ins().stack_load(I64, slot, 0);
@@ -137,7 +139,7 @@ pub fn set(
                     builder.ins().store(MemFlags::new(), i2, mem_ptr, 8);
                     builder.ins().store(MemFlags::new(), i3, mem_ptr, 16);
                     builder.ins().store(MemFlags::new(), i4, mem_ptr, 24);
-                    variable_type_data.remove(ptr);
+                    variable_type_data.remove(&ptr);
                 }
             }
         }
@@ -149,11 +151,11 @@ pub fn change(
     builder: &mut FunctionBuilder<'_>,
     code_block: &mut Block,
     variable_type_data: &mut HashMap<Ptr, VarType>,
-    ptr: &Ptr,
+    ptr: Ptr,
     memory: &[ScratchObject],
 ) {
     let input = input.get_number(builder, code_block, variable_type_data, memory);
-    let old_value = read(builder, *ptr, variable_type_data, memory);
+    let old_value = read(builder, ptr, variable_type_data, memory);
     let old_value = old_value.get_number(builder);
     let new_value = builder.ins().fadd(old_value, input);
 
@@ -161,9 +163,9 @@ pub fn change(
 
     builder.ins().store(MemFlags::new(), new_value, mem_ptr, 8);
 
-    if !matches!(variable_type_data.get(ptr), Some(VarType::Number)) {
-        let id = builder.ins().iconst(I64, ID_NUMBER as i64);
+    if !matches!(variable_type_data.get(&ptr), Some(VarType::Number)) {
+        let id = builder.ins().iconst(I64, ID_NUMBER);
         builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
-        variable_type_data.insert(*ptr, VarType::Number);
+        variable_type_data.insert(ptr, VarType::Number);
     }
 }
