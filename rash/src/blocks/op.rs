@@ -1,27 +1,24 @@
-use std::collections::HashMap;
-
 use cranelift::prelude::*;
 use isa::CallConv;
 use types::{F64, I64};
 
 use crate::{
     callbacks,
-    compiler::VarType,
+    compiler::Compiler,
     data_types::{ScratchObject, ID_STRING},
-    input_primitives::{Input, Ptr, ReturnValue},
+    input_primitives::{Input, ReturnValue},
 };
 
 pub fn str_join(
+    compiler: &mut Compiler,
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
 ) -> (Value, Value, Value, Value) {
     // Get strings
-    let (a, a_is_const) = a.get_string(builder, code_block, variable_type_data, memory);
-    let (b, b_is_const) = b.get_string(builder, code_block, variable_type_data, memory);
+    let (a, a_is_const) = a.get_string(compiler, builder, memory);
+    let (b, b_is_const) = b.get_string(compiler, builder, memory);
 
     // Create stack slot for result
     let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
@@ -32,9 +29,9 @@ pub fn str_join(
     let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
     // Call join_string function
-    let func = builder
-        .ins()
-        .iconst(I64, callbacks::op_str_join as usize as i64);
+    let func = compiler
+        .constants
+        .get_int(callbacks::op_str_join as usize as i64, builder);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -44,14 +41,14 @@ pub fn str_join(
         sig.params.push(AbiParam::new(I64));
         sig
     });
-    let a_is_const = builder.ins().iconst(I64, i64::from(a_is_const));
-    let b_is_const = builder.ins().iconst(I64, i64::from(b_is_const));
+    let a_is_const = compiler.constants.get_int(i64::from(a_is_const), builder);
+    let b_is_const = compiler.constants.get_int(i64::from(b_is_const), builder);
     builder
         .ins()
         .call_indirect(sig, func, &[a, b, stack_ptr, a_is_const, b_is_const]);
 
     // Read resulting string
-    let id = builder.ins().iconst(I64, ID_STRING);
+    let id = compiler.constants.get_int(ID_STRING, builder);
     let i1 = builder.ins().stack_load(I64, stack_slot, 0);
     let i2 = builder.ins().stack_load(I64, stack_slot, 8);
     let i3 = builder.ins().stack_load(I64, stack_slot, 16);
@@ -59,15 +56,14 @@ pub fn str_join(
 }
 
 pub fn modulo(
+    compiler: &mut Compiler,
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
 ) -> Value {
-    let a = a.get_number(builder, code_block, variable_type_data, memory);
-    let b = b.get_number(builder, code_block, variable_type_data, memory);
+    let a = a.get_number(compiler, builder, memory);
+    let b = b.get_number(compiler, builder, memory);
     let div = builder.ins().fdiv(a, b);
 
     // Step 1: Truncate the division to an integer (simulates `floor` for positive values)
@@ -77,7 +73,7 @@ pub fn modulo(
     // Step 2: Check if truncation needs adjustment for negative values
     // If `trunc_div > div`, we adjust by subtracting 1 to simulate `floor`
     let needs_adjustment = builder.ins().fcmp(FloatCC::GreaterThan, trunc_div, div);
-    let tmp = builder.ins().f64const(-1.0);
+    let tmp = compiler.constants.get_float(-1.0, builder);
     let adjustment = builder.ins().fadd(trunc_div, tmp);
     let floor_div = builder
         .ins()
@@ -90,16 +86,15 @@ pub fn modulo(
 }
 
 pub fn str_len(
+    compiler: &mut Compiler,
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
 ) -> ReturnValue {
-    let (input, is_const) = input.get_string(builder, code_block, variable_type_data, memory);
-    let func = builder
-        .ins()
-        .iconst(I64, callbacks::op_str_len as usize as i64);
+    let (input, is_const) = input.get_string(compiler, builder, memory);
+    let func = compiler
+        .constants
+        .get_int(callbacks::op_str_len as usize as i64, builder);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I64));
@@ -107,7 +102,7 @@ pub fn str_len(
         sig.returns.push(AbiParam::new(I64));
         sig
     });
-    let is_const = builder.ins().iconst(I64, i64::from(is_const));
+    let is_const = compiler.constants.get_int(i64::from(is_const), builder);
     let inst = builder.ins().call_indirect(sig, func, &[input, is_const]);
     let res = builder.inst_results(inst)[0];
     let res = builder.ins().fcvt_from_sint(F64, res);
@@ -115,22 +110,19 @@ pub fn str_len(
 }
 
 pub fn random(
+    compiler: &mut Compiler,
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
 ) -> ReturnValue {
-    let (a, a_is_decimal) =
-        a.get_number_with_decimal_check(builder, code_block, variable_type_data, memory);
-    let (b, b_is_decimal) =
-        b.get_number_with_decimal_check(builder, code_block, variable_type_data, memory);
+    let (a, a_is_decimal) = a.get_number_with_decimal_check(compiler, builder, memory);
+    let (b, b_is_decimal) = b.get_number_with_decimal_check(compiler, builder, memory);
 
     let is_decimal = builder.ins().bor(a_is_decimal, b_is_decimal);
-    let func = builder
-        .ins()
-        .iconst(I64, callbacks::op_random as usize as i64);
+    let func = compiler
+        .constants
+        .get_int(callbacks::op_random as usize as i64, builder);
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(F64));

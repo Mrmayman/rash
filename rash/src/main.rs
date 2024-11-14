@@ -1,10 +1,11 @@
-use compiler::{print_func_addresses, Compiler, MEMORY};
+use compiler::{compile, print_func_addresses, MEMORY};
 use input_primitives::STRINGS_TO_DROP;
 
 mod block_test;
 mod blocks;
 mod callbacks;
 mod compiler;
+mod constant_set;
 mod data_types;
 mod input_primitives;
 mod ins_shortcuts;
@@ -36,7 +37,7 @@ fn main() {
     print_func_addresses();
 
     // let compiler = Compiler::new();
-    Compiler::compile();
+    compile();
 
     drop_strings();
 

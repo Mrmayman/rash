@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::sync::Mutex;
 
 use codegen::ir::StackSlot;
 use cranelift::prelude::*;
@@ -7,11 +7,8 @@ use types::{F64, I64};
 
 use crate::{
     callbacks,
-    compiler::{compile_block, ScratchBlock, VarType},
+    compiler::{Compiler, ScratchBlock},
     data_types::ScratchObject,
-    ins_shortcuts::{
-        ins_call_to_num, ins_call_to_num_with_decimal_check, ins_create_string_stack_slot,
-    },
     ARITHMETIC_NAN_CHECK,
 };
 
@@ -21,10 +18,15 @@ pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
 pub struct Ptr(pub usize);
 
 impl Ptr {
-    pub fn constant(&self, builder: &mut FunctionBuilder<'_>, memory: &[ScratchObject]) -> Value {
-        builder
-            .ins()
-            .iconst(I64, unsafe { memory.as_ptr().add(self.0) } as i64)
+    pub fn constant(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+        memory: &[ScratchObject],
+    ) -> Value {
+        compiler
+            .constants
+            .get_int(unsafe { memory.as_ptr().add(self.0) } as i64, builder)
     }
 }
 
@@ -90,31 +92,29 @@ impl From<ScratchBlock> for Input {
 impl Input {
     pub fn get_number(
         &self,
+        compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-        code_block: &mut Block,
-        variable_type_data: &mut HashMap<Ptr, VarType>,
         memory: &[ScratchObject],
     ) -> Value {
-        let mut num = match self {
+        let (mut num, could_be_nan) = match self {
             Input::Obj(scratch_object) => {
                 let o = scratch_object.convert_to_number();
-                builder.ins().f64const(o)
+                (compiler.constants.get_float(o, builder), o.is_nan())
             }
             Input::Block(scratch_block) => {
-                let o = compile_block(
-                    scratch_block,
-                    builder,
-                    code_block,
-                    variable_type_data,
-                    memory,
-                )
-                .unwrap();
-                o.get_number(builder)
+                let could_be_nan = scratch_block.could_be_nan();
+                if could_be_nan {
+                    println!("Could be nan: {scratch_block:?}");
+                }
+                let o = compiler
+                    .compile_block(scratch_block, builder, memory)
+                    .unwrap();
+                (o.get_number(compiler, builder), could_be_nan)
             }
         };
-        if ARITHMETIC_NAN_CHECK {
+        if ARITHMETIC_NAN_CHECK && could_be_nan {
             let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
-            let zero_value = builder.ins().f64const(0.0);
+            let zero_value = compiler.constants.get_float(0.0, builder);
             num = builder.ins().select(is_not_nan, num, zero_value);
         }
 
@@ -123,9 +123,8 @@ impl Input {
 
     pub fn get_string(
         &self,
+        compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-        code_block: &mut Block,
-        variable_type_data: &mut HashMap<Ptr, VarType>,
         memory: &[ScratchObject],
     ) -> (Value, bool) {
         match self {
@@ -139,15 +138,15 @@ impl Input {
                 let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
                 // Transmute the String into a [i64; 3] array
-                println!("Getting string {scratch_object:?}");
+                // println!("Getting string {scratch_object:?}");
                 let string = scratch_object.convert_to_string();
 
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
                 STRINGS_TO_DROP.lock().unwrap().push(bytes);
 
-                let val1 = builder.ins().iconst(I64, bytes[0]);
-                let val2 = builder.ins().iconst(I64, bytes[1]);
-                let val3 = builder.ins().iconst(I64, bytes[2]);
+                let val1 = compiler.constants.get_int(bytes[0], builder);
+                let val2 = compiler.constants.get_int(bytes[1], builder);
+                let val3 = compiler.constants.get_int(bytes[2], builder);
 
                 // Store the values in the stack slot
                 builder.ins().stack_store(val1, stack_slot, 0);
@@ -157,76 +156,59 @@ impl Input {
                 (stack_ptr, true)
             }
             Input::Block(scratch_block) => {
-                let o = compile_block(
-                    scratch_block,
-                    builder,
-                    code_block,
-                    variable_type_data,
-                    memory,
-                )
-                .unwrap();
-                (o.get_string(builder), false)
+                let o = compiler
+                    .compile_block(scratch_block, builder, memory)
+                    .unwrap();
+                (o.get_string(compiler, builder), false)
             }
         }
     }
 
     pub fn get_bool(
         &self,
+        compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-        code_block: &mut Block,
-        variable_type_data: &mut HashMap<Ptr, VarType>,
         memory: &[ScratchObject],
     ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
                 let b = i64::from(scratch_object.convert_to_bool());
-                builder.ins().iconst(I64, b)
+                compiler.constants.get_int(b, builder)
             }
             Input::Block(scratch_block) => {
-                let b = compile_block(
-                    scratch_block,
-                    builder,
-                    code_block,
-                    variable_type_data,
-                    memory,
-                )
-                .unwrap();
-                b.get_bool(builder)
+                let b = compiler
+                    .compile_block(scratch_block, builder, memory)
+                    .unwrap();
+                b.get_bool(compiler, builder)
             }
         }
     }
 
     pub fn get_number_with_decimal_check(
         &self,
+        compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-        code_block: &mut Block,
-        variable_type_data: &mut HashMap<Ptr, VarType>,
         memory: &[ScratchObject],
     ) -> (Value, Value) {
         match self {
             Input::Obj(scratch_object) => {
                 let (n, b) = scratch_object.convert_to_number_with_decimal_check();
-                let n = builder.ins().f64const(n);
-                let b = builder.ins().iconst(I64, i64::from(b));
+                let n = compiler.constants.get_float(n, builder);
+                let b = compiler.constants.get_int(i64::from(b), builder);
                 (n, b)
             }
             Input::Block(scratch_block) => {
-                let o = compile_block(
-                    scratch_block,
-                    builder,
-                    code_block,
-                    variable_type_data,
-                    memory,
-                )
-                .unwrap();
+                let o = compiler
+                    .compile_block(scratch_block, builder, memory)
+                    .unwrap();
                 match o {
-                    ReturnValue::Num(value) => (value, builder.ins().iconst(I64, 0)),
+                    ReturnValue::Num(value) => (value, compiler.constants.get_int(0, builder)),
                     ReturnValue::Object((i1, i2, i3, i4)) => {
-                        ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                        compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
                     }
                     ReturnValue::Bool(value) => (
                         builder.ins().fcvt_from_sint(F64, value),
-                        builder.ins().iconst(I64, 0),
+                        compiler.constants.get_int(0, builder),
                     ),
                     ReturnValue::ObjectPointer(_value, slot) => {
                         let i1 = builder.ins().stack_load(I64, slot, 0);
@@ -234,7 +216,7 @@ impl Input {
                         let i3 = builder.ins().stack_load(I64, slot, 16);
                         let i4 = builder.ins().stack_load(I64, slot, 24);
 
-                        ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                        compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
                     }
                 }
             }
@@ -251,11 +233,11 @@ pub enum ReturnValue {
 }
 
 impl ReturnValue {
-    pub fn get_number(self, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub fn get_number(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             ReturnValue::Num(value) => value,
             ReturnValue::Object((i1, i2, i3, i4)) => {
-                let num = ins_call_to_num(builder, i1, i2, i3, i4);
+                let num = compiler.ins_call_to_num(builder, i1, i2, i3, i4);
                 builder.inst_results(num)[0]
             }
             ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
@@ -266,20 +248,21 @@ impl ReturnValue {
                 let i4 = builder.ins().stack_load(I64, slot, 24);
 
                 // Convert the object to number
-                let num = ins_call_to_num(builder, i1, i2, i3, i4);
+                let num = compiler.ins_call_to_num(builder, i1, i2, i3, i4);
                 builder.inst_results(num)[0]
             }
         }
     }
 
-    pub fn get_string(self, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub fn get_string(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             ReturnValue::Num(value) => {
-                let func = builder
-                    .ins()
-                    .iconst(I64, callbacks::types::to_string_from_num as usize as i64);
+                let func = compiler.constants.get_int(
+                    callbacks::types::to_string_from_num as usize as i64,
+                    builder,
+                );
 
-                let stack_ptr = ins_create_string_stack_slot(builder);
+                let stack_ptr = compiler.ins_create_string_stack_slot(builder);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -290,13 +273,16 @@ impl ReturnValue {
                 builder.ins().call_indirect(sig, func, &[value, stack_ptr]);
                 stack_ptr
             }
-            ReturnValue::Object((i1, i2, i3, i4)) => get_string_from_obj(builder, i1, i2, i3, i4),
+            ReturnValue::Object((i1, i2, i3, i4)) => {
+                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
+            }
             ReturnValue::Bool(value) => {
-                let func = builder
-                    .ins()
-                    .iconst(I64, callbacks::types::to_string_from_bool as usize as i64);
+                let func = compiler.constants.get_int(
+                    callbacks::types::to_string_from_bool as usize as i64,
+                    builder,
+                );
 
-                let stack_ptr = ins_create_string_stack_slot(builder);
+                let stack_ptr = compiler.ins_create_string_stack_slot(builder);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -315,7 +301,7 @@ impl ReturnValue {
                 let i3 = builder.ins().stack_load(I64, slot, 16);
                 let i4 = builder.ins().stack_load(I64, slot, 24);
 
-                get_string_from_obj(builder, i1, i2, i3, i4)
+                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
             }
         }
     }
@@ -324,21 +310,20 @@ impl ReturnValue {
         matches!(self, ReturnValue::Bool(_))
     }
 
-    fn get_bool(&self, builder: &mut FunctionBuilder<'_>) -> Value {
+    fn get_bool(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             ReturnValue::Num(value) => {
                 // (*n != 0.0 && !n.is_nan()) as i64
-                let zero = builder.ins().f64const(0.0);
-                let nan = builder.ins().f64const(f64::NAN);
+                let zero = compiler.constants.get_float(0.0, builder);
                 let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
-                let is_not_nan = builder.ins().fcmp(FloatCC::NotEqual, *value, nan);
+                let is_not_nan = builder.ins().fcmp(FloatCC::Equal, *value, *value);
                 builder.ins().band(is_not_zero, is_not_nan)
             }
             ReturnValue::Bool(value) => *value,
             ReturnValue::Object((i1, i2, i3, i4)) => {
-                let func = builder
-                    .ins()
-                    .iconst(I64, callbacks::types::to_bool as usize as i64);
+                let func = compiler
+                    .constants
+                    .get_int(callbacks::types::to_bool as usize as i64, builder);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -360,9 +345,9 @@ impl ReturnValue {
                 let i3 = builder.ins().stack_load(I64, *stack_slot, 16);
                 let i4 = builder.ins().stack_load(I64, *stack_slot, 24);
 
-                let func = builder
-                    .ins()
-                    .iconst(I64, callbacks::types::to_bool as usize as i64);
+                let func = compiler
+                    .constants
+                    .get_int(callbacks::types::to_bool as usize as i64, builder);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -382,16 +367,17 @@ impl ReturnValue {
 
 fn get_string_from_obj(
     builder: &mut FunctionBuilder<'_>,
+    compiler: &mut Compiler,
     i1: Value,
     i2: Value,
     i3: Value,
     i4: Value,
 ) -> Value {
-    let func = builder
-        .ins()
-        .iconst(I64, callbacks::types::to_string as usize as i64);
+    let func = compiler
+        .constants
+        .get_int(callbacks::types::to_string as usize as i64, builder);
 
-    let stack_ptr = ins_create_string_stack_slot(builder);
+    let stack_ptr = compiler.ins_create_string_stack_slot(builder);
 
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);

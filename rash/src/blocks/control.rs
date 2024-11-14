@@ -4,31 +4,31 @@ use cranelift::prelude::*;
 use types::I64;
 
 use crate::{
-    compiler::{compile_block, ScratchBlock, VarType, VarTypeChecked},
+    compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
     data_types::ScratchObject,
     input_primitives::{Input, Ptr},
 };
 
 pub fn repeat(
+    compiler: &mut Compiler,
     builder: &mut FunctionBuilder<'_>,
     input: &Input,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     vec: &Vec<ScratchBlock>,
     memory: &[ScratchObject],
 ) {
     let loop_block = builder.create_block();
     builder.append_block_param(loop_block, I64);
-    let mut body_block = builder.create_block();
+    let body_block = builder.create_block();
     builder.append_block_param(body_block, I64);
     let end_block = builder.create_block();
 
-    let number = input.get_number(builder, code_block, variable_type_data, memory);
+    let number = input.get_number(compiler, builder, memory);
     let number = builder.ins().fcvt_to_sint(I64, number);
 
-    let counter = builder.ins().iconst(I64, 0);
+    let counter = compiler.constants.get_int(0, builder);
+    compiler.constants.clear();
     builder.ins().jump(loop_block, &[counter]);
-    builder.seal_block(*code_block);
+    builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(loop_block);
     // (counter < number)
@@ -44,19 +44,28 @@ pub fn repeat(
     let counter = builder.block_params(body_block)[0];
     let incremented = builder.ins().iadd_imm(counter, 1);
 
-    let mut inside_types = variable_type_data.clone();
+    let mut inside_types = compiler.variable_type_data.clone();
     update_type_data_for_block(&mut inside_types, memory, vec);
-    let mut inside_types = common_entries(&inside_types, variable_type_data);
+    let mut inside_types = common_entries(&inside_types, &compiler.variable_type_data);
+
+    let temp_block = compiler.code_block;
+    compiler.code_block = body_block;
+
+    std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
+
     for block in vec {
-        compile_block(block, builder, &mut body_block, &mut inside_types, memory);
+        compiler.compile_block(block, builder, memory);
     }
-    *variable_type_data = common_entries(variable_type_data, &inside_types);
+    std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
+    compiler.code_block = temp_block;
+    compiler.variable_type_data = common_entries(&compiler.variable_type_data, &inside_types);
     builder.ins().jump(loop_block, &[incremented]);
-    builder.seal_block(body_block);
+    // builder.seal_block(body_block);
     builder.seal_block(loop_block);
 
     builder.switch_to_block(end_block);
-    *code_block = end_block;
+    compiler.constants.clear();
+    compiler.code_block = end_block;
 }
 
 fn update_type_data_for_block(
@@ -90,34 +99,38 @@ fn update_type_data_for_block(
 }
 
 pub fn if_statement(
+    compiler: &mut Compiler,
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     vec: &Vec<ScratchBlock>,
     memory: &[ScratchObject],
 ) {
-    let input = input.get_bool(builder, code_block, variable_type_data, memory);
-    let mut inside_block = builder.create_block();
+    let input = input.get_bool(compiler, builder, memory);
+    let inside_block = builder.create_block();
     let end_block = builder.create_block();
 
+    compiler.constants.clear();
     builder.ins().brif(input, inside_block, &[], end_block, &[]);
-    builder.seal_block(*code_block);
+    builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(inside_block);
 
-    let mut types = variable_type_data.clone();
+    let temp_types = compiler.variable_type_data.clone();
+    let temp_block = compiler.code_block;
+    compiler.code_block = inside_block;
     for block in vec {
-        compile_block(block, builder, &mut inside_block, &mut types, memory);
+        compiler.compile_block(block, builder, memory);
     }
+    compiler.code_block = temp_block;
     // Only keep the variable type data that hasn't been changed by the if statement.
-    *variable_type_data = common_entries(variable_type_data, &types);
+    compiler.variable_type_data = common_entries(&compiler.variable_type_data, &temp_types);
 
     builder.ins().jump(end_block, &[]);
-    builder.seal_block(inside_block);
+    // builder.seal_block(inside_block);
 
     builder.switch_to_block(end_block);
-    *code_block = end_block;
+    compiler.constants.clear();
+    compiler.code_block = end_block;
 }
 
 fn common_entries<K, V>(map1: &HashMap<K, V>, map2: &HashMap<K, V>) -> HashMap<K, V>
@@ -137,92 +150,94 @@ where
 }
 
 pub fn if_else(
+    compiler: &mut Compiler,
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
     then_blocks: &Vec<ScratchBlock>,
     else_blocks: &Vec<ScratchBlock>,
 ) {
-    let input = input.get_bool(builder, code_block, variable_type_data, memory);
-    let mut inside_block = builder.create_block();
-    let mut else_block = builder.create_block();
+    let input = input.get_bool(compiler, builder, memory);
+    let inside_block = builder.create_block();
+    let else_block = builder.create_block();
     let end_block = builder.create_block();
 
     builder
         .ins()
         .brif(input, inside_block, &[], else_block, &[]);
-    builder.seal_block(*code_block);
+    compiler.constants.clear();
+    builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(inside_block);
-    let mut then_block_types = variable_type_data.clone();
+    let old_types = compiler.variable_type_data.clone();
+    let current_block = compiler.code_block;
+    compiler.code_block = inside_block;
     for block in then_blocks {
-        compile_block(
-            block,
-            builder,
-            &mut inside_block,
-            &mut then_block_types,
-            memory,
-        );
+        compiler.compile_block(block, builder, memory);
     }
+    compiler.code_block = current_block;
     builder.ins().jump(end_block, &[]);
     builder.seal_block(inside_block);
 
     builder.switch_to_block(else_block);
-    let mut else_block_types = variable_type_data.clone();
+    compiler.constants.clear();
+    compiler.variable_type_data = old_types.clone();
+
+    compiler.code_block = else_block;
     for block in else_blocks {
-        compile_block(
-            block,
-            builder,
-            &mut else_block,
-            &mut else_block_types,
-            memory,
-        );
+        compiler.compile_block(block, builder, memory);
     }
-    let common_types = common_entries(&then_block_types, &else_block_types);
-    *variable_type_data = common_entries(variable_type_data, &common_types);
+    compiler.code_block = current_block;
+
+    compiler.variable_type_data = common_entries(&old_types, &compiler.variable_type_data);
     builder.ins().jump(end_block, &[]);
     builder.seal_block(else_block);
 
     builder.switch_to_block(end_block);
-    *code_block = end_block;
+    compiler.constants.clear();
+    compiler.code_block = end_block;
 }
 
 pub fn repeat_until(
+    compiler: &mut Compiler,
     builder: &mut FunctionBuilder<'_>,
-    code_block: &mut Block,
     input: &Input,
-    variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
     vec: &Vec<ScratchBlock>,
 ) {
     let loop_block = builder.create_block();
-    let mut body_block = builder.create_block();
+    let body_block = builder.create_block();
     let end_block = builder.create_block();
     builder.ins().jump(loop_block, &[]);
-    builder.seal_block(*code_block);
+    compiler.constants.clear();
+    builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(loop_block);
-    let condition = input.get_bool(builder, code_block, variable_type_data, memory);
+    let condition = input.get_bool(compiler, builder, memory);
+    compiler.constants.clear();
     builder
         .ins()
         .brif(condition, end_block, &[], body_block, &[]);
 
     builder.switch_to_block(body_block);
 
-    let mut inside_types = variable_type_data.clone();
+    let mut inside_types = compiler.variable_type_data.clone();
     update_type_data_for_block(&mut inside_types, memory, vec);
-    let mut inside_types = common_entries(&inside_types, variable_type_data);
+    let old_types = compiler.variable_type_data.clone();
+
+    let current_block = compiler.code_block;
+    compiler.code_block = body_block;
     for block in vec {
-        compile_block(block, builder, &mut body_block, &mut inside_types, memory);
+        compiler.compile_block(block, builder, memory);
     }
-    *variable_type_data = common_entries(variable_type_data, &inside_types);
+    compiler.code_block = current_block;
+    compiler.variable_type_data = common_entries(&compiler.variable_type_data, &old_types);
 
     builder.ins().jump(loop_block, &[]);
-    builder.seal_block(body_block);
+    // builder.seal_block(body_block);
     builder.seal_block(loop_block);
 
     builder.switch_to_block(end_block);
-    *code_block = end_block;
+    compiler.constants.clear();
+    compiler.code_block = end_block;
 }

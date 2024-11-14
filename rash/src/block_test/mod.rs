@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    compiler::{compile_block, ScratchBlock, VarType},
+    compiler::{Compiler, ScratchBlock, VarType},
     data_types::ScratchObject,
     input_primitives::Ptr,
 };
@@ -61,7 +61,6 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
     ]
 }
 
-// Pass: 1,0,1,0 pattern until *9
 #[allow(unused)]
 pub fn if_test() -> Vec<ScratchBlock> {
     vec![
@@ -99,6 +98,14 @@ pub fn if_test() -> Vec<ScratchBlock> {
                     vec![ScratchBlock::VarSet(Ptr(9), 1.0.into())],
                 ),
             ],
+        ),
+        ScratchBlock::ControlIf(
+            f64::NAN.into(),
+            vec![ScratchBlock::VarSet(Ptr(10), 1.0.into())],
+        ),
+        ScratchBlock::ControlIf(
+            ScratchBlock::OpDiv(0.0.into(), 0.0.into()).into(),
+            vec![ScratchBlock::VarSet(Ptr(11), 1.0.into())],
         ),
     ]
 }
@@ -153,39 +160,39 @@ pub fn pi() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(I, 0.0.into()),
         // A test of nested repeat loops
         ScratchBlock::ControlRepeat(
-            1000.0.into(),
-            vec![ScratchBlock::ControlRepeat(
-                1000.0.into(),
-                vec![
-                    // PI += ((8 * (I % 2)) - 4) / D
-                    ScratchBlock::VarSet(
-                        PI,
-                        ScratchBlock::OpAdd(
-                            ScratchBlock::VarRead(PI).into(),
-                            ScratchBlock::OpDiv(
-                                ScratchBlock::OpSub(
-                                    ScratchBlock::OpMul(
-                                        8.0.into(),
-                                        ScratchBlock::OpMod(
-                                            ScratchBlock::VarRead(I).into(),
-                                            2.0.into(),
-                                        )
-                                        .into(),
+            1000_000.0.into(),
+            // vec![ScratchBlock::ControlRepeat(
+            // 1000.0.into(),
+            vec![
+                // PI += ((8 * (I % 2)) - 4) / D
+                ScratchBlock::VarSet(
+                    PI,
+                    ScratchBlock::OpAdd(
+                        ScratchBlock::VarRead(PI).into(),
+                        ScratchBlock::OpDiv(
+                            ScratchBlock::OpSub(
+                                ScratchBlock::OpMul(
+                                    8.0.into(),
+                                    ScratchBlock::OpMod(
+                                        ScratchBlock::VarRead(I).into(),
+                                        2.0.into(),
                                     )
                                     .into(),
-                                    4.0.into(),
                                 )
                                 .into(),
-                                ScratchBlock::VarRead(D).into(),
+                                4.0.into(),
                             )
                             .into(),
+                            ScratchBlock::VarRead(D).into(),
                         )
                         .into(),
-                    ),
-                    ScratchBlock::VarChange(D, 2.0.into()),
-                    ScratchBlock::VarChange(I, 1.0.into()),
-                ],
-            )],
+                    )
+                    .into(),
+                ),
+                ScratchBlock::VarChange(D, 2.0.into()),
+                ScratchBlock::VarChange(I, 1.0.into()),
+            ],
+            // )],
         ),
     ]
 }
@@ -538,17 +545,14 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     let mut variable_type_data: HashMap<Ptr, VarType> = HashMap::new();
 
+    let mut compiler = Compiler::new(code_block);
+
     for block in program {
-        compile_block(
-            block,
-            &mut builder,
-            &mut code_block,
-            &mut variable_type_data,
-            memory,
-        );
+        compiler.compile_block(block, &mut builder, memory);
     }
 
-    builder.seal_block(code_block);
+    // builder.seal_block(compiler.code_block);
+    builder.seal_all_blocks();
 
     let ins = builder.ins();
     ins.return_(&[]);
@@ -661,6 +665,8 @@ mod tests {
         assert_eq!(memory[7].convert_to_number(), 0.0);
         assert_eq!(memory[8].convert_to_number(), 1.0);
         assert_eq!(memory[9].convert_to_number(), 0.0);
+        assert_eq!(memory[10].convert_to_number(), 0.0);
+        assert_eq!(memory[11].convert_to_number(), 0.0);
     }
 
     #[test]
