@@ -160,7 +160,7 @@ pub fn pi() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(I, 0.0.into()),
         // A test of nested repeat loops
         ScratchBlock::ControlRepeat(
-            1000_000.0.into(),
+            1_000_000.0.into(),
             // vec![ScratchBlock::ControlRepeat(
             // 1000.0.into(),
             vec![

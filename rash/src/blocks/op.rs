@@ -62,27 +62,89 @@ pub fn modulo(
     builder: &mut FunctionBuilder<'_>,
     memory: &[ScratchObject],
 ) -> Value {
+    // let div = a / b;
+    // let floor_div = div.floor();
+    // let decimal_part = div - floor_div;
+    // let modulo = decimal_part * b;
+
     let a = a.get_number(compiler, builder, memory);
     let b = b.get_number(compiler, builder, memory);
     let div = builder.ins().fdiv(a, b);
 
-    // Step 1: Truncate the division to an integer (simulates `floor` for positive values)
-    let trunc_div = builder.ins().fcvt_to_sint(I64, div);
-    let trunc_div = builder.ins().fcvt_from_sint(F64, trunc_div);
+    // let floor_div = floor_branch(builder, div, compiler);
 
-    // Step 2: Check if truncation needs adjustment for negative values
-    // If `trunc_div > div`, we adjust by subtracting 1 to simulate `floor`
-    let needs_adjustment = builder.ins().fcmp(FloatCC::GreaterThan, trunc_div, div);
-    let tmp = compiler.constants.get_float(-1.0, builder);
-    let adjustment = builder.ins().fadd(trunc_div, tmp);
-    let floor_div = builder
-        .ins()
-        .select(needs_adjustment, adjustment, trunc_div);
+    let floor_div = floor_int_float_conversion(builder, div, compiler);
 
-    // Step 3: Calculate the decimal part and modulo as before
+    // Calculate the decimal part and modulo as before
     let decimal_part = builder.ins().fsub(div, floor_div);
     let modulo = builder.ins().fmul(decimal_part, b);
     modulo
+}
+
+fn floor_int_float_conversion(
+    builder: &mut FunctionBuilder<'_>,
+    div: Value,
+    compiler: &mut Compiler,
+) -> Value {
+    let trunc_div = builder.ins().fcvt_to_sint(I64, div);
+    let trunc_div = builder.ins().fcvt_from_sint(F64, trunc_div);
+
+    let needs_adjustment = builder.ins().fcmp(FloatCC::GreaterThan, trunc_div, div);
+    let neg_one = compiler.constants.get_float(-1.0, builder);
+    let adjustment = builder.ins().fadd(trunc_div, neg_one);
+    let floor_div = builder
+        .ins()
+        .select(needs_adjustment, adjustment, trunc_div);
+    floor_div
+}
+
+fn floor_bit_hack(builder: &mut FunctionBuilder<'_>, div: Value, compiler: &mut Compiler) -> Value {
+    let div_bits = builder.ins().bitcast(I64, MemFlags::new(), div);
+
+    // let exponent = (div_bits >> 52) & 0x7FF;
+    let exponent = builder.ins().ushr_imm(div_bits, 52);
+    let exponent = builder.ins().band_imm(exponent, 0x7FF);
+
+    // exponent < 1023
+    let exponent_lt_1023 = builder
+        .ins()
+        .icmp_imm(IntCC::UnsignedLessThan, exponent, 1023);
+
+    // if exponent < 1023: (results in -1.0 or 0.0 based on sign)
+    let minus_one = compiler.constants.get_float(-1.0, builder);
+    let zero = compiler.constants.get_float(0.0, builder);
+    let n_is_negative = builder.ins().fcmp(FloatCC::GreaterThan, zero, div);
+    let neg_floor_result = builder.ins().select(n_is_negative, minus_one, zero);
+
+    // if exponent >= 1023:
+
+    // (exponent - 1023)
+    // let exponent_offset = builder.ins().iadd_imm(exponent, -1023);
+    // (52 - (exponent - 1023))
+    let v_1075 = compiler.constants.get_int(52 + 1023, builder);
+    let shift_amount = builder.ins().isub(v_1075, exponent);
+
+    // (1 << (52 - (exponent - 1023))) - 1
+    let one = compiler.constants.get_int(1, builder);
+    let mask = builder.ins().ishl(one, shift_amount);
+    let mask = builder.ins().iadd_imm(mask, -1);
+
+    // let not_mask = builder.ins().bnot(mask);
+    let truncated_bits = builder.ins().band_not(div_bits, mask);
+    // Zero out fractional bits
+    let trunc = builder.ins().bitcast(F64, MemFlags::new(), truncated_bits);
+
+    // Step 6: Apply conditional adjustment: `if trunc > n { trunc - 1.0 } else { trunc }`
+    let trunc_gt_n = builder.ins().fcmp(FloatCC::GreaterThan, trunc, div);
+    let one = compiler.constants.get_float(1.0, builder);
+    let zero = compiler.constants.get_float(0.0, builder);
+    let num = builder.ins().select(trunc_gt_n, one, zero);
+    let trunc_floor_result = builder.ins().fsub(trunc, num);
+
+    // Step 7: Select between `neg_floor_result` and `trunc_floor_result` based on `exponent_lt_1023`
+    builder
+        .ins()
+        .select(exponent_lt_1023, neg_floor_result, trunc_floor_result)
 }
 
 pub fn str_len(

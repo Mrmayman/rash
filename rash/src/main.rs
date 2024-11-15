@@ -10,6 +10,7 @@ mod data_types;
 mod input_primitives;
 mod ins_shortcuts;
 mod json;
+mod stack_cache;
 
 /// Scratch has a special edge case for math with NaN.
 /// Any operation with NaN will be treated as

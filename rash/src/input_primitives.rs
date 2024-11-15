@@ -103,9 +103,9 @@ impl Input {
             }
             Input::Block(scratch_block) => {
                 let could_be_nan = scratch_block.could_be_nan();
-                if could_be_nan {
-                    println!("Could be nan: {scratch_block:?}");
-                }
+                // if could_be_nan {
+                //     println!("Could be nan: {scratch_block:?}");
+                // }
                 let o = compiler
                     .compile_block(scratch_block, builder, memory)
                     .unwrap();
@@ -262,7 +262,7 @@ impl ReturnValue {
                     builder,
                 );
 
-                let stack_ptr = compiler.ins_create_string_stack_slot(builder);
+                let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -282,7 +282,7 @@ impl ReturnValue {
                     builder,
                 );
 
-                let stack_ptr = compiler.ins_create_string_stack_slot(builder);
+                let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
                 let sig = builder.import_signature({
                     let mut sig = Signature::new(CallConv::SystemV);
@@ -377,7 +377,7 @@ fn get_string_from_obj(
         .constants
         .get_int(callbacks::types::to_string as usize as i64, builder);
 
-    let stack_ptr = compiler.ins_create_string_stack_slot(builder);
+    let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
     let sig = builder.import_signature({
         let mut sig = Signature::new(CallConv::SystemV);

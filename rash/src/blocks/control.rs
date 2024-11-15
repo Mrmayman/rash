@@ -68,14 +68,14 @@ pub fn repeat(
     compiler.code_block = end_block;
 }
 
-fn update_type_data_for_block(
+pub fn update_type_data_for_block(
     variable_type_data: &mut HashMap<Ptr, VarType>,
     memory: &[ScratchObject],
-    vec: &[ScratchBlock],
+    code: &[ScratchBlock],
 ) {
     variable_type_data.clear();
     for var in (0..memory.len()).map(Ptr) {
-        if let Some(var_type) = vec
+        if let Some(var_type) = code
             .iter()
             .filter_map(|block| block.affects_var(var, variable_type_data))
             .last()
@@ -102,7 +102,7 @@ pub fn if_statement(
     compiler: &mut Compiler,
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
-    vec: &Vec<ScratchBlock>,
+    then: &Vec<ScratchBlock>,
     memory: &[ScratchObject],
 ) {
     let input = input.get_bool(compiler, builder, memory);
@@ -118,15 +118,29 @@ pub fn if_statement(
     let temp_types = compiler.variable_type_data.clone();
     let temp_block = compiler.code_block;
     compiler.code_block = inside_block;
-    for block in vec {
+    for block in then {
         compiler.compile_block(block, builder, memory);
     }
     compiler.code_block = temp_block;
+
     // Only keep the variable type data that hasn't been changed by the if statement.
+    // For example:
+
+    // var a = String;
+    // var b = Bool;
+    // if condition {
+    //     var a = Number;
+    //     var b = Bool;
+    // }
+
+    // Here, the compiler can't tell beforehand if the condition will run.
+    // So it can't tell the type of variable a.
+
+    // But the type of variable b doesn't change inside the condition.
+    // So the compiler remembers the type of variable b.
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &temp_types);
 
     builder.ins().jump(end_block, &[]);
-    // builder.seal_block(inside_block);
 
     builder.switch_to_block(end_block);
     compiler.constants.clear();
@@ -162,6 +176,7 @@ pub fn if_else(
     let else_block = builder.create_block();
     let end_block = builder.create_block();
 
+    // If condition then { jump to inside block } else { jump to else block }.
     builder
         .ins()
         .brif(input, inside_block, &[], else_block, &[]);
@@ -169,19 +184,25 @@ pub fn if_else(
     builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(inside_block);
+
+    // Temporarily store the old type data from before the then block.
+    // Will be used later.
     let old_types = compiler.variable_type_data.clone();
     let current_block = compiler.code_block;
     compiler.code_block = inside_block;
+
     for block in then_blocks {
         compiler.compile_block(block, builder, memory);
     }
+
     compiler.code_block = current_block;
+    let common_then_entries = common_entries(&compiler.variable_type_data, &old_types);
     builder.ins().jump(end_block, &[]);
     builder.seal_block(inside_block);
 
     builder.switch_to_block(else_block);
     compiler.constants.clear();
-    compiler.variable_type_data = old_types.clone();
+    compiler.variable_type_data.clone_from(&old_types);
 
     compiler.code_block = else_block;
     for block in else_blocks {
@@ -190,6 +211,9 @@ pub fn if_else(
     compiler.code_block = current_block;
 
     compiler.variable_type_data = common_entries(&old_types, &compiler.variable_type_data);
+    compiler.variable_type_data =
+        common_entries(&common_then_entries, &compiler.variable_type_data);
+
     builder.ins().jump(end_block, &[]);
     builder.seal_block(else_block);
 
@@ -203,11 +227,12 @@ pub fn repeat_until(
     builder: &mut FunctionBuilder<'_>,
     input: &Input,
     memory: &[ScratchObject],
-    vec: &Vec<ScratchBlock>,
+    body: &Vec<ScratchBlock>,
 ) {
     let loop_block = builder.create_block();
     let body_block = builder.create_block();
     let end_block = builder.create_block();
+
     builder.ins().jump(loop_block, &[]);
     compiler.constants.clear();
     builder.seal_block(compiler.code_block);
@@ -222,19 +247,18 @@ pub fn repeat_until(
     builder.switch_to_block(body_block);
 
     let mut inside_types = compiler.variable_type_data.clone();
-    update_type_data_for_block(&mut inside_types, memory, vec);
+    update_type_data_for_block(&mut inside_types, memory, body);
     let old_types = compiler.variable_type_data.clone();
 
     let current_block = compiler.code_block;
     compiler.code_block = body_block;
-    for block in vec {
+    for block in body {
         compiler.compile_block(block, builder, memory);
     }
     compiler.code_block = current_block;
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &old_types);
 
     builder.ins().jump(loop_block, &[]);
-    // builder.seal_block(body_block);
     builder.seal_block(loop_block);
 
     builder.switch_to_block(end_block);

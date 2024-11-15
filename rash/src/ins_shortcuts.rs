@@ -94,7 +94,7 @@ impl Compiler {
         builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
     }
 
-    pub fn ins_create_string_stack_slot(&mut self, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value {
         let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
             StackSlotKind::ExplicitSlot,
             3 * std::mem::size_of::<i64>() as u32,
