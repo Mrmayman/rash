@@ -19,6 +19,8 @@ pub extern "C" fn op_str_join(
     let a_ref = unsafe { &mut *a };
     let b_ref = unsafe { &mut *b };
 
+    println!("{a_ref}\n{b_ref}");
+
     // If a isn't const, we can just append b to it.
     if a_is_const == 0 {
         a_ref.push_str(b_ref);

@@ -14,6 +14,7 @@ use crate::{
     constant_set::ConstantMap,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ReturnValue},
+    stack_cache::StackCache,
 };
 
 lazy_static! {
@@ -211,12 +212,16 @@ pub fn compile(/*&self*/) {
             builder.append_block_params_for_function_params(code_block);
             builder.switch_to_block(code_block);
 
-            let mut compiler = Compiler::new(code_block);
+            let mut compiler = Compiler::new(code_block, &mut builder, script);
 
             let lock = MEMORY.lock().unwrap();
             for block in script {
                 compiler.compile_block(block, &mut builder, &lock);
             }
+
+            compiler
+                .cache
+                .save(&mut builder, &mut compiler.constants, &lock);
 
             // builder.seal_block(compiler.code_block);
             builder.seal_all_blocks();
@@ -268,14 +273,16 @@ pub struct Compiler {
     pub variable_type_data: HashMap<Ptr, VarType>,
     pub constants: ConstantMap,
     pub code_block: Block,
+    pub cache: StackCache,
 }
 
 impl Compiler {
-    pub fn new(block: Block) -> Self {
+    pub fn new(block: Block, builder: &mut FunctionBuilder<'_>, code: &[ScratchBlock]) -> Self {
         Self {
             variable_type_data: HashMap::new(),
             constants: ConstantMap::new(),
             code_block: block,
+            cache: StackCache::new(builder, code),
         }
     }
 
@@ -319,7 +326,7 @@ impl Compiler {
                 return Some(ReturnValue::Num(modulo));
             }
             ScratchBlock::VarRead(ptr) => {
-                return Some(blocks::var::read(self, builder, *ptr, memory));
+                return Some(blocks::var::read(self, builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
                 let obj = blocks::op::str_join(self, a, b, builder, memory);

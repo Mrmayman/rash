@@ -8,6 +8,7 @@ use types::{F64, I64};
 use crate::{
     callbacks,
     compiler::{Compiler, ScratchBlock},
+    constant_set::ConstantMap,
     data_types::ScratchObject,
     ARITHMETIC_NAN_CHECK,
 };
@@ -20,13 +21,11 @@ pub struct Ptr(pub usize);
 impl Ptr {
     pub fn constant(
         &self,
-        compiler: &mut Compiler,
+        map: &mut ConstantMap,
         builder: &mut FunctionBuilder<'_>,
         memory: &[ScratchObject],
     ) -> Value {
-        compiler
-            .constants
-            .get_int(unsafe { memory.as_ptr().add(self.0) } as i64, builder)
+        map.get_int(unsafe { memory.as_ptr().add(self.0) } as i64, builder)
     }
 }
 

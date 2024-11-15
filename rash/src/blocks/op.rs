@@ -98,6 +98,7 @@ fn floor_int_float_conversion(
     floor_div
 }
 
+#[allow(unused)]
 fn floor_bit_hack(builder: &mut FunctionBuilder<'_>, div: Value, compiler: &mut Compiler) -> Value {
     let div_bits = builder.ins().bitcast(I64, MemFlags::new(), div);
 

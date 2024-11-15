@@ -3,12 +3,7 @@ use cranelift::prelude::*;
 use isa::CallConv;
 use types::{F64, I64};
 
-use crate::{
-    callbacks,
-    compiler::Compiler,
-    data_types::{ScratchObject, ID_BOOL, ID_NUMBER, ID_STRING},
-    input_primitives::Ptr,
-};
+use crate::{callbacks, compiler::Compiler, input_primitives::Ptr};
 
 impl Compiler {
     pub fn ins_call_to_num(
@@ -36,64 +31,6 @@ impl Compiler {
             .call_indirect(sig, to_num_func, &[i1, i2, i3, i4])
     }
 
-    pub fn ins_mem_write_string(
-        &mut self,
-        string: &str,
-        builder: &mut FunctionBuilder<'_>,
-        ptr: Ptr,
-        memory: &[ScratchObject],
-    ) {
-        let string = string.to_owned();
-
-        // Transmute the String into a [i64; 4] array
-        let arr: [i64; 3] = unsafe { std::mem::transmute(string) };
-        let i1 = self.constants.get_int(arr[0], builder);
-        let i2 = self.constants.get_int(arr[1], builder);
-        let i3 = self.constants.get_int(arr[2], builder);
-
-        let mem_ptr = ptr.constant(self, builder, memory);
-
-        builder.ins().store(MemFlags::new(), i1, mem_ptr, 8);
-        builder.ins().store(MemFlags::new(), i2, mem_ptr, 16);
-        builder.ins().store(MemFlags::new(), i3, mem_ptr, 24);
-
-        let id = self.constants.get_int(ID_STRING, builder);
-        builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
-    }
-
-    pub fn ins_mem_write_bool(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-        ptr: Ptr,
-        num: bool,
-        memory: &[ScratchObject],
-    ) {
-        let mem_ptr = ptr.constant(self, builder, memory);
-
-        let num = self.constants.get_int(i64::from(num), builder);
-        builder.ins().store(MemFlags::new(), num, mem_ptr, 8);
-
-        let id = self.constants.get_int(ID_BOOL, builder);
-        builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
-    }
-
-    pub fn ins_mem_write_f64(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-        ptr: Ptr,
-        num: f64,
-        memory: &[ScratchObject],
-    ) {
-        let mem_ptr = ptr.constant(self, builder, memory);
-
-        // write to the ptr
-        let num = self.constants.get_float(num, builder);
-        builder.ins().store(MemFlags::new(), num, mem_ptr, 8);
-
-        let id = self.constants.get_int(ID_NUMBER, builder);
-        builder.ins().store(MemFlags::new(), id, mem_ptr, 0);
-    }
-
     pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value {
         let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
             StackSlotKind::ExplicitSlot,
@@ -104,12 +41,7 @@ impl Compiler {
         stack_ptr
     }
 
-    pub fn ins_drop_obj(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-        ptr: Ptr,
-        memory: &[ScratchObject],
-    ) {
+    pub fn ins_drop_obj(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
         let func = self
             .constants
             .get_int(callbacks::types::drop_obj as usize as i64, builder);
@@ -118,9 +50,9 @@ impl Compiler {
             sig.params.push(AbiParam::new(I64));
             sig
         });
-        let mem_ptr = ptr.constant(self, builder, memory);
+        let stack_addr = self.cache.get_ptr(ptr, builder);
 
-        builder.ins().call_indirect(sig, func, &[mem_ptr]);
+        builder.ins().call_indirect(sig, func, &[stack_addr]);
     }
 
     pub fn ins_call_to_num_with_decimal_check(

@@ -165,27 +165,20 @@ pub fn pi() -> Vec<ScratchBlock> {
             // 1000.0.into(),
             vec![
                 // PI += ((8 * (I % 2)) - 4) / D
-                ScratchBlock::VarSet(
+                ScratchBlock::VarChange(
                     PI,
-                    ScratchBlock::OpAdd(
-                        ScratchBlock::VarRead(PI).into(),
-                        ScratchBlock::OpDiv(
-                            ScratchBlock::OpSub(
-                                ScratchBlock::OpMul(
-                                    8.0.into(),
-                                    ScratchBlock::OpMod(
-                                        ScratchBlock::VarRead(I).into(),
-                                        2.0.into(),
-                                    )
+                    ScratchBlock::OpDiv(
+                        ScratchBlock::OpSub(
+                            ScratchBlock::OpMul(
+                                8.0.into(),
+                                ScratchBlock::OpMod(ScratchBlock::VarRead(I).into(), 2.0.into())
                                     .into(),
-                                )
-                                .into(),
-                                4.0.into(),
                             )
                             .into(),
-                            ScratchBlock::VarRead(D).into(),
+                            4.0.into(),
                         )
                         .into(),
+                        ScratchBlock::VarRead(D).into(),
                     )
                     .into(),
                 ),
@@ -545,11 +538,18 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     let mut variable_type_data: HashMap<Ptr, VarType> = HashMap::new();
 
-    let mut compiler = Compiler::new(code_block);
+    let mut compiler = Compiler::new(code_block, &mut builder, program);
+    compiler
+        .cache
+        .init(&mut builder, memory, &mut compiler.constants);
 
     for block in program {
         compiler.compile_block(block, &mut builder, memory);
     }
+
+    compiler
+        .cache
+        .save(&mut builder, &mut compiler.constants, memory);
 
     // builder.seal_block(compiler.code_block);
     builder.seal_all_blocks();
