@@ -1,18 +1,6 @@
-use std::collections::HashMap;
+use crate::{compiler::ScratchBlock, input_primitives::Ptr};
 
-use crate::{
-    compiler::{Compiler, ScratchBlock, VarType},
-    data_types::ScratchObject,
-    input_primitives::Ptr,
-};
-
-use codegen::{
-    control::ControlPlane,
-    ir::{Function, UserFuncName},
-};
-use cranelift::prelude::*;
-use isa::CallConv;
-use target_lexicon::Triple;
+mod utils;
 
 #[allow(unused)]
 pub fn repeated_sum() -> Vec<ScratchBlock> {
@@ -515,96 +503,133 @@ pub fn math_div_test() -> Vec<ScratchBlock> {
 }
 
 #[allow(unused)]
-fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
-    let mut builder = settings::builder();
-    builder.set("opt_level", "speed").unwrap();
-    let flags = settings::Flags::new(builder);
+pub fn bool_ops() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(
+            Ptr(0),
+            ScratchBlock::OpBAnd(true.into(), true.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            ScratchBlock::OpBAnd(true.into(), false.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            ScratchBlock::OpBAnd(false.into(), true.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(3),
+            ScratchBlock::OpBAnd(false.into(), false.into()).into(),
+        ),
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpBOr(true.into(), true.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(5),
+            ScratchBlock::OpBOr(true.into(), false.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpBOr(false.into(), true.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpBOr(false.into(), false.into()).into(),
+        ),
+        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpBNot(true.into()).into()),
+        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpBNot(false.into()).into()),
+        ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpBNot(1.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpBNot(0.0.into()).into()),
+    ]
+}
 
-    let isa = match isa::lookup(Triple::host()) {
-        Err(err) => panic!("Error looking up target: {err}"),
-        Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
-    };
+#[allow(unused)]
+pub fn math_modulo() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMod(5.5.into(), 3.0.into()).into()), // 5.5 % 3.0
+        ScratchBlock::VarSet(
+            Ptr(1),
+            ScratchBlock::OpMod((-5.5).into(), 3.0.into()).into(),
+        ), // -5.5 % 3.0
+        ScratchBlock::VarSet(
+            Ptr(2),
+            ScratchBlock::OpMod(5.5.into(), (-3.0).into()).into(),
+        ), // 5.5 % -3.0
+        ScratchBlock::VarSet(
+            Ptr(3),
+            ScratchBlock::OpMod((-5.5).into(), (-3.0).into()).into(),
+        ), // -5.5 % -3.0
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpMod(10.0.into(), 3.0.into()).into()), // 10.0 % 3.0
+        ScratchBlock::VarSet(
+            Ptr(5),
+            ScratchBlock::OpMod((-10.0).into(), 3.0.into()).into(),
+        ), // -10.0 % 3.0
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpMod(10.0.into(), (-3.0).into()).into(),
+        ), // 10.0 % -3.0
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpMod((-10.0).into(), (-3.0).into()).into(),
+        ), // -10.0 % -3.0
+        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMod(0.0.into(), 1.0.into()).into()), // 0.0 % 1.0
+        ScratchBlock::VarSet(
+            Ptr(9),
+            ScratchBlock::OpMod((-1.0).into(), 1.0.into()).into(),
+        ), // -1.0 % 1.0
+        ScratchBlock::VarSet(
+            Ptr(10),
+            ScratchBlock::OpMod(1.0.into(), (-1.0).into()).into(),
+        ), // 1.0 % -1.0
+        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMod(1.0.into(), 2.5.into()).into()), // 1.0 % 2.5
+        ScratchBlock::VarSet(
+            Ptr(12),
+            ScratchBlock::OpMod((-1.0).into(), 2.5.into()).into(),
+        ), // -1.0 % 2.5
+        ScratchBlock::VarSet(Ptr(13), ScratchBlock::OpMod(1e10.into(), 3.0.into()).into()), // Large numbers
+        ScratchBlock::VarSet(
+            Ptr(14),
+            ScratchBlock::OpMod((-1e10).into(), 3.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(15),
+            ScratchBlock::OpMod(0.0001.into(), 0.003.into()).into(),
+        ), // Small remainders
+        ScratchBlock::VarSet(
+            Ptr(16),
+            ScratchBlock::OpMod((-0.0001).into(), 0.003.into()).into(),
+        ),
+    ]
+}
 
-    let sig = Signature::new(CallConv::SystemV);
-    let mut func = Function::with_name_signature(UserFuncName::default(), sig);
-
-    let mut func_ctx = FunctionBuilderContext::new();
-    let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
-
-    let mut code_block = builder.create_block();
-
-    builder.append_block_params_for_function_params(code_block);
-    builder.switch_to_block(code_block);
-
-    let mut variable_type_data: HashMap<Ptr, VarType> = HashMap::new();
-
-    let mut compiler = Compiler::new(code_block, &mut builder, program);
-    compiler
-        .cache
-        .init(&mut builder, memory, &mut compiler.constants);
-
-    for block in program {
-        compiler.compile_block(block, &mut builder, memory);
-    }
-
-    compiler
-        .cache
-        .save(&mut builder, &mut compiler.constants, memory);
-
-    // builder.seal_block(compiler.code_block);
-    builder.seal_all_blocks();
-
-    let ins = builder.ins();
-    ins.return_(&[]);
-
-    builder.finalize();
-
-    // println!("{}", func.display());
-
-    let mut ctx = codegen::Context::for_function(func);
-    let mut plane = ControlPlane::default();
-    ctx.optimize(isa.as_ref(), &mut plane).unwrap();
-
-    let code = ctx.compile(&*isa, &mut plane).unwrap();
-
-    let mut buffer = memmap2::MmapOptions::new()
-        .len(code.code_buffer().len())
-        .map_anon()
-        .unwrap();
-
-    buffer.copy_from_slice(code.code_buffer());
-
-    // Machine code dump
-    // let ptr = buffer.as_ptr();
-    // let bytes = unsafe { std::slice::from_raw_parts(ptr, code.code_buffer().len()) };
-    // for (_i, byte) in bytes.iter().enumerate() {
-    //     print!("{:#04x} ", byte);
-    // }
-    // println!();
-    // std::fs::write("func.bin", bytes).unwrap();
-
-    let buffer = buffer.make_exec().unwrap();
-
-    unsafe {
-        let code_fn: unsafe extern "sysv64" fn() = std::mem::transmute(buffer.as_ptr());
-        code_fn();
-    }
+#[allow(unused)]
+pub fn math_floor() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMFloor(5.5.into()).into()),
+        ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpMFloor((-3.2).into()).into()),
+        ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpMFloor(0.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpMFloor((-0.8).into()).into()),
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpMFloor(2.999.into()).into()),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpMFloor((-1.1).into()).into()),
+        ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpMFloor(10.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpMFloor((-10.999).into()).into()),
+        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMFloor(123456.789.into()).into()),
+        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMFloor((-123456.789).into()).into()),
+        ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMFloor(1e-9.into()).into()),
+        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMFloor((-1e-9).into()).into()),
+        ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMFloor(1e10.into()).into()),
+        ScratchBlock::VarSet(Ptr(13), ScratchBlock::OpMFloor((-1e10).into()).into()),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::MutexGuard;
+    use utils::run_code;
 
-    use crate::compiler::MEMORY;
+    use crate::compiler::VarType;
 
     use super::*;
-
-    fn run_code<'a>(code: Vec<ScratchBlock>) -> MutexGuard<'a, Box<[ScratchObject]>> {
-        let mut memory = MEMORY.lock().unwrap();
-        *memory = vec![ScratchObject::Number(0.0); 256].into_boxed_slice();
-        run(&code, &memory);
-        memory
-    }
 
     #[test]
     pub fn b_str_ops() {
@@ -831,5 +856,73 @@ mod tests {
         assert!(memory[16].convert_to_number().is_sign_positive());
 
         assert_eq!(memory[17].convert_to_number(), 0.0);
+    }
+
+    #[test]
+    pub fn b_bool_ops() {
+        let memory = run_code(bool_ops());
+        assert_eq!(memory[0].convert_to_number(), 1.0);
+        assert_eq!(memory[1].convert_to_number(), 0.0);
+        assert_eq!(memory[2].convert_to_number(), 0.0);
+        assert_eq!(memory[3].convert_to_number(), 0.0);
+        assert_eq!(memory[4].convert_to_number(), 1.0);
+        assert_eq!(memory[5].convert_to_number(), 1.0);
+        assert_eq!(memory[6].convert_to_number(), 1.0);
+        assert_eq!(memory[7].convert_to_number(), 0.0);
+        assert_eq!(memory[8].convert_to_number(), 0.0);
+        assert_eq!(memory[9].convert_to_number(), 1.0);
+        assert_eq!(memory[10].convert_to_number(), 0.0);
+        assert_eq!(memory[11].convert_to_number(), 1.0);
+    }
+
+    #[test]
+    pub fn b_math_modulo() {
+        let memory = run_code(math_modulo());
+
+        assert_eq!(memory[0].convert_to_number(), 2.5);
+        assert!((memory[1].convert_to_number() - 0.5) <= f64::EPSILON);
+        assert!((memory[2].convert_to_number() + 0.5).abs() <= f64::EPSILON);
+        assert_eq!(memory[3].convert_to_number(), -2.5);
+
+        assert!((memory[4].convert_to_number() - 1.0) <= 2.0 * f64::EPSILON);
+        assert!((memory[5].convert_to_number() - 2.0).abs() <= 2.0 * f64::EPSILON);
+        assert!((memory[6].convert_to_number() + 2.0).abs() <= 2.0 * f64::EPSILON);
+        assert!((memory[7].convert_to_number() + 1.0).abs() <= 2.0 * f64::EPSILON);
+
+        assert_eq!(memory[8].convert_to_number(), 0.0);
+        assert_eq!(memory[9].convert_to_number(), 0.0);
+        assert_eq!(memory[10].convert_to_number(), 0.0);
+
+        assert_eq!(memory[11].convert_to_number(), 1.0);
+        assert_eq!(memory[12].convert_to_number(), 1.5);
+
+        assert!(
+            (memory[13].convert_to_number() - 1.0).abs() <= (i32::MAX as f64 + 1.0) * f64::EPSILON
+        );
+        assert!(
+            (memory[14].convert_to_number() - 2.0).abs() <= (i32::MAX as f64 + 1.0) * f64::EPSILON
+        );
+
+        assert_eq!(memory[15].convert_to_number(), 0.0001);
+        assert!(memory[16].convert_to_number() - 0.0029 <= f64::EPSILON);
+    }
+
+    #[test]
+    pub fn b_math_floor() {
+        let memory = run_code(math_floor());
+        assert_eq!(memory[0].convert_to_number(), 5.0);
+        assert_eq!(memory[1].convert_to_number(), -4.0);
+        assert_eq!(memory[2].convert_to_number(), 0.0);
+        assert_eq!(memory[3].convert_to_number(), -1.0);
+        assert_eq!(memory[4].convert_to_number(), 2.0);
+        assert_eq!(memory[5].convert_to_number(), -2.0);
+        assert_eq!(memory[6].convert_to_number(), 10.0);
+        assert_eq!(memory[7].convert_to_number(), -11.0);
+        assert_eq!(memory[8].convert_to_number(), 123456.0);
+        assert_eq!(memory[9].convert_to_number(), -123457.0);
+        assert_eq!(memory[10].convert_to_number(), 0.0);
+        assert_eq!(memory[11].convert_to_number(), -1.0);
+        assert_eq!(memory[12].convert_to_number(), 1e10);
+        assert_eq!(memory[13].convert_to_number(), -1e10);
     }
 }

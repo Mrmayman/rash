@@ -32,7 +32,12 @@ pub enum ScratchObject {
 // Lets you know when the object is being dropped by the JIT compiled code
 // impl Drop for ScratchObject {
 //     fn drop(&mut self) {
-//         println!("Dropping self: {self}");
+//         let bytes = unsafe { std::mem::transmute::<&Self, &[i64; 4]>(&self) };
+//         println!(
+//             "Self bytes: {:X} {:X} {:X} {:X}",
+//             bytes[0] as i32 as i64, bytes[1], bytes[2], bytes[3]
+//         );
+//         println!("Dropping self: {self:?}");
 //     }
 // }
 

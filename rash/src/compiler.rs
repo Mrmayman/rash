@@ -36,6 +36,10 @@ pub enum ScratchBlock {
     OpStrJoin(Input, Input),
     OpMod(Input, Input),
     OpStrLen(Input),
+    OpBAnd(Input, Input),
+    OpBNot(Input),
+    OpBOr(Input, Input),
+    OpMFloor(Input),
     OpCmpGreater(Input, Input),
     OpCmpLesser(Input, Input),
     OpRandom(Input, Input),
@@ -79,11 +83,14 @@ impl ScratchBlock {
             | ScratchBlock::OpDiv(_, _)
             | ScratchBlock::OpMod(_, _)
             | ScratchBlock::OpRandom(_, _)
+            | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrJoin(_, _) => Some(VarTypeChecked::String),
-            ScratchBlock::OpCmpGreater(_, _) | ScratchBlock::OpCmpLesser(_, _) => {
-                Some(VarTypeChecked::Bool)
-            }
+            ScratchBlock::OpBAnd(_, _)
+            | ScratchBlock::OpBNot(_)
+            | ScratchBlock::OpBOr(_, _)
+            | ScratchBlock::OpCmpGreater(_, _)
+            | ScratchBlock::OpCmpLesser(_, _) => Some(VarTypeChecked::Bool),
             ScratchBlock::WhenFlagClicked
             | ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
@@ -162,6 +169,10 @@ impl ScratchBlock {
             | ScratchBlock::OpStrJoin(_, _)
             | ScratchBlock::OpStrLen(_)
             | ScratchBlock::OpCmpGreater(_, _)
+            | ScratchBlock::OpBAnd(_, _)
+            | ScratchBlock::OpBNot(_)
+            | ScratchBlock::OpBOr(_, _)
+            | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -215,6 +226,10 @@ pub fn compile(/*&self*/) {
             let mut compiler = Compiler::new(code_block, &mut builder, script);
 
             let lock = MEMORY.lock().unwrap();
+            compiler
+                .cache
+                .init(&mut builder, &lock, &mut compiler.constants);
+
             for block in script {
                 compiler.compile_block(block, &mut builder, &lock);
             }
@@ -264,6 +279,7 @@ pub fn compile(/*&self*/) {
                 code_fn();
                 println!("Time: {:?}", instant.elapsed());
                 println!("Types: {:?}", compiler.variable_type_data);
+                println!("Memory ptr {:X}", lock.as_ptr() as usize);
             }
         }
     }
@@ -365,6 +381,26 @@ impl Compiler {
             ScratchBlock::OpRandom(a, b) => {
                 return Some(blocks::op::random(self, a, b, builder, memory))
             }
+            ScratchBlock::OpBAnd(a, b) => {
+                let a = a.get_bool(self, builder, memory);
+                let b = b.get_bool(self, builder, memory);
+                let res = builder.ins().band(a, b);
+                return Some(ReturnValue::Bool(res));
+            }
+            ScratchBlock::OpBNot(a) => {
+                let a = a.get_bool(self, builder, memory);
+                let res = builder.ins().bnot(a);
+                return Some(ReturnValue::Bool(res));
+            }
+            ScratchBlock::OpBOr(a, b) => {
+                let a = a.get_bool(self, builder, memory);
+                let b = b.get_bool(self, builder, memory);
+                let res = builder.ins().bor(a, b);
+                return Some(ReturnValue::Bool(res));
+            }
+            ScratchBlock::OpMFloor(n) => {
+                return Some(blocks::op::m_floor(self, n, builder, memory))
+            }
         }
         None
     }
@@ -373,6 +409,7 @@ impl Compiler {
 pub fn print_func_addresses() {
     println!("var_read: {:X}", callbacks::var_read as usize);
     println!("op_str_join: {:X}", callbacks::op_str_join as usize);
+    println!("f64::floor: {:X}", f64::floor as usize);
     println!(
         "to_string_from_num: {:X}",
         callbacks::types::to_string_from_num as usize
