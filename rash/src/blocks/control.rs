@@ -5,7 +5,6 @@ use types::I64;
 
 use crate::{
     compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
-    data_types::ScratchObject,
     input_primitives::{Input, Ptr},
 };
 
@@ -14,7 +13,6 @@ pub fn repeat(
     builder: &mut FunctionBuilder<'_>,
     input: &Input,
     vec: &Vec<ScratchBlock>,
-    memory: &[ScratchObject],
 ) {
     let loop_block = builder.create_block();
     builder.append_block_param(loop_block, I64);
@@ -22,7 +20,7 @@ pub fn repeat(
     builder.append_block_param(body_block, I64);
     let end_block = builder.create_block();
 
-    let number = input.get_number(compiler, builder, memory);
+    let number = input.get_number(compiler, builder);
     let number = builder.ins().fcvt_to_sint(I64, number);
 
     let counter = compiler.constants.get_int(0, builder);
@@ -45,7 +43,7 @@ pub fn repeat(
     let incremented = builder.ins().iadd_imm(counter, 1);
 
     let mut inside_types = compiler.variable_type_data.clone();
-    update_type_data_for_block(&mut inside_types, memory, vec);
+    update_type_data_for_block(compiler, &mut inside_types, vec);
     let mut inside_types = common_entries(&inside_types, &compiler.variable_type_data);
 
     let temp_block = compiler.code_block;
@@ -54,7 +52,7 @@ pub fn repeat(
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
 
     for block in vec {
-        compiler.compile_block(block, builder, memory);
+        compiler.compile_block(block, builder);
     }
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
     compiler.code_block = temp_block;
@@ -69,12 +67,12 @@ pub fn repeat(
 }
 
 pub fn update_type_data_for_block(
+    compiler: &Compiler,
     variable_type_data: &mut HashMap<Ptr, VarType>,
-    memory: &[ScratchObject],
     code: &[ScratchBlock],
 ) {
     variable_type_data.clear();
-    for var in (0..memory.len()).map(Ptr) {
+    for var in (0..compiler.memory_len).map(Ptr) {
         if let Some(var_type) = code
             .iter()
             .filter_map(|block| block.affects_var(var, variable_type_data))
@@ -103,9 +101,8 @@ pub fn if_statement(
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
     then: &Vec<ScratchBlock>,
-    memory: &[ScratchObject],
 ) {
-    let input = input.get_bool(compiler, builder, memory);
+    let input = input.get_bool(compiler, builder);
     let inside_block = builder.create_block();
     let end_block = builder.create_block();
 
@@ -119,7 +116,7 @@ pub fn if_statement(
     let temp_block = compiler.code_block;
     compiler.code_block = inside_block;
     for block in then {
-        compiler.compile_block(block, builder, memory);
+        compiler.compile_block(block, builder);
     }
     compiler.code_block = temp_block;
 
@@ -167,11 +164,11 @@ pub fn if_else(
     compiler: &mut Compiler,
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
-    memory: &[ScratchObject],
+
     then_blocks: &Vec<ScratchBlock>,
     else_blocks: &Vec<ScratchBlock>,
 ) {
-    let input = input.get_bool(compiler, builder, memory);
+    let input = input.get_bool(compiler, builder);
     let inside_block = builder.create_block();
     let else_block = builder.create_block();
     let end_block = builder.create_block();
@@ -192,7 +189,7 @@ pub fn if_else(
     compiler.code_block = inside_block;
 
     for block in then_blocks {
-        compiler.compile_block(block, builder, memory);
+        compiler.compile_block(block, builder);
     }
 
     compiler.code_block = current_block;
@@ -206,7 +203,7 @@ pub fn if_else(
 
     compiler.code_block = else_block;
     for block in else_blocks {
-        compiler.compile_block(block, builder, memory);
+        compiler.compile_block(block, builder);
     }
     compiler.code_block = current_block;
 
@@ -226,7 +223,7 @@ pub fn repeat_until(
     compiler: &mut Compiler,
     builder: &mut FunctionBuilder<'_>,
     input: &Input,
-    memory: &[ScratchObject],
+
     body: &Vec<ScratchBlock>,
 ) {
     let loop_block = builder.create_block();
@@ -238,7 +235,7 @@ pub fn repeat_until(
     builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(loop_block);
-    let condition = input.get_bool(compiler, builder, memory);
+    let condition = input.get_bool(compiler, builder);
     compiler.constants.clear();
     builder
         .ins()
@@ -247,13 +244,13 @@ pub fn repeat_until(
     builder.switch_to_block(body_block);
 
     let mut inside_types = compiler.variable_type_data.clone();
-    update_type_data_for_block(&mut inside_types, memory, body);
+    update_type_data_for_block(compiler, &mut inside_types, body);
     let old_types = compiler.variable_type_data.clone();
 
     let current_block = compiler.code_block;
     compiler.code_block = body_block;
     for block in body {
-        compiler.compile_block(block, builder, memory);
+        compiler.compile_block(block, builder);
     }
     compiler.code_block = current_block;
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &old_types);

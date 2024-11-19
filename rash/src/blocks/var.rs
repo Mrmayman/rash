@@ -39,13 +39,7 @@ pub fn read(compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>, ptr: Ptr
     }
 }
 
-pub fn set(
-    compiler: &mut Compiler,
-    obj: &Input,
-    builder: &mut FunctionBuilder<'_>,
-    ptr: Ptr,
-    memory: &[ScratchObject],
-) {
+pub fn set(compiler: &mut Compiler, obj: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
     match obj {
         Input::Obj(obj) => {
             if !matches!(
@@ -77,7 +71,7 @@ pub fn set(
         }
         Input::Block(block) => {
             // compile block
-            let val = compiler.compile_block(block, builder, memory);
+            let val = compiler.compile_block(block, builder);
             let val = val.unwrap();
             if !matches!(
                 compiler.variable_type_data.get(&ptr),
@@ -122,14 +116,8 @@ pub fn set(
     };
 }
 
-pub fn change(
-    compiler: &mut Compiler,
-    input: &Input,
-    builder: &mut FunctionBuilder<'_>,
-    ptr: Ptr,
-    memory: &[ScratchObject],
-) {
-    let input = input.get_number(compiler, builder, memory);
+pub fn change(compiler: &mut Compiler, input: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
+    let input = input.get_number(compiler, builder);
     let old_value = read(compiler, builder, ptr);
     let old_value = old_value.get_number(compiler, builder);
     let new_value = builder.ins().fadd(old_value, input);

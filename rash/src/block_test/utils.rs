@@ -34,13 +34,13 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     builder.append_block_params_for_function_params(code_block);
     builder.switch_to_block(code_block);
 
-    let mut compiler = Compiler::new(code_block, &mut builder, program);
+    let mut compiler = Compiler::new(code_block, &mut builder, program, memory.len());
     compiler
         .cache
         .init(&mut builder, memory, &mut compiler.constants);
 
     for block in program {
-        compiler.compile_block(block, &mut builder, memory);
+        compiler.compile_block(block, &mut builder);
     }
 
     compiler

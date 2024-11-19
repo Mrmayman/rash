@@ -237,6 +237,19 @@ pub fn str_ops() -> Vec<ScratchBlock> {
             ScratchBlock::OpStrJoin(true.into(), 2.0.into()).into(),
         ),
         ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpStrLen(true.into()).into()),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpStrLen("💀".into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(6),
+            ScratchBlock::OpStrLetterOf(2.0.into(), "hello".into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(7),
+            ScratchBlock::OpStrLetterOf(0.0.into(), "hello".into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(8),
+            ScratchBlock::OpStrLetterOf(1.0.into(), "💀".into()).into(),
+        ),
     ]
 }
 
@@ -642,6 +655,15 @@ mod tests {
         assert_eq!(memory[2].convert_to_string(), "1world");
         assert_eq!(memory[3].convert_to_string(), "true2");
         assert_eq!(memory[4].convert_to_number(), 4.0);
+
+        // Skull emoji takes 2 chars in Scratch.
+        assert_eq!(memory[5].convert_to_number(), 2.0);
+
+        assert_eq!(memory[6].convert_to_string(), "e");
+        assert_eq!(memory[7].convert_to_string(), "");
+
+        // memory[8] isn't valid unicode
+        assert_ne!(memory[8].convert_to_string(), "💀");
     }
 
     #[test]

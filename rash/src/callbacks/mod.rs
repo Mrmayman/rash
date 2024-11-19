@@ -8,6 +8,47 @@ use rand::Rng;
 
 pub mod types;
 
+pub extern "C" fn op_str_letter(string: *mut String, is_const: i64, index: f64, out: *mut String) {
+    let letter = get_char_at_index(index, string);
+
+    if is_const == 0 {
+        let mut string = unsafe { string.read() };
+
+        // Reuse the input string, since it's gonna get dropped anyway.
+        string.clear();
+        if let Some(letter) = letter {
+            string.push(letter);
+        }
+        unsafe {
+            out.write(string);
+        }
+    } else {
+        let letter = letter.map(String::from).unwrap_or_default();
+        unsafe {
+            out.write(letter);
+        }
+    }
+}
+
+fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
+    if index < 1.0 {
+        return None;
+    }
+
+    let index = index as usize - 1;
+    let string = unsafe { &*string };
+    // Scratch encodes strings in UTF-16, so we have to convert it.
+    // This HAS to be done for a fully correct implementation.
+    // For example, the emoji "💀" is 4 "chars" in rust string,
+    // but 2 chars in UTF-16 Scratch string.
+    let string_utf16 = string.encode_utf16().collect::<Vec<u16>>();
+    string_utf16
+        .get(index)
+        // Convert the UTF-16 to a char.
+        // If failed, just forcefully convert it by casting.
+        .map(|n| char::from_u32(*n as u32).unwrap_or(*n as u8 as char))
+}
+
 /// Callback from JIT code to join two strings
 pub extern "C" fn op_str_join(
     a: *mut String,
@@ -18,8 +59,6 @@ pub extern "C" fn op_str_join(
 ) {
     let a_ref = unsafe { &mut *a };
     let b_ref = unsafe { &mut *b };
-
-    println!("{a_ref}\n{b_ref}");
 
     // If a isn't const, we can just append b to it.
     if a_is_const == 0 {
@@ -48,7 +87,12 @@ pub extern "C" fn op_str_join(
 
 /// Callback from JIT code to get the length of a string
 pub extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
-    let len = unsafe { (*s).len() };
+    let string = unsafe { &*s };
+    // Scratch stores Strings in UTF-16 (unlike rust).
+    // For example, skull emoji ("💀") is 4 chars in rust,
+    // but 2 chars in Scratch.
+    // So a conversion is needed.
+    let len = string.encode_utf16().count();
     if is_const == 0 {
         unsafe {
             std::ptr::drop_in_place(s);

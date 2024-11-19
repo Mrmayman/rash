@@ -5,7 +5,7 @@ use types::{F64, I64};
 use crate::{
     callbacks,
     compiler::Compiler,
-    data_types::{ScratchObject, ID_STRING},
+    data_types::ID_STRING,
     input_primitives::{Input, ReturnValue},
 };
 
@@ -14,11 +14,10 @@ pub fn str_join(
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
-    memory: &[ScratchObject],
 ) -> (Value, Value, Value, Value) {
     // Get strings
-    let (a, a_is_const) = a.get_string(compiler, builder, memory);
-    let (b, b_is_const) = b.get_string(compiler, builder, memory);
+    let (a, a_is_const) = a.get_string(compiler, builder);
+    let (b, b_is_const) = b.get_string(compiler, builder);
 
     // Create stack slot for result
     let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
@@ -60,22 +59,23 @@ pub fn modulo(
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
-    memory: &[ScratchObject],
 ) -> Value {
-    let a = a.get_number(compiler, builder, memory);
-    let b = b.get_number(compiler, builder, memory);
+    let a = a.get_number(compiler, builder);
+    let b = b.get_number(compiler, builder);
+
+    // let div = a / b;
+    // let modulo = (div - floor(div)) * b;
 
     let div = builder.ins().fdiv(a, b);
 
-    // let floor_div = floor_bit_hack(builder, div, compiler);
     let floor_div = floor_call(div, compiler, builder);
 
-    // Calculate the decimal part and modulo as before
     let decimal_part = builder.ins().fsub(div, floor_div);
     let modulo = builder.ins().fmul(decimal_part, b);
     modulo
 }
 
+/// Calls the rust [`f64::floor`] function.
 fn floor_call(n: Value, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
     let func = compiler
         .constants
@@ -95,9 +95,8 @@ pub fn str_len(
     compiler: &mut Compiler,
     input: &Input,
     builder: &mut FunctionBuilder<'_>,
-    memory: &[ScratchObject],
 ) -> ReturnValue {
-    let (input, is_const) = input.get_string(compiler, builder, memory);
+    let (input, is_const) = input.get_string(compiler, builder);
     let func = compiler
         .constants
         .get_int(callbacks::op_str_len as usize as i64, builder);
@@ -120,10 +119,9 @@ pub fn random(
     a: &Input,
     b: &Input,
     builder: &mut FunctionBuilder<'_>,
-    memory: &[ScratchObject],
 ) -> ReturnValue {
-    let (a, a_is_decimal) = a.get_number_with_decimal_check(compiler, builder, memory);
-    let (b, b_is_decimal) = b.get_number_with_decimal_check(compiler, builder, memory);
+    let (a, a_is_decimal) = a.get_number_with_decimal_check(compiler, builder);
+    let (b, b_is_decimal) = b.get_number_with_decimal_check(compiler, builder);
 
     let is_decimal = builder.ins().bor(a_is_decimal, b_is_decimal);
     let func = compiler
@@ -146,9 +144,48 @@ pub fn m_floor(
     compiler: &mut Compiler,
     n: &Input,
     builder: &mut FunctionBuilder<'_>,
-    memory: &[ScratchObject],
 ) -> ReturnValue {
-    let n = n.get_number(compiler, builder, memory);
+    let n = n.get_number(compiler, builder);
     let result = floor_call(n, compiler, builder);
     ReturnValue::Num(result)
+}
+
+pub fn str_letter(
+    compiler: &mut Compiler,
+    letter: &Input,
+    string: &Input,
+    builder: &mut FunctionBuilder<'_>,
+) -> (Value, Value, Value, Value) {
+    let (string, is_const) = string.get_string(compiler, builder);
+    let letter = letter.get_number(compiler, builder);
+
+    let func = compiler
+        .constants
+        .get_int(callbacks::op_str_letter as usize as i64, builder);
+    let sig = builder.import_signature({
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I64));
+        sig.params.push(AbiParam::new(I64));
+        sig.params.push(AbiParam::new(F64));
+        sig.params.push(AbiParam::new(I64));
+        sig
+    });
+
+    let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+        StackSlotKind::ExplicitSlot,
+        3 * std::mem::size_of::<i64>() as u32,
+        0,
+    ));
+    let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
+
+    let is_const = compiler.constants.get_int(i64::from(is_const), builder);
+    builder
+        .ins()
+        .call_indirect(sig, func, &[string, is_const, letter, stack_ptr]);
+
+    let id = compiler.constants.get_int(ID_STRING, builder);
+    let i1 = builder.ins().stack_load(I64, stack_slot, 0);
+    let i2 = builder.ins().stack_load(I64, stack_slot, 8);
+    let i3 = builder.ins().stack_load(I64, stack_slot, 16);
+    (id, i1, i2, i3)
 }

@@ -89,12 +89,7 @@ impl From<ScratchBlock> for Input {
 }
 
 impl Input {
-    pub fn get_number(
-        &self,
-        compiler: &mut Compiler,
-        builder: &mut FunctionBuilder<'_>,
-        memory: &[ScratchObject],
-    ) -> Value {
+    pub fn get_number(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         let (mut num, could_be_nan) = match self {
             Input::Obj(scratch_object) => {
                 let o = scratch_object.convert_to_number();
@@ -105,9 +100,7 @@ impl Input {
                 // if could_be_nan {
                 //     println!("Could be nan: {scratch_block:?}");
                 // }
-                let o = compiler
-                    .compile_block(scratch_block, builder, memory)
-                    .unwrap();
+                let o = compiler.compile_block(scratch_block, builder).unwrap();
                 (o.get_number(compiler, builder), could_be_nan)
             }
         };
@@ -124,7 +117,6 @@ impl Input {
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-        memory: &[ScratchObject],
     ) -> (Value, bool) {
         match self {
             Input::Obj(scratch_object) => {
@@ -155,29 +147,20 @@ impl Input {
                 (stack_ptr, true)
             }
             Input::Block(scratch_block) => {
-                let o = compiler
-                    .compile_block(scratch_block, builder, memory)
-                    .unwrap();
+                let o = compiler.compile_block(scratch_block, builder).unwrap();
                 (o.get_string(compiler, builder), false)
             }
         }
     }
 
-    pub fn get_bool(
-        &self,
-        compiler: &mut Compiler,
-        builder: &mut FunctionBuilder<'_>,
-        memory: &[ScratchObject],
-    ) -> Value {
+    pub fn get_bool(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             Input::Obj(scratch_object) => {
                 let b = i64::from(scratch_object.convert_to_bool());
                 compiler.constants.get_int(b, builder)
             }
             Input::Block(scratch_block) => {
-                let b = compiler
-                    .compile_block(scratch_block, builder, memory)
-                    .unwrap();
+                let b = compiler.compile_block(scratch_block, builder).unwrap();
                 b.get_bool(compiler, builder)
             }
         }
@@ -187,7 +170,6 @@ impl Input {
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-        memory: &[ScratchObject],
     ) -> (Value, Value) {
         match self {
             Input::Obj(scratch_object) => {
@@ -197,9 +179,7 @@ impl Input {
                 (n, b)
             }
             Input::Block(scratch_block) => {
-                let o = compiler
-                    .compile_block(scratch_block, builder, memory)
-                    .unwrap();
+                let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
                     ReturnValue::Num(value) => (value, compiler.constants.get_int(0, builder)),
                     ReturnValue::Object((i1, i2, i3, i4)) => {

@@ -43,6 +43,7 @@ pub enum ScratchBlock {
     OpCmpGreater(Input, Input),
     OpCmpLesser(Input, Input),
     OpRandom(Input, Input),
+    OpStrLetterOf(Input, Input),
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
     ControlRepeat(Input, Vec<ScratchBlock>),
@@ -85,7 +86,9 @@ impl ScratchBlock {
             | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
-            ScratchBlock::OpStrJoin(_, _) => Some(VarTypeChecked::String),
+            ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
+                Some(VarTypeChecked::String)
+            }
             ScratchBlock::OpBAnd(_, _)
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
@@ -173,6 +176,7 @@ impl ScratchBlock {
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
             | ScratchBlock::OpMFloor(_)
+            | ScratchBlock::OpStrLetterOf(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -223,15 +227,16 @@ pub fn compile(/*&self*/) {
             builder.append_block_params_for_function_params(code_block);
             builder.switch_to_block(code_block);
 
-            let mut compiler = Compiler::new(code_block, &mut builder, script);
-
             let lock = MEMORY.lock().unwrap();
+
+            let mut compiler = Compiler::new(code_block, &mut builder, script, lock.len());
+
             compiler
                 .cache
                 .init(&mut builder, &lock, &mut compiler.constants);
 
             for block in script {
-                compiler.compile_block(block, &mut builder, &lock);
+                compiler.compile_block(block, &mut builder);
             }
 
             compiler
@@ -290,15 +295,22 @@ pub struct Compiler {
     pub constants: ConstantMap,
     pub code_block: Block,
     pub cache: StackCache,
+    pub memory_len: usize,
 }
 
 impl Compiler {
-    pub fn new(block: Block, builder: &mut FunctionBuilder<'_>, code: &[ScratchBlock]) -> Self {
+    pub fn new(
+        block: Block,
+        builder: &mut FunctionBuilder<'_>,
+        code: &[ScratchBlock],
+        memory_len: usize,
+    ) -> Self {
         Self {
             variable_type_data: HashMap::new(),
             constants: ConstantMap::new(),
             code_block: block,
             cache: StackCache::new(builder, code),
+            memory_len,
         }
     }
 
@@ -306,100 +318,100 @@ impl Compiler {
         &mut self,
         block: &ScratchBlock,
         builder: &mut FunctionBuilder<'_>,
-        memory: &[ScratchObject],
     ) -> Option<ReturnValue> {
         match block {
             ScratchBlock::WhenFlagClicked => {}
             ScratchBlock::VarSet(ptr, obj) => {
-                blocks::var::set(self, obj, builder, *ptr, memory);
+                blocks::var::set(self, obj, builder, *ptr);
             }
             ScratchBlock::OpAdd(a, b) => {
-                let a = a.get_number(self, builder, memory);
-                let b = b.get_number(self, builder, memory);
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
                 let res = builder.ins().fadd(a, b);
                 return Some(ReturnValue::Num(res));
             }
             ScratchBlock::OpSub(a, b) => {
-                let a = a.get_number(self, builder, memory);
-                let b = b.get_number(self, builder, memory);
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
                 let res = builder.ins().fsub(a, b);
                 return Some(ReturnValue::Num(res));
             }
             ScratchBlock::OpMul(a, b) => {
-                let a = a.get_number(self, builder, memory);
-                let b = b.get_number(self, builder, memory);
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
                 let res = builder.ins().fmul(a, b);
                 return Some(ReturnValue::Num(res));
             }
             ScratchBlock::OpDiv(a, b) => {
-                let a = a.get_number(self, builder, memory);
-                let b = b.get_number(self, builder, memory);
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
                 let res = builder.ins().fdiv(a, b);
                 return Some(ReturnValue::Num(res));
             }
             ScratchBlock::OpMod(a, b) => {
-                let modulo = blocks::op::modulo(self, a, b, builder, memory);
+                let modulo = blocks::op::modulo(self, a, b, builder);
                 return Some(ReturnValue::Num(modulo));
             }
             ScratchBlock::VarRead(ptr) => {
                 return Some(blocks::var::read(self, builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
-                let obj = blocks::op::str_join(self, a, b, builder, memory);
+                let obj = blocks::op::str_join(self, a, b, builder);
                 return Some(ReturnValue::Object(obj));
             }
             ScratchBlock::ControlRepeat(input, vec) => {
-                blocks::control::repeat(self, builder, input, vec, memory);
+                blocks::control::repeat(self, builder, input, vec);
             }
             ScratchBlock::VarChange(ptr, input) => {
-                blocks::var::change(self, input, builder, *ptr, memory);
+                blocks::var::change(self, input, builder, *ptr);
             }
             ScratchBlock::ControlIf(input, vec) => {
-                blocks::control::if_statement(self, input, builder, vec, memory);
+                blocks::control::if_statement(self, input, builder, vec);
             }
             ScratchBlock::ControlIfElse(condition, then, r#else) => {
-                blocks::control::if_else(self, condition, builder, memory, then, r#else);
+                blocks::control::if_else(self, condition, builder, then, r#else);
             }
             ScratchBlock::ControlRepeatUntil(input, vec) => {
-                blocks::control::repeat_until(self, builder, input, memory, vec);
+                blocks::control::repeat_until(self, builder, input, vec);
             }
             ScratchBlock::OpCmpGreater(a, b) => {
-                let a = a.get_number(self, builder, memory);
-                let b = b.get_number(self, builder, memory);
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
                 let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
                 return Some(ReturnValue::Bool(res));
             }
             ScratchBlock::OpCmpLesser(a, b) => {
-                let a = a.get_number(self, builder, memory);
-                let b = b.get_number(self, builder, memory);
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
                 let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
                 return Some(ReturnValue::Bool(res));
             }
             ScratchBlock::OpStrLen(input) => {
-                return Some(blocks::op::str_len(self, input, builder, memory));
+                return Some(blocks::op::str_len(self, input, builder));
             }
-            ScratchBlock::OpRandom(a, b) => {
-                return Some(blocks::op::random(self, a, b, builder, memory))
-            }
+            ScratchBlock::OpRandom(a, b) => return Some(blocks::op::random(self, a, b, builder)),
             ScratchBlock::OpBAnd(a, b) => {
-                let a = a.get_bool(self, builder, memory);
-                let b = b.get_bool(self, builder, memory);
+                let a = a.get_bool(self, builder);
+                let b = b.get_bool(self, builder);
                 let res = builder.ins().band(a, b);
                 return Some(ReturnValue::Bool(res));
             }
             ScratchBlock::OpBNot(a) => {
-                let a = a.get_bool(self, builder, memory);
+                let a = a.get_bool(self, builder);
                 let res = builder.ins().bnot(a);
                 return Some(ReturnValue::Bool(res));
             }
             ScratchBlock::OpBOr(a, b) => {
-                let a = a.get_bool(self, builder, memory);
-                let b = b.get_bool(self, builder, memory);
+                let a = a.get_bool(self, builder);
+                let b = b.get_bool(self, builder);
                 let res = builder.ins().bor(a, b);
                 return Some(ReturnValue::Bool(res));
             }
-            ScratchBlock::OpMFloor(n) => {
-                return Some(blocks::op::m_floor(self, n, builder, memory))
+            ScratchBlock::OpMFloor(n) => return Some(blocks::op::m_floor(self, n, builder)),
+            ScratchBlock::OpStrLetterOf(letter, string) => {
+                return Some(ReturnValue::Object(blocks::op::str_letter(
+                    self, letter, string, builder,
+                )))
             }
         }
         None
