@@ -250,6 +250,18 @@ pub fn str_ops() -> Vec<ScratchBlock> {
             Ptr(8),
             ScratchBlock::OpStrLetterOf(1.0.into(), "💀".into()).into(),
         ),
+        ScratchBlock::VarSet(
+            Ptr(9),
+            ScratchBlock::OpStrContains("Hello World".into(), "World".into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(10),
+            ScratchBlock::OpStrContains("Hello World".into(), "world".into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(11),
+            ScratchBlock::OpStrContains("Hello World".into(), "Hi".into()).into(),
+        ),
     ]
 }
 
@@ -662,8 +674,13 @@ mod tests {
         assert_eq!(memory[6].convert_to_string(), "e");
         assert_eq!(memory[7].convert_to_string(), "");
 
-        // memory[8] isn't valid unicode
-        assert_ne!(memory[8].convert_to_string(), "💀");
+        // memory[8] isn't valid unicode.
+        // There is no way to test this.
+        assert_eq!(memory[8].convert_to_string().chars().count(), 1);
+
+        assert!(memory[9].convert_to_bool());
+        assert!(memory[10].convert_to_bool());
+        assert!(!memory[11].convert_to_bool());
     }
 
     #[test]

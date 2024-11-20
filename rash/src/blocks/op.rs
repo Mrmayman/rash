@@ -189,3 +189,41 @@ pub fn str_letter(
     let i3 = builder.ins().stack_load(I64, stack_slot, 16);
     (id, i1, i2, i3)
 }
+
+pub fn str_contains(
+    compiler: &mut Compiler,
+    string: &Input,
+    pattern: &Input,
+    builder: &mut FunctionBuilder<'_>,
+) -> Value {
+    let (string, string_is_const) = string.get_string(compiler, builder);
+    let (pattern, pattern_is_const) = pattern.get_string(compiler, builder);
+
+    let string_is_const = compiler
+        .constants
+        .get_int(i64::from(string_is_const), builder);
+    let pattern_is_const = compiler
+        .constants
+        .get_int(i64::from(pattern_is_const), builder);
+
+    let func = compiler
+        .constants
+        .get_int(callbacks::op_str_contains as usize as i64, builder);
+    let sig = builder.import_signature({
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I64));
+        sig.params.push(AbiParam::new(I64));
+        sig.params.push(AbiParam::new(I64));
+        sig.params.push(AbiParam::new(I64));
+        sig.returns.push(AbiParam::new(I64));
+        sig
+    });
+
+    let ins = builder.ins().call_indirect(
+        sig,
+        func,
+        &[string, string_is_const, pattern, pattern_is_const],
+    );
+
+    builder.inst_results(ins)[0]
+}

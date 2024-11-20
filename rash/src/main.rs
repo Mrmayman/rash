@@ -43,7 +43,7 @@ fn main() {
     drop_strings();
 
     // print memory
-    for (i, obj) in MEMORY.lock().unwrap().iter().enumerate().take(10) {
+    for (i, obj) in MEMORY.lock().unwrap().iter().enumerate().take(16) {
         println!("{i}: {obj:?}");
     }
 }

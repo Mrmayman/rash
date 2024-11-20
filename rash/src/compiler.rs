@@ -44,6 +44,7 @@ pub enum ScratchBlock {
     OpCmpLesser(Input, Input),
     OpRandom(Input, Input),
     OpStrLetterOf(Input, Input),
+    OpStrContains(Input, Input),
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
     ControlRepeat(Input, Vec<ScratchBlock>),
@@ -93,6 +94,7 @@ impl ScratchBlock {
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
             | ScratchBlock::OpCmpGreater(_, _)
+            | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => Some(VarTypeChecked::Bool),
             ScratchBlock::WhenFlagClicked
             | ScratchBlock::VarSet(_, _)
@@ -177,6 +179,7 @@ impl ScratchBlock {
             | ScratchBlock::OpBOr(_, _)
             | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpStrLetterOf(_, _)
+            | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -212,7 +215,7 @@ pub fn compile(/*&self*/) {
 
     // let code_sprites = self.get_block_code();
     let code_sprites = vec![CodeSprite {
-        scripts: vec![block_test::pi()],
+        scripts: vec![block_test::str_ops()],
     }];
     for sprite in &code_sprites {
         for script in &sprite.scripts {
@@ -411,6 +414,11 @@ impl Compiler {
             ScratchBlock::OpStrLetterOf(letter, string) => {
                 return Some(ReturnValue::Object(blocks::op::str_letter(
                     self, letter, string, builder,
+                )))
+            }
+            ScratchBlock::OpStrContains(string, pattern) => {
+                return Some(ReturnValue::Bool(blocks::op::str_contains(
+                    self, string, pattern, builder,
                 )))
             }
         }

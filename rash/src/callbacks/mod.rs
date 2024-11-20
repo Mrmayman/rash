@@ -8,6 +8,31 @@ use rand::Rng;
 
 pub mod types;
 
+pub extern "C" fn op_str_contains(
+    string: *mut String,
+    string_is_const: i64,
+    substring: *mut String,
+    substring_is_const: i64,
+) -> i64 {
+    let contains = {
+        let string = unsafe { &*string }.to_lowercase();
+        let substring = unsafe { &*substring }.to_lowercase();
+
+        string.contains(&substring)
+    };
+    if string_is_const == 0 {
+        unsafe {
+            std::ptr::drop_in_place(string);
+        }
+    }
+    if substring_is_const == 0 {
+        unsafe {
+            std::ptr::drop_in_place(substring);
+        }
+    }
+    contains as i64
+}
+
 pub extern "C" fn op_str_letter(string: *mut String, is_const: i64, index: f64, out: *mut String) {
     let letter = get_char_at_index(index, string);
 
@@ -45,8 +70,17 @@ fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
     string_utf16
         .get(index)
         // Convert the UTF-16 to a char.
-        // If failed, just forcefully convert it by casting.
-        .map(|n| char::from_u32(*n as u32).unwrap_or(*n as u8 as char))
+        // If failed, use the unicode replacement character
+        // which represents an unknown character.
+        .map(|n| {
+            char::from_u32(*n as u32).unwrap_or({
+                // '\u{FFFD}'
+
+                // WARNING: Highly unsafe, could cause crashes.
+                // TODO: Find a better way to handle this.
+                unsafe { std::mem::transmute(*n as u32) }
+            })
+        })
 }
 
 /// Callback from JIT code to join two strings
