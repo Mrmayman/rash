@@ -184,7 +184,7 @@ impl StackCache {
     ) {
         let mem_ptr = *self.variable_offsets.get(&ptr).unwrap() as i32;
 
-        builder.ins().stack_store(i1, self.slot, mem_ptr + 0);
+        builder.ins().stack_store(i1, self.slot, mem_ptr);
         builder.ins().stack_store(i2, self.slot, mem_ptr + 8);
         builder.ins().stack_store(i3, self.slot, mem_ptr + 16);
         builder.ins().stack_store(i4, self.slot, mem_ptr + 24);
@@ -242,6 +242,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::OpRound(_)
         | ScratchBlock::OpMAbs(_)
         | ScratchBlock::OpMSqrt(_)
+        | ScratchBlock::OpMSin(_)
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

@@ -8,6 +8,7 @@ use cranelift::prelude::*;
 use isa::CallConv;
 use lazy_static::lazy_static;
 use target_lexicon::Triple;
+use types::F64;
 
 use crate::{
     block_test, blocks, callbacks,
@@ -43,6 +44,7 @@ pub enum ScratchBlock {
     OpMFloor(Input),
     OpMAbs(Input),
     OpMSqrt(Input),
+    OpMSin(Input),
     OpCmpGreater(Input, Input),
     OpCmpLesser(Input, Input),
     OpRandom(Input, Input),
@@ -92,6 +94,7 @@ impl ScratchBlock {
             | ScratchBlock::OpRound(_)
             | ScratchBlock::OpMAbs(_)
             | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VarTypeChecked::String)
@@ -188,6 +191,7 @@ impl ScratchBlock {
             | ScratchBlock::OpStrLetterOf(_, _)
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::OpRound(_)
+            | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -224,7 +228,7 @@ pub fn compile(/*&self*/) {
 
     // let code_sprites = self.get_block_code();
     let code_sprites = vec![CodeSprite {
-        scripts: vec![block_test::str_ops()],
+        scripts: vec![block_test::pi()],
     }];
     for sprite in &code_sprites {
         for script in &sprite.scripts {
@@ -442,6 +446,13 @@ impl Compiler {
                 let num = num.get_number(self, builder);
                 let sqrt = builder.ins().sqrt(num);
                 return Some(ReturnValue::Num(sqrt));
+            }
+            ScratchBlock::OpMSin(num) => {
+                let num = num.get_number(self, builder);
+                let inst =
+                    self.call_function(builder, callbacks::op_sin as usize, &[F64], &[F64], &[num]);
+                let result = builder.inst_results(inst)[0];
+                return Some(ReturnValue::Num(result));
             }
         }
         None

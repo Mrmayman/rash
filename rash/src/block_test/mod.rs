@@ -695,13 +695,27 @@ pub fn math_sqrt() -> Vec<ScratchBlock> {
     ])
 }
 
+#[allow(unused)]
+pub fn math_trig() -> Vec<ScratchBlock> {
+    set_vars(vec![
+        ScratchBlock::OpMSin(0.0.into()).into(),
+        ScratchBlock::OpMSin(30.0.into()).into(),
+        ScratchBlock::OpMSin(60.0.into()).into(),
+        ScratchBlock::OpMSin(90.0.into()).into(),
+        ScratchBlock::OpMSin(100.0.into()).into(),
+        ScratchBlock::OpMSin((-30.0).into()).into(),
+        ScratchBlock::OpMSin((-60.0).into()).into(),
+        ScratchBlock::OpMSin((-90.0).into()).into(),
+        ScratchBlock::OpMSin((-100.0).into()).into(),
+    ])
+}
+
 fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
-    let out = input
+    input
         .into_iter()
         .enumerate()
         .map(|(i, input)| ScratchBlock::VarSet(Ptr(i), input))
-        .collect();
-    out
+        .collect()
 }
 
 #[cfg(test)]
@@ -1056,5 +1070,21 @@ mod tests {
         assert!(memory[5].convert_to_number().is_infinite());
         assert!(memory[5].convert_to_number().is_sign_positive());
         assert!(memory[6].convert_to_number().is_nan());
+    }
+
+    #[test]
+    pub fn b_math_trig() {
+        let memory = run_code(math_trig());
+        assert_eq!(memory[0].convert_to_number(), 0.0);
+
+        assert!(0.5 - memory[1].convert_to_number() < f64::EPSILON);
+        assert!(0.8660254038 - memory[2].convert_to_number() <= 80000.0 * f64::EPSILON);
+        assert_eq!(memory[3].convert_to_number(), 1.0);
+        assert!(memory[4].convert_to_number() - 0.984807753 <= 60000.0 * f64::EPSILON);
+
+        assert!(memory[5].convert_to_number() - 0.5 < f64::EPSILON);
+        assert!(memory[6].convert_to_number() - 0.8660254038 <= 80000.0 * f64::EPSILON);
+        assert_eq!(memory[7].convert_to_number(), -1.0);
+        assert!(memory[8].convert_to_number() + 0.984807753 <= 60000.0 * f64::EPSILON);
     }
 }

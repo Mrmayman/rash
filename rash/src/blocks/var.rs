@@ -8,8 +8,6 @@ use crate::{
     input_primitives::{Input, Ptr, ReturnValue},
 };
 
-use super::call_function;
-
 pub fn read(compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ReturnValue {
     match compiler.variable_type_data.get(&ptr) {
         Some(VarType::Number) => ReturnValue::Num(compiler.cache.load_f64(ptr, builder)),
@@ -23,8 +21,7 @@ pub fn read(compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>, ptr: Ptr
             ));
             let output_stack_ptr = builder.ins().stack_addr(I64, output_stack_slot, 0);
 
-            call_function(
-                compiler,
+            compiler.call_function(
                 builder,
                 callbacks::var_read as usize,
                 &[I64, I64],

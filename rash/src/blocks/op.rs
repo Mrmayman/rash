@@ -1,5 +1,4 @@
 use cranelift::prelude::*;
-use isa::CallConv;
 use types::{F64, I64};
 
 use crate::{
@@ -8,8 +7,6 @@ use crate::{
     data_types::ID_STRING,
     input_primitives::{Input, ReturnValue},
 };
-
-use super::call_function;
 
 pub fn str_join(
     compiler: &mut Compiler,
@@ -33,8 +30,7 @@ pub fn str_join(
     let a_is_const = compiler.constants.get_int(i64::from(a_is_const), builder);
     let b_is_const = compiler.constants.get_int(i64::from(b_is_const), builder);
 
-    call_function(
-        compiler,
+    compiler.call_function(
         builder,
         callbacks::op_str_join as usize,
         &[I64, I64, I64, I64, I64],
@@ -72,7 +68,7 @@ pub fn modulo(
 
 /// Calls the rust [`f64::floor`] function.
 fn floor_call(n: Value, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
-    let ins = call_function(compiler, builder, f64::floor as usize, &[F64], &[F64], &[n]);
+    let ins = compiler.call_function(builder, f64::floor as usize, &[F64], &[F64], &[n]);
     builder.inst_results(ins)[0]
 }
 
@@ -82,18 +78,15 @@ pub fn str_len(
     builder: &mut FunctionBuilder<'_>,
 ) -> ReturnValue {
     let (input, is_const) = input.get_string(compiler, builder);
-    let func = compiler
-        .constants
-        .get_int(callbacks::op_str_len as usize as i64, builder);
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.returns.push(AbiParam::new(I64));
-        sig
-    });
     let is_const = compiler.constants.get_int(i64::from(is_const), builder);
-    let inst = builder.ins().call_indirect(sig, func, &[input, is_const]);
+
+    let inst = compiler.call_function(
+        builder,
+        callbacks::op_str_len as usize,
+        &[I64, I64],
+        &[I64],
+        &[input, is_const],
+    );
     let res = builder.inst_results(inst)[0];
     let res = builder.ins().fcvt_from_sint(F64, res);
     ReturnValue::Num(res)
@@ -109,18 +102,14 @@ pub fn random(
     let (b, b_is_decimal) = b.get_number_with_decimal_check(compiler, builder);
 
     let is_decimal = builder.ins().bor(a_is_decimal, b_is_decimal);
-    let func = compiler
-        .constants
-        .get_int(callbacks::op_random as usize as i64, builder);
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(F64));
-        sig.params.push(AbiParam::new(F64));
-        sig.params.push(AbiParam::new(I64));
-        sig.returns.push(AbiParam::new(F64));
-        sig
-    });
-    let inst = builder.ins().call_indirect(sig, func, &[a, b, is_decimal]);
+
+    let inst = compiler.call_function(
+        builder,
+        callbacks::op_random as usize,
+        &[F64, F64, I64],
+        &[F64],
+        &[a, b, is_decimal],
+    );
     let res = builder.inst_results(inst)[0];
     ReturnValue::Num(res)
 }
@@ -152,8 +141,7 @@ pub fn str_letter(
     let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
     let is_const = compiler.constants.get_int(i64::from(is_const), builder);
-    call_function(
-        compiler,
+    compiler.call_function(
         builder,
         callbacks::op_str_letter as usize,
         &[I64, I64, F64, I64],
@@ -184,8 +172,7 @@ pub fn str_contains(
         .constants
         .get_int(i64::from(pattern_is_const), builder);
 
-    let ins = call_function(
-        compiler,
+    let ins = compiler.call_function(
         builder,
         callbacks::op_str_contains as usize,
         &[I64, I64, I64, I64],
@@ -198,8 +185,7 @@ pub fn str_contains(
 
 pub fn round(compiler: &mut Compiler, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
     let num = num.get_number(compiler, builder);
-    let inst = call_function(
-        compiler,
+    let inst = compiler.call_function(
         builder,
         callbacks::op_round as usize,
         &[F64],

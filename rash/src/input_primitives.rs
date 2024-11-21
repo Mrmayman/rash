@@ -2,7 +2,6 @@ use std::sync::Mutex;
 
 use codegen::ir::StackSlot;
 use cranelift::prelude::*;
-use isa::CallConv;
 use types::{F64, I64};
 
 use crate::{
@@ -216,7 +215,13 @@ impl ReturnValue {
         match self {
             ReturnValue::Num(value) => value,
             ReturnValue::Object((i1, i2, i3, i4)) => {
-                let num = compiler.ins_call_to_num(builder, i1, i2, i3, i4);
+                let num = compiler.call_function(
+                    builder,
+                    callbacks::types::to_number as usize,
+                    &[I64, I64, I64, I64],
+                    &[F64],
+                    &[i1, i2, i3, i4],
+                );
                 builder.inst_results(num)[0]
             }
             ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
@@ -227,7 +232,13 @@ impl ReturnValue {
                 let i4 = builder.ins().stack_load(I64, slot, 24);
 
                 // Convert the object to number
-                let num = compiler.ins_call_to_num(builder, i1, i2, i3, i4);
+                let num = compiler.call_function(
+                    builder,
+                    callbacks::types::to_number as usize,
+                    &[I64, I64, I64, I64],
+                    &[F64],
+                    &[i1, i2, i3, i4],
+                );
                 builder.inst_results(num)[0]
             }
         }
@@ -236,41 +247,30 @@ impl ReturnValue {
     pub fn get_string(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             ReturnValue::Num(value) => {
-                let func = compiler.constants.get_int(
-                    callbacks::types::to_string_from_num as usize as i64,
-                    builder,
-                );
-
                 let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
-                let sig = builder.import_signature({
-                    let mut sig = Signature::new(CallConv::SystemV);
-                    sig.params.push(AbiParam::new(F64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig
-                });
-                builder.ins().call_indirect(sig, func, &[value, stack_ptr]);
+                compiler.call_function(
+                    builder,
+                    callbacks::types::to_string_from_num as usize,
+                    &[F64, I64],
+                    &[],
+                    &[value, stack_ptr],
+                );
                 stack_ptr
             }
             ReturnValue::Object((i1, i2, i3, i4)) => {
                 get_string_from_obj(builder, compiler, i1, i2, i3, i4)
             }
             ReturnValue::Bool(value) => {
-                let func = compiler.constants.get_int(
-                    callbacks::types::to_string_from_bool as usize as i64,
-                    builder,
-                );
-
                 let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
-                let sig = builder.import_signature({
-                    let mut sig = Signature::new(CallConv::SystemV);
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig
-                });
-                builder.ins().call_indirect(sig, func, &[value, stack_ptr]);
-                // let results = builder.inst_results(num);
+                compiler.call_function(
+                    builder,
+                    callbacks::types::to_string_from_bool as usize,
+                    &[I64, I64],
+                    &[],
+                    &[value, stack_ptr],
+                );
                 stack_ptr
             }
             ReturnValue::ObjectPointer(_value, slot) => {
@@ -300,22 +300,13 @@ impl ReturnValue {
             }
             ReturnValue::Bool(value) => *value,
             ReturnValue::Object((i1, i2, i3, i4)) => {
-                let func = compiler
-                    .constants
-                    .get_int(callbacks::types::to_bool as usize as i64, builder);
-
-                let sig = builder.import_signature({
-                    let mut sig = Signature::new(CallConv::SystemV);
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig.returns.push(AbiParam::new(I64));
-                    sig
-                });
-                let ins = builder
-                    .ins()
-                    .call_indirect(sig, func, &[*i1, *i2, *i3, *i4]);
+                let ins = compiler.call_function(
+                    builder,
+                    callbacks::types::to_bool as usize,
+                    &[I64, I64, I64, I64],
+                    &[I64],
+                    &[*i1, *i2, *i3, *i4],
+                );
                 builder.inst_results(ins)[0]
             }
             ReturnValue::ObjectPointer(_value, stack_slot) => {
@@ -324,20 +315,13 @@ impl ReturnValue {
                 let i3 = builder.ins().stack_load(I64, *stack_slot, 16);
                 let i4 = builder.ins().stack_load(I64, *stack_slot, 24);
 
-                let func = compiler
-                    .constants
-                    .get_int(callbacks::types::to_bool as usize as i64, builder);
-
-                let sig = builder.import_signature({
-                    let mut sig = Signature::new(CallConv::SystemV);
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig.params.push(AbiParam::new(I64));
-                    sig.returns.push(AbiParam::new(I64));
-                    sig
-                });
-                let ins = builder.ins().call_indirect(sig, func, &[i1, i2, i3, i4]);
+                let ins = compiler.call_function(
+                    builder,
+                    callbacks::types::to_bool as usize,
+                    &[I64, I64, I64, I64],
+                    &[I64],
+                    &[i1, i2, i3, i4],
+                );
                 builder.inst_results(ins)[0]
             }
         }
@@ -352,24 +336,15 @@ fn get_string_from_obj(
     i3: Value,
     i4: Value,
 ) -> Value {
-    let func = compiler
-        .constants
-        .get_int(callbacks::types::to_string as usize as i64, builder);
-
     let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig
-    });
-    builder
-        .ins()
-        .call_indirect(sig, func, &[i1, i2, i3, i4, stack_ptr]);
-    // let results = builder.inst_results(num);
+    compiler.call_function(
+        builder,
+        callbacks::types::to_string as usize,
+        &[I64, I64, I64, I64, I64],
+        &[],
+        &[i1, i2, i3, i4, stack_ptr],
+    );
+
     stack_ptr
 }

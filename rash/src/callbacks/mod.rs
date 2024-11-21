@@ -8,6 +8,11 @@ use rand::Rng;
 
 pub mod types;
 
+pub extern "C" fn op_sin(value: f64) -> f64 {
+    let value = value.to_radians();
+    value.sin()
+}
+
 pub extern "C" fn op_round(value: f64) -> f64 {
     // If number ends with .5 round up (Scratch behaviour).
     if (value - value.trunc()).abs() == 0.5 {
@@ -87,7 +92,7 @@ fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
 
                 // WARNING: Highly unsafe, could cause crashes.
                 // TODO: Find a better way to handle this.
-                unsafe { std::mem::transmute(*n as u32) }
+                unsafe { std::mem::transmute::<u32, char>(*n as u32) }
             })
         })
 }
