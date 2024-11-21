@@ -1,4 +1,7 @@
-use crate::{compiler::ScratchBlock, input_primitives::Ptr};
+use crate::{
+    compiler::ScratchBlock,
+    input_primitives::{Input, Ptr},
+};
 
 mod utils;
 
@@ -568,7 +571,7 @@ pub fn bool_ops() -> Vec<ScratchBlock> {
 }
 
 #[allow(unused)]
-pub fn math_misc() -> Vec<ScratchBlock> {
+pub fn math_round() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpRound(2.3.into()).into()),
@@ -579,13 +582,20 @@ pub fn math_misc() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpRound((-2.5).into()).into()),
         ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpRound((-2.7).into()).into()),
         ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpRound((-3.0).into()).into()),
-        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMAbs(2.3.into()).into()),
-        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMAbs((-2.3).into()).into()),
-        ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMAbs(0.0.into()).into()),
-        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMAbs((-0.0).into()).into()),
-        ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMAbs(f64::INFINITY.into()).into()),
+    ]
+}
+
+#[allow(unused)]
+pub fn math_abs() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMAbs(2.3.into()).into()),
+        ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpMAbs((-2.3).into()).into()),
+        ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpMAbs(0.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpMAbs((-0.0).into()).into()),
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpMAbs(f64::INFINITY.into()).into()),
         ScratchBlock::VarSet(
-            Ptr(13),
+            Ptr(5),
             ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
         ),
     ]
@@ -670,6 +680,28 @@ pub fn math_floor() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMFloor(1e10.into()).into()),
         ScratchBlock::VarSet(Ptr(13), ScratchBlock::OpMFloor((-1e10).into()).into()),
     ]
+}
+
+#[allow(unused)]
+pub fn math_sqrt() -> Vec<ScratchBlock> {
+    set_vars(vec![
+        ScratchBlock::OpMSqrt(1.0.into()).into(),
+        ScratchBlock::OpMSqrt(2.0.into()).into(),
+        ScratchBlock::OpMSqrt(0.0.into()).into(),
+        ScratchBlock::OpMSqrt((-0.0).into()).into(),
+        ScratchBlock::OpMSqrt((-1.0).into()).into(),
+        ScratchBlock::OpMSqrt(f64::INFINITY.into()).into(),
+        ScratchBlock::OpMSqrt(f64::NEG_INFINITY.into()).into(),
+    ])
+}
+
+fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
+    let out = input
+        .into_iter()
+        .enumerate()
+        .map(|(i, input)| ScratchBlock::VarSet(Ptr(i), input))
+        .collect();
+    out
 }
 
 #[cfg(test)]
@@ -990,8 +1022,8 @@ mod tests {
     }
 
     #[test]
-    pub fn b_math_misc() {
-        let memory = run_code(math_misc());
+    pub fn b_math_round() {
+        let memory = run_code(math_round());
         assert_eq!(memory[0].convert_to_number(), 2.0);
         assert_eq!(memory[1].convert_to_number(), 3.0);
         assert_eq!(memory[2].convert_to_number(), 3.0);
@@ -1000,24 +1032,29 @@ mod tests {
         assert_eq!(memory[5].convert_to_number(), -2.0);
         assert_eq!(memory[6].convert_to_number(), -3.0);
         assert_eq!(memory[7].convert_to_number(), -3.0);
+    }
 
-        assert_eq!(memory[8].convert_to_number(), 2.3);
-        assert_eq!(memory[9].convert_to_number(), 2.3);
-        assert_eq!(memory[10].convert_to_number(), 0.0);
-        assert_eq!(memory[11].convert_to_number(), 0.0);
-        assert_eq!(memory[12].convert_to_number(), f64::INFINITY);
-        assert_eq!(memory[13].convert_to_number(), f64::INFINITY);
+    #[test]
+    pub fn b_math_abs() {
+        let memory = run_code(math_abs());
+        assert_eq!(memory[0].convert_to_number(), 2.3);
+        assert_eq!(memory[1].convert_to_number(), 2.3);
+        assert_eq!(memory[2].convert_to_number(), 0.0);
+        assert_eq!(memory[3].convert_to_number(), 0.0);
+        assert_eq!(memory[4].convert_to_number(), f64::INFINITY);
+        assert_eq!(memory[5].convert_to_number(), f64::INFINITY);
+    }
 
-        /*
-        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMAbs(2.3.into()).into()),
-        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMAbs((-2.3).into()).into()),
-        ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMAbs(0.0.into()).into()),
-        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMAbs((-0.0).into()).into()),
-        ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMAbs(f64::INFINITY.into()).into()),
-        ScratchBlock::VarSet(
-            Ptr(13),
-            ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
-        ),
-        */
+    #[test]
+    pub fn b_math_sqrt() {
+        let memory = run_code(math_sqrt());
+        assert_eq!(memory[0].convert_to_number(), 1.0);
+        assert_eq!(memory[1].convert_to_number(), 1.4142135623730951);
+        assert_eq!(memory[2].convert_to_number(), 0.0);
+        assert_eq!(memory[3].convert_to_number(), 0.0);
+        assert!(memory[4].convert_to_number().is_nan());
+        assert!(memory[5].convert_to_number().is_infinite());
+        assert!(memory[5].convert_to_number().is_sign_positive());
+        assert!(memory[6].convert_to_number().is_nan());
     }
 }

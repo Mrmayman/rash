@@ -42,6 +42,7 @@ pub enum ScratchBlock {
     OpBOr(Input, Input),
     OpMFloor(Input),
     OpMAbs(Input),
+    OpMSqrt(Input),
     OpCmpGreater(Input, Input),
     OpCmpLesser(Input, Input),
     OpRandom(Input, Input),
@@ -90,6 +91,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpRound(_)
             | ScratchBlock::OpMAbs(_)
+            | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VarTypeChecked::String)
@@ -190,6 +192,7 @@ impl ScratchBlock {
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
             | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::OpRandom(_, _) => true,
         }
     }
@@ -434,6 +437,11 @@ impl Compiler {
                 let num = num.get_number(self, builder);
                 let abs = builder.ins().fabs(num);
                 return Some(ReturnValue::Num(abs));
+            }
+            ScratchBlock::OpMSqrt(num) => {
+                let num = num.get_number(self, builder);
+                let sqrt = builder.ins().sqrt(num);
+                return Some(ReturnValue::Num(sqrt));
             }
         }
         None
