@@ -579,6 +579,15 @@ pub fn math_misc() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpRound((-2.5).into()).into()),
         ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpRound((-2.7).into()).into()),
         ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpRound((-3.0).into()).into()),
+        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMAbs(2.3.into()).into()),
+        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMAbs((-2.3).into()).into()),
+        ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMAbs(0.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMAbs((-0.0).into()).into()),
+        ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMAbs(f64::INFINITY.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(13),
+            ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
+        ),
     ]
 }
 
@@ -992,15 +1001,23 @@ mod tests {
         assert_eq!(memory[6].convert_to_number(), -3.0);
         assert_eq!(memory[7].convert_to_number(), -3.0);
 
+        assert_eq!(memory[8].convert_to_number(), 2.3);
+        assert_eq!(memory[9].convert_to_number(), 2.3);
+        assert_eq!(memory[10].convert_to_number(), 0.0);
+        assert_eq!(memory[11].convert_to_number(), 0.0);
+        assert_eq!(memory[12].convert_to_number(), f64::INFINITY);
+        assert_eq!(memory[13].convert_to_number(), f64::INFINITY);
+
         /*
-        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpRound(2.3.into()).into()),
-        ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpRound(2.5.into()).into()),
-        ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpRound(2.7.into()).into()),
-        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpRound(3.0.into()).into()),
-        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpRound((-2.3).into()).into()),
-        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpRound((-2.5).into()).into()),
-        ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpRound((-2.7).into()).into()),
-        ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpRound((-3.0).into()).into()),
+        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMAbs(2.3.into()).into()),
+        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMAbs((-2.3).into()).into()),
+        ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMAbs(0.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMAbs((-0.0).into()).into()),
+        ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMAbs(f64::INFINITY.into()).into()),
+        ScratchBlock::VarSet(
+            Ptr(13),
+            ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
+        ),
         */
     }
 }
