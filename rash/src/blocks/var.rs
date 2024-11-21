@@ -1,5 +1,4 @@
 use cranelift::prelude::*;
-use isa::CallConv;
 use types::I64;
 
 use crate::{
@@ -9,21 +8,13 @@ use crate::{
     input_primitives::{Input, Ptr, ReturnValue},
 };
 
+use super::call_function;
+
 pub fn read(compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ReturnValue {
     match compiler.variable_type_data.get(&ptr) {
         Some(VarType::Number) => ReturnValue::Num(compiler.cache.load_f64(ptr, builder)),
         Some(VarType::Bool) => ReturnValue::Bool(compiler.cache.load_bool(ptr, builder)),
         _ => {
-            let func = compiler
-                .constants
-                .get_int(callbacks::var_read as usize as i64, builder);
-            let sig = builder.import_signature({
-                let mut sig = Signature::new(CallConv::SystemV);
-                sig.params.push(AbiParam::new(I64));
-                sig.params.push(AbiParam::new(I64));
-                sig
-            });
-
             let mem_ptr = compiler.cache.get_ptr(ptr, builder);
             let output_stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
                 StackSlotKind::ExplicitSlot,
@@ -31,9 +22,15 @@ pub fn read(compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>, ptr: Ptr
                 8,
             ));
             let output_stack_ptr = builder.ins().stack_addr(I64, output_stack_slot, 0);
-            builder
-                .ins()
-                .call_indirect(sig, func, &[mem_ptr, output_stack_ptr]);
+
+            call_function(
+                compiler,
+                builder,
+                callbacks::var_read as usize,
+                &[I64, I64],
+                &[],
+                &[mem_ptr, output_stack_ptr],
+            );
             ReturnValue::ObjectPointer(output_stack_ptr, output_stack_slot)
         }
     }

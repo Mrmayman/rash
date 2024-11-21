@@ -9,6 +9,8 @@ use crate::{
     input_primitives::{Input, ReturnValue},
 };
 
+use super::call_function;
+
 pub fn str_join(
     compiler: &mut Compiler,
     a: &Input,
@@ -28,24 +30,17 @@ pub fn str_join(
     let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
     // Call join_string function
-    let func = compiler
-        .constants
-        .get_int(callbacks::op_str_join as usize as i64, builder);
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig
-    });
     let a_is_const = compiler.constants.get_int(i64::from(a_is_const), builder);
     let b_is_const = compiler.constants.get_int(i64::from(b_is_const), builder);
-    builder
-        .ins()
-        .call_indirect(sig, func, &[a, b, stack_ptr, a_is_const, b_is_const]);
 
+    call_function(
+        compiler,
+        builder,
+        callbacks::op_str_join as usize,
+        &[I64, I64, I64, I64, I64],
+        &[],
+        &[a, b, stack_ptr, a_is_const, b_is_const],
+    );
     // Read resulting string
     let id = compiler.constants.get_int(ID_STRING, builder);
     let i1 = builder.ins().stack_load(I64, stack_slot, 0);
@@ -77,17 +72,7 @@ pub fn modulo(
 
 /// Calls the rust [`f64::floor`] function.
 fn floor_call(n: Value, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
-    let func = compiler
-        .constants
-        .get_int(f64::floor as usize as i64, builder);
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(F64));
-        sig.returns.push(AbiParam::new(F64));
-        sig
-    });
-
-    let ins = builder.ins().call_indirect(sig, func, &[n]);
+    let ins = call_function(compiler, builder, f64::floor as usize, &[F64], &[F64], &[n]);
     builder.inst_results(ins)[0]
 }
 
@@ -159,18 +144,6 @@ pub fn str_letter(
     let (string, is_const) = string.get_string(compiler, builder);
     let letter = letter.get_number(compiler, builder);
 
-    let func = compiler
-        .constants
-        .get_int(callbacks::op_str_letter as usize as i64, builder);
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(F64));
-        sig.params.push(AbiParam::new(I64));
-        sig
-    });
-
     let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
         StackSlotKind::ExplicitSlot,
         3 * std::mem::size_of::<i64>() as u32,
@@ -179,9 +152,14 @@ pub fn str_letter(
     let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
     let is_const = compiler.constants.get_int(i64::from(is_const), builder);
-    builder
-        .ins()
-        .call_indirect(sig, func, &[string, is_const, letter, stack_ptr]);
+    call_function(
+        compiler,
+        builder,
+        callbacks::op_str_letter as usize,
+        &[I64, I64, F64, I64],
+        &[],
+        &[string, is_const, letter, stack_ptr],
+    );
 
     let id = compiler.constants.get_int(ID_STRING, builder);
     let i1 = builder.ins().stack_load(I64, stack_slot, 0);
@@ -206,24 +184,27 @@ pub fn str_contains(
         .constants
         .get_int(i64::from(pattern_is_const), builder);
 
-    let func = compiler
-        .constants
-        .get_int(callbacks::op_str_contains as usize as i64, builder);
-    let sig = builder.import_signature({
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.params.push(AbiParam::new(I64));
-        sig.returns.push(AbiParam::new(I64));
-        sig
-    });
-
-    let ins = builder.ins().call_indirect(
-        sig,
-        func,
+    let ins = call_function(
+        compiler,
+        builder,
+        callbacks::op_str_contains as usize,
+        &[I64, I64, I64, I64],
+        &[I64],
         &[string, string_is_const, pattern, pattern_is_const],
     );
 
     builder.inst_results(ins)[0]
+}
+
+pub fn round(compiler: &mut Compiler, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+    let num = num.get_number(compiler, builder);
+    let inst = call_function(
+        compiler,
+        builder,
+        callbacks::op_round as usize,
+        &[F64],
+        &[F64],
+        &[num],
+    );
+    builder.inst_results(inst)[0]
 }

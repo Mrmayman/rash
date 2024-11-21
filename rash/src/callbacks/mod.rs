@@ -8,6 +8,15 @@ use rand::Rng;
 
 pub mod types;
 
+pub extern "C" fn op_round(value: f64) -> f64 {
+    // If number ends with .5 round up (Scratch behaviour).
+    if (value - value.trunc()).abs() == 0.5 {
+        value.ceil()
+    } else {
+        value.round()
+    }
+}
+
 pub extern "C" fn op_str_contains(
     string: *mut String,
     string_is_const: i64,

@@ -568,6 +568,21 @@ pub fn bool_ops() -> Vec<ScratchBlock> {
 }
 
 #[allow(unused)]
+pub fn math_misc() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpRound(2.3.into()).into()),
+        ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpRound(2.5.into()).into()),
+        ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpRound(2.7.into()).into()),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpRound(3.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpRound((-2.3).into()).into()),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpRound((-2.5).into()).into()),
+        ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpRound((-2.7).into()).into()),
+        ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpRound((-3.0).into()).into()),
+    ]
+}
+
+#[allow(unused)]
 pub fn math_modulo() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
@@ -963,5 +978,29 @@ mod tests {
         assert_eq!(memory[11].convert_to_number(), -1.0);
         assert_eq!(memory[12].convert_to_number(), 1e10);
         assert_eq!(memory[13].convert_to_number(), -1e10);
+    }
+
+    #[test]
+    pub fn b_math_misc() {
+        let memory = run_code(math_misc());
+        assert_eq!(memory[0].convert_to_number(), 2.0);
+        assert_eq!(memory[1].convert_to_number(), 3.0);
+        assert_eq!(memory[2].convert_to_number(), 3.0);
+        assert_eq!(memory[3].convert_to_number(), 3.0);
+        assert_eq!(memory[4].convert_to_number(), -2.0);
+        assert_eq!(memory[5].convert_to_number(), -2.0);
+        assert_eq!(memory[6].convert_to_number(), -3.0);
+        assert_eq!(memory[7].convert_to_number(), -3.0);
+
+        /*
+        ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpRound(2.3.into()).into()),
+        ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpRound(2.5.into()).into()),
+        ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpRound(2.7.into()).into()),
+        ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpRound(3.0.into()).into()),
+        ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpRound((-2.3).into()).into()),
+        ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpRound((-2.5).into()).into()),
+        ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpRound((-2.7).into()).into()),
+        ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpRound((-3.0).into()).into()),
+        */
     }
 }

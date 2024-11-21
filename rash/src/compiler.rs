@@ -33,6 +33,7 @@ pub enum ScratchBlock {
     OpSub(Input, Input),
     OpMul(Input, Input),
     OpDiv(Input, Input),
+    OpRound(Input),
     OpStrJoin(Input, Input),
     OpMod(Input, Input),
     OpStrLen(Input),
@@ -86,6 +87,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMod(_, _)
             | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpMFloor(_)
+            | ScratchBlock::OpRound(_)
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VarTypeChecked::String)
@@ -180,6 +182,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpStrLetterOf(_, _)
             | ScratchBlock::OpStrContains(_, _)
+            | ScratchBlock::OpRound(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -420,6 +423,9 @@ impl Compiler {
                 return Some(ReturnValue::Bool(blocks::op::str_contains(
                     self, string, pattern, builder,
                 )))
+            }
+            ScratchBlock::OpRound(num) => {
+                return Some(ReturnValue::Num(blocks::op::round(self, num, builder)))
             }
         }
         None
