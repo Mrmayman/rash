@@ -3,6 +3,8 @@
 //! These functions are called by JIT code to perform
 //! operations that are not possible in JIT code.
 
+use core::f64;
+
 use crate::data_types::ScratchObject;
 use rand::Rng;
 
@@ -11,6 +13,20 @@ pub mod types;
 pub extern "C" fn op_sin(value: f64) -> f64 {
     let value = value.to_radians();
     value.sin()
+}
+
+pub extern "C" fn op_cos(value: f64) -> f64 {
+    let value = value.to_radians();
+    value.cos()
+}
+
+pub extern "C" fn op_tan(value: f64) -> f64 {
+    if (value != 0.0) && (value % 90.0 == 0.0) {
+        f64::INFINITY.copysign(value)
+    } else {
+        let value = value.to_radians();
+        value.tan()
+    }
 }
 
 pub extern "C" fn op_round(value: f64) -> f64 {

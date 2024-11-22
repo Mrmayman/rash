@@ -243,6 +243,8 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::OpMAbs(_)
         | ScratchBlock::OpMSqrt(_)
         | ScratchBlock::OpMSin(_)
+        | ScratchBlock::OpMCos(_)
+        | ScratchBlock::OpMTan(_)
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

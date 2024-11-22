@@ -707,6 +707,24 @@ pub fn math_trig() -> Vec<ScratchBlock> {
         ScratchBlock::OpMSin((-60.0).into()).into(),
         ScratchBlock::OpMSin((-90.0).into()).into(),
         ScratchBlock::OpMSin((-100.0).into()).into(),
+        ScratchBlock::OpMCos(0.0.into()).into(),
+        ScratchBlock::OpMCos(30.0.into()).into(),
+        ScratchBlock::OpMCos(60.0.into()).into(),
+        ScratchBlock::OpMCos(90.0.into()).into(),
+        ScratchBlock::OpMCos(100.0.into()).into(),
+        ScratchBlock::OpMCos((-30.0).into()).into(),
+        ScratchBlock::OpMCos((-60.0).into()).into(),
+        ScratchBlock::OpMCos((-90.0).into()).into(),
+        ScratchBlock::OpMCos((-100.0).into()).into(),
+        ScratchBlock::OpMTan(0.0.into()).into(),
+        ScratchBlock::OpMTan(30.0.into()).into(),
+        ScratchBlock::OpMTan(60.0.into()).into(),
+        ScratchBlock::OpMTan(90.0.into()).into(),
+        ScratchBlock::OpMTan(100.0.into()).into(),
+        ScratchBlock::OpMTan((-30.0).into()).into(),
+        ScratchBlock::OpMTan((-60.0).into()).into(),
+        ScratchBlock::OpMTan((-90.0).into()).into(),
+        ScratchBlock::OpMTan((-100.0).into()).into(),
     ])
 }
 
@@ -1075,6 +1093,9 @@ mod tests {
     #[test]
     pub fn b_math_trig() {
         let memory = run_code(math_trig());
+
+        // SIN
+
         assert_eq!(memory[0].convert_to_number(), 0.0);
 
         assert!(0.5 - memory[1].convert_to_number() < f64::EPSILON);
@@ -1086,5 +1107,35 @@ mod tests {
         assert!(memory[6].convert_to_number() - 0.8660254038 <= 80000.0 * f64::EPSILON);
         assert_eq!(memory[7].convert_to_number(), -1.0);
         assert!(memory[8].convert_to_number() + 0.984807753 <= 60000.0 * f64::EPSILON);
+
+        // COS
+
+        assert_eq!(memory[9].convert_to_number(), 1.0);
+
+        assert!(0.8660254038 - memory[10].convert_to_number() <= 80000.0 * f64::EPSILON);
+        assert!(0.5 - memory[11].convert_to_number() < f64::EPSILON);
+        assert!(memory[12].convert_to_number() < f64::EPSILON);
+        assert!(memory[13].convert_to_number() + 0.1736481777 < 150000.0 * f64::EPSILON);
+
+        assert!(memory[14].convert_to_number() - 0.8660254038 <= 80000.0 * f64::EPSILON);
+        assert!(memory[15].convert_to_number() - 0.5 < f64::EPSILON);
+        assert!(memory[16].convert_to_number() < f64::EPSILON);
+        assert!(memory[17].convert_to_number() + 0.1736481777 < 150000.0 * f64::EPSILON);
+
+        // TAN
+
+        assert_eq!(memory[18].convert_to_number(), 0.0);
+
+        assert!((memory[19].convert_to_number() - 0.5773502692).abs() < 46722.0 * f64::EPSILON);
+        assert!((memory[20].convert_to_number() - 1.7320508076).abs() < 140168.0 * f64::EPSILON);
+        assert!(memory[21].convert_to_number().is_infinite());
+        assert!(memory[21].convert_to_number().is_sign_positive());
+        assert!(memory[22].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
+
+        assert!((memory[23].convert_to_number() + 0.5773502692).abs() < 46722.0 * f64::EPSILON);
+        assert!((memory[24].convert_to_number() + 1.7320508076).abs() < 140168.0 * f64::EPSILON);
+        assert!(memory[25].convert_to_number().is_infinite());
+        assert!(memory[25].convert_to_number().is_sign_negative());
+        assert!(memory[26].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
     }
 }

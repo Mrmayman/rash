@@ -45,6 +45,8 @@ pub enum ScratchBlock {
     OpMAbs(Input),
     OpMSqrt(Input),
     OpMSin(Input),
+    OpMCos(Input),
+    OpMTan(Input),
     OpCmpGreater(Input, Input),
     OpCmpLesser(Input, Input),
     OpRandom(Input, Input),
@@ -95,6 +97,8 @@ impl ScratchBlock {
             | ScratchBlock::OpMAbs(_)
             | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::OpMSin(_)
+            | ScratchBlock::OpMCos(_)
+            | ScratchBlock::OpMTan(_)
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VarTypeChecked::String)
@@ -192,6 +196,8 @@ impl ScratchBlock {
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::OpRound(_)
             | ScratchBlock::OpMSin(_)
+            | ScratchBlock::OpMCos(_)
+            | ScratchBlock::OpMTan(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -451,6 +457,20 @@ impl Compiler {
                 let num = num.get_number(self, builder);
                 let inst =
                     self.call_function(builder, callbacks::op_sin as usize, &[F64], &[F64], &[num]);
+                let result = builder.inst_results(inst)[0];
+                return Some(ReturnValue::Num(result));
+            }
+            ScratchBlock::OpMCos(num) => {
+                let num = num.get_number(self, builder);
+                let inst =
+                    self.call_function(builder, callbacks::op_cos as usize, &[F64], &[F64], &[num]);
+                let result = builder.inst_results(inst)[0];
+                return Some(ReturnValue::Num(result));
+            }
+            ScratchBlock::OpMTan(num) => {
+                let num = num.get_number(self, builder);
+                let inst =
+                    self.call_function(builder, callbacks::op_tan as usize, &[F64], &[F64], &[num]);
                 let result = builder.inst_results(inst)[0];
                 return Some(ReturnValue::Num(result));
             }
