@@ -74,7 +74,7 @@ pub fn update_type_data_for_block(
     code: &[ScratchBlock],
 ) {
     variable_type_data.clear();
-    for var in (0..compiler.memory_len).map(Ptr) {
+    for var in (0..compiler.memory.len()).map(Ptr) {
         if let Some(var_type) = code
             .iter()
             .filter_map(|block| block.affects_var(var, variable_type_data))

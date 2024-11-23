@@ -8,7 +8,7 @@ pub mod control;
 pub mod op;
 pub mod var;
 
-impl Compiler {
+impl<'a> Compiler<'a> {
     pub fn call_function(
         &mut self,
         builder: &mut FunctionBuilder<'_>,

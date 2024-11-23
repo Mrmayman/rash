@@ -34,7 +34,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     builder.append_block_params_for_function_params(code_block);
     builder.switch_to_block(code_block);
 
-    let mut compiler = Compiler::new(code_block, &mut builder, program, memory.len());
+    let mut compiler = Compiler::new(code_block, &mut builder, program, memory);
     compiler
         .cache
         .init(&mut builder, memory, &mut compiler.constants);

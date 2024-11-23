@@ -6,6 +6,16 @@ use crate::{
 mod utils;
 
 #[allow(unused)]
+pub fn screen_refresh_test() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), 1.0.into()),
+        ScratchBlock::ScreenRefresh,
+        ScratchBlock::VarSet(Ptr(1), 1.0.into()),
+    ]
+}
+
+#[allow(unused)]
 pub fn repeated_sum() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,

@@ -235,7 +235,7 @@ pub fn compile(/*&self*/) {
 
     // let code_sprites = self.get_block_code();
     let code_sprites = vec![CodeSprite {
-        scripts: vec![block_test::pi()],
+        scripts: vec![block_test::screen_refresh_test()],
     }];
     for sprite in &code_sprites {
         for script in &sprite.scripts {
@@ -264,7 +264,7 @@ pub fn compile(/*&self*/) {
 
             let lock = MEMORY.lock().unwrap();
 
-            let mut compiler = Compiler::new(code_block, &mut builder, script, lock.len());
+            let mut compiler = Compiler::new(code_block, &mut builder, script, &lock);
 
             compiler
                 .cache
@@ -283,7 +283,6 @@ pub fn compile(/*&self*/) {
             let return_value = compiler.constants.get_int(-1, &mut builder);
             builder.ins().return_(&[return_value]);
 
-            println!("{:?}, {:?}", compiler.break_points, code_block);
             for (i, point) in compiler.break_points.iter().enumerate() {
                 builder.switch_to_block(jmp1_block);
                 let param = builder.block_params(jmp1_block)[0];
@@ -332,7 +331,10 @@ pub fn compile(/*&self*/) {
                     std::mem::transmute(buffer.as_ptr());
 
                 let instant = std::time::Instant::now();
-                println!("Returned: {}", code_fn(0));
+                let mut result = 0;
+                while result != -1 {
+                    result = code_fn(result);
+                }
                 println!("Time: {:?}", instant.elapsed());
                 // println!("Types: {:?}", compiler.variable_type_data);
                 // println!("Memory ptr {:X}", lock.as_ptr() as usize);
@@ -341,31 +343,33 @@ pub fn compile(/*&self*/) {
     }
 }
 
-pub struct Compiler {
+pub struct Compiler<'compiler> {
     pub variable_type_data: HashMap<Ptr, VarType>,
     pub constants: ConstantMap,
     pub code_block: Block,
     pub cache: StackCache,
-    pub memory_len: usize,
     pub loop_stack: Vec<Value>,
+    pub break_counter: usize,
     pub break_points: Vec<Block>,
+    pub memory: &'compiler [ScratchObject],
 }
 
-impl Compiler {
+impl<'a> Compiler<'a> {
     pub fn new(
         block: Block,
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
-        memory_len: usize,
+        memory: &'a [ScratchObject],
     ) -> Self {
         Self {
             variable_type_data: HashMap::new(),
             constants: ConstantMap::new(),
             code_block: block,
             cache: StackCache::new(builder, code),
-            memory_len,
             loop_stack: Vec::new(),
             break_points: Vec::new(),
+            break_counter: 0,
+            memory,
         }
     }
 
@@ -508,7 +512,16 @@ impl Compiler {
                 return Some(ReturnValue::Num(result));
             }
             ScratchBlock::ScreenRefresh => {
-                // builder.ins().return_(&[]);
+                self.break_counter += 1;
+                self.cache.save(builder, &mut self.constants, self.memory);
+                let break_counter = self.constants.get_int(self.break_counter as i64, builder);
+                builder.ins().return_(&[break_counter]);
+                // builder.seal_block(self.code_block);
+                self.constants.clear();
+                self.code_block = builder.create_block();
+                self.break_points.push(self.code_block);
+                builder.switch_to_block(self.code_block);
+                self.cache.init(builder, self.memory, &mut self.constants);
             }
         }
         None
