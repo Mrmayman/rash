@@ -1,14 +1,12 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use codegen::{
-    control::ControlPlane,
-    ir::{Function, UserFuncName},
-};
+use codegen::control::ControlPlane;
+use codegen::ir::{Function, UserFuncName};
 use cranelift::prelude::*;
 use isa::CallConv;
 use lazy_static::lazy_static;
 use target_lexicon::Triple;
-use types::F64;
+use types::{F64, I64};
 
 use crate::{
     block_test, blocks, callbacks,
@@ -56,6 +54,7 @@ pub enum ScratchBlock {
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
     ControlRepeat(Input, Vec<ScratchBlock>),
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
+    ScreenRefresh,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -115,6 +114,7 @@ impl ScratchBlock {
             | ScratchBlock::ControlIf(_, _)
             | ScratchBlock::ControlIfElse(_, _, _)
             | ScratchBlock::ControlRepeat(_, _)
+            | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlRepeatUntil(_, _) => None,
         }
     }
@@ -198,6 +198,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
+            | ScratchBlock::ScreenRefresh
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -238,15 +239,27 @@ pub fn compile(/*&self*/) {
     }];
     for sprite in &code_sprites {
         for script in &sprite.scripts {
-            let sig = Signature::new(CallConv::SystemV);
+            let mut sig = Signature::new(CallConv::SystemV);
+            sig.params.push(AbiParam::new(I64));
+            sig.returns.push(AbiParam::new(I64));
             let mut func = Function::with_name_signature(UserFuncName::default(), sig);
 
             let mut func_ctx = FunctionBuilderContext::new();
-            let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
+            // let func_ptr: *mut Function = &mut func;
+            // let func_ptr = unsafe { &mut *func_ptr };
+            let func_ptr = &mut func;
+            let mut builder = FunctionBuilder::new(func_ptr, &mut func_ctx);
+
+            let mut jmp1_block = builder.create_block();
+            builder.append_block_param(jmp1_block, I64);
+
+            let jmp2_block = builder.create_block();
+            builder.append_block_params_for_function_params(jmp2_block);
+            builder.switch_to_block(jmp2_block);
+            let param = builder.block_params(jmp2_block)[0];
+            builder.ins().jump(jmp1_block, &[param]);
 
             let code_block = builder.create_block();
-
-            builder.append_block_params_for_function_params(code_block);
             builder.switch_to_block(code_block);
 
             let lock = MEMORY.lock().unwrap();
@@ -257,6 +270,8 @@ pub fn compile(/*&self*/) {
                 .cache
                 .init(&mut builder, &lock, &mut compiler.constants);
 
+            compiler.break_points.push(code_block);
+
             for block in script {
                 compiler.compile_block(block, &mut builder);
             }
@@ -265,11 +280,24 @@ pub fn compile(/*&self*/) {
                 .cache
                 .save(&mut builder, &mut compiler.constants, &lock);
 
-            // builder.seal_block(compiler.code_block);
-            builder.seal_all_blocks();
+            let return_value = compiler.constants.get_int(-1, &mut builder);
+            builder.ins().return_(&[return_value]);
 
-            let ins = builder.ins();
-            ins.return_(&[]);
+            println!("{:?}, {:?}", compiler.break_points, code_block);
+            for (i, point) in compiler.break_points.iter().enumerate() {
+                builder.switch_to_block(jmp1_block);
+                let param = builder.block_params(jmp1_block)[0];
+                let cmp = builder.ins().icmp_imm(IntCC::Equal, param, i as i64);
+                jmp1_block = builder.create_block();
+                builder.append_block_param(jmp1_block, I64);
+                builder.ins().brif(cmp, *point, &[], jmp1_block, &[param]);
+            }
+
+            builder.switch_to_block(jmp1_block);
+            let return_value = builder.ins().iconst(I64, -1);
+            builder.ins().return_(&[return_value]);
+
+            builder.seal_all_blocks();
 
             builder.finalize();
 
@@ -300,13 +328,14 @@ pub fn compile(/*&self*/) {
             let buffer = buffer.make_exec().unwrap();
 
             unsafe {
-                let code_fn: unsafe extern "sysv64" fn() = std::mem::transmute(buffer.as_ptr());
+                let code_fn: unsafe extern "sysv64" fn(i64) -> i64 =
+                    std::mem::transmute(buffer.as_ptr());
 
                 let instant = std::time::Instant::now();
-                code_fn();
+                println!("Returned: {}", code_fn(0));
                 println!("Time: {:?}", instant.elapsed());
-                println!("Types: {:?}", compiler.variable_type_data);
-                println!("Memory ptr {:X}", lock.as_ptr() as usize);
+                // println!("Types: {:?}", compiler.variable_type_data);
+                // println!("Memory ptr {:X}", lock.as_ptr() as usize);
             }
         }
     }
@@ -318,6 +347,8 @@ pub struct Compiler {
     pub code_block: Block,
     pub cache: StackCache,
     pub memory_len: usize,
+    pub loop_stack: Vec<Value>,
+    pub break_points: Vec<Block>,
 }
 
 impl Compiler {
@@ -333,6 +364,8 @@ impl Compiler {
             code_block: block,
             cache: StackCache::new(builder, code),
             memory_len,
+            loop_stack: Vec::new(),
+            break_points: Vec::new(),
         }
     }
 
@@ -473,6 +506,9 @@ impl Compiler {
                     self.call_function(builder, callbacks::op_tan as usize, &[F64], &[F64], &[num]);
                 let result = builder.inst_results(inst)[0];
                 return Some(ReturnValue::Num(result));
+            }
+            ScratchBlock::ScreenRefresh => {
+                // builder.ins().return_(&[]);
             }
         }
         None

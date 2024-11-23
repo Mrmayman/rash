@@ -11,12 +11,24 @@ use crate::{
     input_primitives::Ptr,
 };
 
+/// A local cache of accessed variables.
+///
+/// The interpreter by default stores values on the heap,
+/// but this is slow. By having a local stack cache that
+/// syncs with the real variable storage, we can get
+/// a noticeable speedup (`6.8 ms -> 6.3 ms` in pi benchmark)
 pub struct StackCache {
     slot: StackSlot,
     variable_offsets: HashMap<Ptr, usize>,
 }
 
 impl StackCache {
+    /// Creates a new [`StackCache`], containing variables
+    /// accessed by the code in the `code` argument.
+    ///
+    /// # Warning
+    /// Call [`StackCache::init()`] before generating the
+    /// code, or you will get memory corruption and crashes.
     pub fn new(builder: &mut FunctionBuilder, code: &[ScratchBlock]) -> Self {
         let mut vars = HashSet::new();
         for block in code {
@@ -245,6 +257,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::OpMSin(_)
         | ScratchBlock::OpMCos(_)
         | ScratchBlock::OpMTan(_)
+        | ScratchBlock::ScreenRefresh
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

@@ -26,7 +26,7 @@ pub fn repeat(
     let counter = compiler.constants.get_int(0, builder);
     compiler.constants.clear();
     builder.ins().jump(loop_block, &[counter]);
-    builder.seal_block(compiler.code_block);
+    // builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(loop_block);
     // (counter < number)
@@ -51,15 +51,17 @@ pub fn repeat(
 
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
 
+    compiler.loop_stack.push(incremented);
     for block in vec {
         compiler.compile_block(block, builder);
     }
+    let incremented = compiler.loop_stack.pop().unwrap();
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
     compiler.code_block = temp_block;
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &inside_types);
     builder.ins().jump(loop_block, &[incremented]);
-    // builder.seal_block(body_block);
-    builder.seal_block(loop_block);
+    // // builder.seal_block(body_block);
+    // builder.seal_block(loop_block);
 
     builder.switch_to_block(end_block);
     compiler.constants.clear();
@@ -108,7 +110,7 @@ pub fn if_statement(
 
     compiler.constants.clear();
     builder.ins().brif(input, inside_block, &[], end_block, &[]);
-    builder.seal_block(compiler.code_block);
+    // builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(inside_block);
 
@@ -178,7 +180,7 @@ pub fn if_else(
         .ins()
         .brif(input, inside_block, &[], else_block, &[]);
     compiler.constants.clear();
-    builder.seal_block(compiler.code_block);
+    // builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(inside_block);
 
@@ -195,7 +197,7 @@ pub fn if_else(
     compiler.code_block = current_block;
     let common_then_entries = common_entries(&compiler.variable_type_data, &old_types);
     builder.ins().jump(end_block, &[]);
-    builder.seal_block(inside_block);
+    // builder.seal_block(inside_block);
 
     builder.switch_to_block(else_block);
     compiler.constants.clear();
@@ -212,7 +214,7 @@ pub fn if_else(
         common_entries(&common_then_entries, &compiler.variable_type_data);
 
     builder.ins().jump(end_block, &[]);
-    builder.seal_block(else_block);
+    // builder.seal_block(else_block);
 
     builder.switch_to_block(end_block);
     compiler.constants.clear();
@@ -232,7 +234,7 @@ pub fn repeat_until(
 
     builder.ins().jump(loop_block, &[]);
     compiler.constants.clear();
-    builder.seal_block(compiler.code_block);
+    // builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(loop_block);
     let condition = input.get_bool(compiler, builder);
@@ -256,7 +258,7 @@ pub fn repeat_until(
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &old_types);
 
     builder.ins().jump(loop_block, &[]);
-    builder.seal_block(loop_block);
+    // builder.seal_block(loop_block);
 
     builder.switch_to_block(end_block);
     compiler.constants.clear();
