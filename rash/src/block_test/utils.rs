@@ -7,6 +7,7 @@ use codegen::{
 use cranelift::prelude::*;
 use isa::CallConv;
 use target_lexicon::Triple;
+use types::I64;
 
 use crate::{
     compiler::{Compiler, ScratchBlock, MEMORY},
@@ -23,7 +24,8 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
     };
 
-    let sig = Signature::new(CallConv::SystemV);
+    let mut sig = Signature::new(CallConv::SystemV);
+    sig.params.push(AbiParam::new(I64));
     let mut func = Function::with_name_signature(UserFuncName::default(), sig);
 
     let mut func_ctx = FunctionBuilderContext::new();
@@ -33,8 +35,8 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     builder.append_block_params_for_function_params(code_block);
     builder.switch_to_block(code_block);
-
-    let mut compiler = Compiler::new(code_block, &mut builder, program, memory);
+    let vec_ptr = builder.block_params(code_block)[0];
+    let mut compiler = Compiler::new(code_block, &mut builder, program, memory, vec_ptr);
     compiler
         .cache
         .init(&mut builder, memory, &mut compiler.constants);
@@ -81,8 +83,10 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     let buffer = buffer.make_exec().unwrap();
 
     unsafe {
-        let code_fn: unsafe extern "sysv64" fn() = std::mem::transmute(buffer.as_ptr());
-        code_fn();
+        let code_fn: unsafe extern "sysv64" fn(*mut Vec<i64>) =
+            std::mem::transmute(buffer.as_ptr());
+        let mut stack = Vec::new();
+        code_fn(&mut stack);
     }
 }
 

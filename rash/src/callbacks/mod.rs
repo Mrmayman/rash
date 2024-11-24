@@ -8,6 +8,7 @@ use core::f64;
 use crate::data_types::ScratchObject;
 use rand::Rng;
 
+pub mod repeat_stack;
 pub mod types;
 
 pub extern "C" fn op_sin(value: f64) -> f64 {

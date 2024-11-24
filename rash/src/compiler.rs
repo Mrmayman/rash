@@ -235,11 +235,12 @@ pub fn compile(/*&self*/) {
 
     // let code_sprites = self.get_block_code();
     let code_sprites = vec![CodeSprite {
-        scripts: vec![block_test::screen_refresh_test()],
+        scripts: vec![block_test::pi()],
     }];
     for sprite in &code_sprites {
         for script in &sprite.scripts {
             let mut sig = Signature::new(CallConv::SystemV);
+            sig.params.push(AbiParam::new(I64));
             sig.params.push(AbiParam::new(I64));
             sig.returns.push(AbiParam::new(I64));
             let mut func = Function::with_name_signature(UserFuncName::default(), sig);
@@ -257,6 +258,7 @@ pub fn compile(/*&self*/) {
             builder.append_block_params_for_function_params(jmp2_block);
             builder.switch_to_block(jmp2_block);
             let param = builder.block_params(jmp2_block)[0];
+            let repeat_stack_ptr = builder.block_params(jmp2_block)[1];
             builder.ins().jump(jmp1_block, &[param]);
 
             let code_block = builder.create_block();
@@ -264,7 +266,8 @@ pub fn compile(/*&self*/) {
 
             let lock = MEMORY.lock().unwrap();
 
-            let mut compiler = Compiler::new(code_block, &mut builder, script, &lock);
+            let mut compiler =
+                Compiler::new(code_block, &mut builder, script, &lock, repeat_stack_ptr);
 
             compiler
                 .cache
@@ -304,7 +307,8 @@ pub fn compile(/*&self*/) {
 
             let mut ctx = codegen::Context::for_function(func);
             let mut plane = ControlPlane::default();
-            ctx.optimize(isa.as_ref(), &mut plane).unwrap();
+            let isa = isa.as_ref();
+            ctx.optimize(isa, &mut plane).unwrap();
 
             let code = ctx.compile(&*isa, &mut plane).unwrap();
 
@@ -327,13 +331,16 @@ pub fn compile(/*&self*/) {
             let buffer = buffer.make_exec().unwrap();
 
             unsafe {
-                let code_fn: unsafe extern "sysv64" fn(i64) -> i64 =
+                let code_fn: unsafe extern "sysv64" fn(i64, *mut Vec<i64>) -> i64 =
                     std::mem::transmute(buffer.as_ptr());
 
                 let instant = std::time::Instant::now();
+                let mut stack: Vec<i64> = Vec::new();
+
                 let mut result = 0;
                 while result != -1 {
-                    result = code_fn(result);
+                    result = code_fn(result, &mut stack);
+                    println!("Iteration");
                 }
                 println!("Time: {:?}", instant.elapsed());
                 // println!("Types: {:?}", compiler.variable_type_data);
@@ -348,10 +355,10 @@ pub struct Compiler<'compiler> {
     pub constants: ConstantMap,
     pub code_block: Block,
     pub cache: StackCache,
-    pub loop_stack: Vec<Value>,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
+    pub vec_ptr: Value,
 }
 
 impl<'a> Compiler<'a> {
@@ -360,16 +367,17 @@ impl<'a> Compiler<'a> {
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
+        vec_ptr: Value,
     ) -> Self {
         Self {
             variable_type_data: HashMap::new(),
             constants: ConstantMap::new(),
             code_block: block,
             cache: StackCache::new(builder, code),
-            loop_stack: Vec::new(),
             break_points: Vec::new(),
             break_counter: 0,
             memory,
+            vec_ptr,
         }
     }
 
@@ -515,12 +523,13 @@ impl<'a> Compiler<'a> {
                 self.break_counter += 1;
                 self.cache.save(builder, &mut self.constants, self.memory);
                 let break_counter = self.constants.get_int(self.break_counter as i64, builder);
+
                 builder.ins().return_(&[break_counter]);
-                // builder.seal_block(self.code_block);
                 self.constants.clear();
                 self.code_block = builder.create_block();
                 self.break_points.push(self.code_block);
                 builder.switch_to_block(self.code_block);
+
                 self.cache.init(builder, self.memory, &mut self.constants);
             }
         }

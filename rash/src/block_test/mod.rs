@@ -6,12 +6,45 @@ use crate::{
 mod utils;
 
 #[allow(unused)]
-pub fn screen_refresh_test() -> Vec<ScratchBlock> {
+pub fn screen_refresh() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), 1.0.into()),
         ScratchBlock::ScreenRefresh,
         ScratchBlock::VarSet(Ptr(1), 1.0.into()),
+    ]
+}
+
+#[allow(unused)]
+pub fn screen_refresh_repeat() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), 1.0.into()),
+        ScratchBlock::ControlRepeat(
+            5.0.into(),
+            vec![
+                ScratchBlock::VarChange(Ptr(1), 1.0.into()),
+                ScratchBlock::ScreenRefresh,
+            ],
+        ),
+    ]
+}
+
+#[allow(unused)]
+pub fn screen_refresh_nested_repeat() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::WhenFlagClicked,
+        ScratchBlock::VarSet(Ptr(0), 1.0.into()),
+        ScratchBlock::ControlRepeat(
+            5.0.into(),
+            vec![ScratchBlock::ControlRepeat(
+                5.0.into(),
+                vec![
+                    ScratchBlock::VarChange(Ptr(1), 1.0.into()),
+                    ScratchBlock::ScreenRefresh,
+                ],
+            )],
+        ),
     ]
 }
 

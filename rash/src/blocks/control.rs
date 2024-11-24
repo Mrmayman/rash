@@ -4,6 +4,7 @@ use cranelift::prelude::*;
 use types::I64;
 
 use crate::{
+    callbacks,
     compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
     input_primitives::{Input, Ptr},
 };
@@ -16,6 +17,7 @@ pub fn repeat(
 ) {
     let loop_block = builder.create_block();
     builder.append_block_param(loop_block, I64);
+    builder.append_block_param(loop_block, I64);
     let body_block = builder.create_block();
     builder.append_block_param(body_block, I64);
     let end_block = builder.create_block();
@@ -24,13 +26,13 @@ pub fn repeat(
     let number = builder.ins().fcvt_to_sint(I64, number);
 
     let counter = compiler.constants.get_int(0, builder);
-    compiler.constants.clear();
-    builder.ins().jump(loop_block, &[counter]);
+    builder.ins().jump(loop_block, &[counter, number]);
     // builder.seal_block(compiler.code_block);
 
     builder.switch_to_block(loop_block);
     // (counter < number)
     let counter = builder.block_params(loop_block)[0];
+    let number = builder.block_params(loop_block)[1];
     let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
 
     // if (counter < number) jump to body_block else jump to end_block
@@ -51,21 +53,49 @@ pub fn repeat(
 
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
 
-    compiler.loop_stack.push(incremented);
+    call_stack_push(compiler, builder, incremented);
+    call_stack_push(compiler, builder, number);
+    compiler.constants.clear();
     for block in vec {
         compiler.compile_block(block, builder);
     }
-    let incremented = compiler.loop_stack.pop().unwrap();
+    let number = call_stack_pop(compiler, builder);
+    let incremented = call_stack_pop(compiler, builder);
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
     compiler.code_block = temp_block;
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &inside_types);
-    builder.ins().jump(loop_block, &[incremented]);
+    builder.ins().jump(loop_block, &[incremented, number]);
     // // builder.seal_block(body_block);
     // builder.seal_block(loop_block);
 
     builder.switch_to_block(end_block);
     compiler.constants.clear();
     compiler.code_block = end_block;
+}
+
+fn call_stack_pop(compiler: &mut Compiler<'_>, builder: &mut FunctionBuilder<'_>) -> Value {
+    let inst = compiler.call_function(
+        builder,
+        callbacks::repeat_stack::stack_pop as usize,
+        &[I64],
+        &[I64],
+        &[compiler.vec_ptr],
+    );
+    builder.inst_results(inst)[0]
+}
+
+fn call_stack_push(
+    compiler: &mut Compiler<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    incremented: Value,
+) {
+    compiler.call_function(
+        builder,
+        callbacks::repeat_stack::stack_push as usize,
+        &[I64, I64],
+        &[],
+        &[compiler.vec_ptr, incremented],
+    );
 }
 
 pub fn update_type_data_for_block(
