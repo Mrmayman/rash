@@ -1,15 +1,11 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use codegen::control::ControlPlane;
-use codegen::ir::{Function, UserFuncName};
 use cranelift::prelude::*;
-use isa::CallConv;
 use lazy_static::lazy_static;
-use target_lexicon::Triple;
-use types::{F64, I64};
+use types::F64;
 
 use crate::{
-    block_test, blocks, callbacks,
+    blocks, callbacks,
     constant_set::ConstantMap,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ReturnValue},
@@ -25,8 +21,14 @@ lazy_static! {
 #[derive(Debug)]
 pub enum ScratchBlock {
     WhenFlagClicked,
+    /// Sets a variable to a value.
     VarSet(Ptr, Input),
+    /// Sets a variable to variable + input.
+    ///
+    /// Basically like the `x += a` operation.
     VarChange(Ptr, Input),
+    /// Reads a value from a value and returns it.
+    /// Meant to be used as the input to other blocks.
     VarRead(Ptr),
     OpAdd(Input, Input),
     OpSub(Input, Input),
@@ -52,8 +54,30 @@ pub enum ScratchBlock {
     OpStrContains(Input, Input),
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
+    /// A repeat loop that *doesn't support* screen refresh.
+    /// MUCH faster than [`ScratchBlock::ControlRepeatScreenRefresh`]
+    /// but you can't use [`ScratchBlock::ScreenRefresh`] inside.
     ControlRepeat(Input, Vec<ScratchBlock>),
+    /// A repeat loop that *supports* screen refresh
+    /// (pausing/resuming of code). It is slower than
+    /// [`ScratchBlock::ControlRepeat`] which doesn't
+    /// support screen refresh.
+    ///
+    /// This loop doesn't provide screen refresh by default
+    /// but you can insert [`ScratchBlock::ScreenRefresh`]
+    /// inside it.
+    ControlRepeatScreenRefresh(Input, Vec<ScratchBlock>),
+    /// Repeats until a condition is true.
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
+    /// A block to trigger a screen refresh.
+    ///
+    /// Similar to coroutines in other languages,
+    /// screen refresh allows a script to pause and
+    /// resume.
+    ///
+    /// Note: if you use this inside a repeat loop,
+    /// make sure to use
+    /// [`ScratchBlock::ControlRepeatScreenRefresh`]
     ScreenRefresh,
 }
 
@@ -113,6 +137,7 @@ impl ScratchBlock {
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
             | ScratchBlock::ControlIfElse(_, _, _)
+            | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlRepeat(_, _)
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlRepeatUntil(_, _) => None,
@@ -199,6 +224,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::ScreenRefresh
+            | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -214,140 +240,6 @@ pub enum VarType {
     Number,
     Bool,
     String,
-}
-
-pub struct CodeSprite {
-    pub scripts: Vec<Vec<ScratchBlock>>,
-}
-
-pub fn compile(/*&self*/) {
-    let mut builder = settings::builder();
-    builder.set("opt_level", "speed").unwrap();
-    // for setting in builder.iter() {
-    //     println!("{setting:?}");
-    // }
-    let flags = settings::Flags::new(builder);
-
-    let isa = match isa::lookup(Triple::host()) {
-        Err(err) => panic!("Error looking up target: {err}"),
-        Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
-    };
-
-    // let code_sprites = self.get_block_code();
-    let code_sprites = vec![CodeSprite {
-        scripts: vec![block_test::pi()],
-    }];
-    for sprite in &code_sprites {
-        for script in &sprite.scripts {
-            let mut sig = Signature::new(CallConv::SystemV);
-            sig.params.push(AbiParam::new(I64));
-            sig.params.push(AbiParam::new(I64));
-            sig.returns.push(AbiParam::new(I64));
-            let mut func = Function::with_name_signature(UserFuncName::default(), sig);
-
-            let mut func_ctx = FunctionBuilderContext::new();
-            // let func_ptr: *mut Function = &mut func;
-            // let func_ptr = unsafe { &mut *func_ptr };
-            let func_ptr = &mut func;
-            let mut builder = FunctionBuilder::new(func_ptr, &mut func_ctx);
-
-            let mut jmp1_block = builder.create_block();
-            builder.append_block_param(jmp1_block, I64);
-
-            let jmp2_block = builder.create_block();
-            builder.append_block_params_for_function_params(jmp2_block);
-            builder.switch_to_block(jmp2_block);
-            let param = builder.block_params(jmp2_block)[0];
-            let repeat_stack_ptr = builder.block_params(jmp2_block)[1];
-            builder.ins().jump(jmp1_block, &[param]);
-
-            let code_block = builder.create_block();
-            builder.switch_to_block(code_block);
-
-            let lock = MEMORY.lock().unwrap();
-
-            let mut compiler =
-                Compiler::new(code_block, &mut builder, script, &lock, repeat_stack_ptr);
-
-            compiler
-                .cache
-                .init(&mut builder, &lock, &mut compiler.constants);
-
-            compiler.break_points.push(code_block);
-
-            for block in script {
-                compiler.compile_block(block, &mut builder);
-            }
-
-            compiler
-                .cache
-                .save(&mut builder, &mut compiler.constants, &lock);
-
-            let return_value = compiler.constants.get_int(-1, &mut builder);
-            builder.ins().return_(&[return_value]);
-
-            for (i, point) in compiler.break_points.iter().enumerate() {
-                builder.switch_to_block(jmp1_block);
-                let param = builder.block_params(jmp1_block)[0];
-                let cmp = builder.ins().icmp_imm(IntCC::Equal, param, i as i64);
-                jmp1_block = builder.create_block();
-                builder.append_block_param(jmp1_block, I64);
-                builder.ins().brif(cmp, *point, &[], jmp1_block, &[param]);
-            }
-
-            builder.switch_to_block(jmp1_block);
-            let return_value = builder.ins().iconst(I64, -1);
-            builder.ins().return_(&[return_value]);
-
-            builder.seal_all_blocks();
-
-            builder.finalize();
-
-            println!("{}", func.display());
-
-            let mut ctx = codegen::Context::for_function(func);
-            let mut plane = ControlPlane::default();
-            let isa = isa.as_ref();
-            ctx.optimize(isa, &mut plane).unwrap();
-
-            let code = ctx.compile(&*isa, &mut plane).unwrap();
-
-            let mut buffer = memmap2::MmapOptions::new()
-                .len(code.code_buffer().len())
-                .map_anon()
-                .unwrap();
-
-            buffer.copy_from_slice(code.code_buffer());
-
-            // Machine code dump
-            // let ptr = buffer.as_ptr();
-            // let bytes = unsafe { std::slice::from_raw_parts(ptr, code.code_buffer().len()) };
-            // for (_i, byte) in bytes.iter().enumerate() {
-            //     print!("{:#04x} ", byte);
-            // }
-            // println!();
-            // std::fs::write("func.bin", bytes).unwrap();
-
-            let buffer = buffer.make_exec().unwrap();
-
-            unsafe {
-                let code_fn: unsafe extern "sysv64" fn(i64, *mut Vec<i64>) -> i64 =
-                    std::mem::transmute(buffer.as_ptr());
-
-                let instant = std::time::Instant::now();
-                let mut stack: Vec<i64> = Vec::new();
-
-                let mut result = 0;
-                while result != -1 {
-                    result = code_fn(result, &mut stack);
-                    println!("Iteration");
-                }
-                println!("Time: {:?}", instant.elapsed());
-                // println!("Types: {:?}", compiler.variable_type_data);
-                // println!("Memory ptr {:X}", lock.as_ptr() as usize);
-            }
-        }
-    }
 }
 
 pub struct Compiler<'compiler> {
@@ -427,7 +319,10 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Object(obj));
             }
             ScratchBlock::ControlRepeat(input, vec) => {
-                blocks::control::repeat(self, builder, input, vec);
+                blocks::control::repeat(self, builder, input, vec, false);
+            }
+            ScratchBlock::ControlRepeatScreenRefresh(input, vec) => {
+                blocks::control::repeat(self, builder, input, vec, true);
             }
             ScratchBlock::VarChange(ptr, input) => {
                 blocks::var::change(self, input, builder, *ptr);

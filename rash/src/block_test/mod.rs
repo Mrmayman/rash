@@ -35,9 +35,9 @@ pub fn screen_refresh_nested_repeat() -> Vec<ScratchBlock> {
     vec![
         ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), 1.0.into()),
-        ScratchBlock::ControlRepeat(
+        ScratchBlock::ControlRepeatScreenRefresh(
             5.0.into(),
-            vec![ScratchBlock::ControlRepeat(
+            vec![ScratchBlock::ControlRepeatScreenRefresh(
                 5.0.into(),
                 vec![
                     ScratchBlock::VarChange(Ptr(1), 1.0.into()),
@@ -716,8 +716,8 @@ pub fn math_floor() -> Vec<ScratchBlock> {
         ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpMFloor((-1.1).into()).into()),
         ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpMFloor(10.0.into()).into()),
         ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpMFloor((-10.999).into()).into()),
-        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMFloor(123456.789.into()).into()),
-        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMFloor((-123456.789).into()).into()),
+        ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMFloor(123_456.789.into()).into()),
+        ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMFloor((-123_456.789).into()).into()),
         ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMFloor(1e-9.into()).into()),
         ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMFloor((-1e-9).into()).into()),
         ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMFloor(1e10.into()).into()),
@@ -789,7 +789,7 @@ mod tests {
 
     #[test]
     pub fn b_str_ops() {
-        let memory = run_code(str_ops());
+        let memory = run_code(&str_ops());
 
         assert_eq!(memory[4].get_type(), VarType::Number);
 
@@ -816,7 +816,7 @@ mod tests {
 
     #[test]
     pub fn b_pi() {
-        let memory = run_code(pi());
+        let memory = run_code(&pi());
 
         assert_eq!(memory[0].convert_to_number(), -3.1415916535897743);
         assert_eq!(memory[1].convert_to_number(), 2000001.0);
@@ -825,20 +825,20 @@ mod tests {
 
     #[test]
     pub fn b_nested_repeat() {
-        let memory = run_code(nested_repeat());
+        let memory = run_code(&nested_repeat());
         assert_eq!(memory[0].convert_to_string(), "0HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
     }
 
     #[test]
     pub fn b_repeat_until() {
-        let memory = run_code(repeat_until());
+        let memory = run_code(&repeat_until());
         assert_eq!(memory[0].convert_to_number(), 11.0);
         assert_eq!(memory[1].convert_to_number(), 21.0);
     }
 
     #[test]
     pub fn b_if_else_test() {
-        let memory = run_code(if_else_test());
+        let memory = run_code(&if_else_test());
         assert_eq!(memory[0].convert_to_number(), 1.0);
         assert_eq!(memory[1].convert_to_number(), 1.0);
         assert_eq!(memory[2].convert_to_number(), 1.0);
@@ -849,7 +849,7 @@ mod tests {
 
     #[test]
     pub fn b_if_test() {
-        let memory = run_code(if_test());
+        let memory = run_code(&if_test());
         assert_eq!(memory[0].convert_to_number(), 1.0);
         assert_eq!(memory[1].convert_to_number(), 0.0);
         assert_eq!(memory[2].convert_to_number(), 1.0);
@@ -866,13 +866,13 @@ mod tests {
 
     #[test]
     pub fn b_repeated_sum() {
-        let memory = run_code(repeated_sum());
+        let memory = run_code(&repeated_sum());
         assert_eq!(memory[7].convert_to_number(), 200000.0);
     }
 
     #[test]
     pub fn b_repeated_join_string() {
-        let memory = run_code(repeated_join_string());
+        let memory = run_code(&repeated_join_string());
         assert_eq!(
             memory[7].convert_to_string(),
             "hello world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, "
@@ -881,7 +881,7 @@ mod tests {
 
     #[test]
     pub fn b_random() {
-        let memory = run_code(random());
+        let memory = run_code(&random());
 
         assert!(memory[0].convert_to_number() >= 0.0);
         assert!(memory[0].convert_to_number() <= 100.0);
@@ -906,7 +906,7 @@ mod tests {
 
     #[test]
     pub fn b_math_add_test() {
-        let memory = run_code(math_add_test());
+        let memory = run_code(&math_add_test());
         assert_eq!(memory[0].convert_to_number(), 75.0);
         assert_eq!(memory[1].convert_to_number(), -475.0);
         assert_eq!(memory[2].convert_to_number(), -525.0);
@@ -926,7 +926,7 @@ mod tests {
 
     #[test]
     pub fn b_math_sub_test() {
-        let memory = run_code(math_sub_test());
+        let memory = run_code(&math_sub_test());
         assert_eq!(memory[0].convert_to_number(), 25.0);
         assert_eq!(memory[1].convert_to_number(), -525.0);
         assert_eq!(memory[2].convert_to_number(), -475.0);
@@ -947,7 +947,7 @@ mod tests {
 
     #[test]
     pub fn b_math_mul_test() {
-        let memory = run_code(math_mul_test());
+        let memory = run_code(&math_mul_test());
         assert_eq!(memory[0].convert_to_number(), 100.0);
         assert_eq!(memory[1].convert_to_number(), -100.0);
         assert_eq!(memory[2].convert_to_number(), 100.0);
@@ -989,7 +989,7 @@ mod tests {
 
     #[test]
     pub fn b_math_div_test() {
-        let memory = run_code(math_div_test());
+        let memory = run_code(&math_div_test());
         assert_eq!(memory[0].convert_to_number(), 25.0);
         assert_eq!(memory[1].convert_to_number(), -25.0);
         assert_eq!(memory[2].convert_to_number(), 25.0);
@@ -1030,7 +1030,7 @@ mod tests {
 
     #[test]
     pub fn b_bool_ops() {
-        let memory = run_code(bool_ops());
+        let memory = run_code(&bool_ops());
         assert_eq!(memory[0].convert_to_number(), 1.0);
         assert_eq!(memory[1].convert_to_number(), 0.0);
         assert_eq!(memory[2].convert_to_number(), 0.0);
@@ -1047,7 +1047,7 @@ mod tests {
 
     #[test]
     pub fn b_math_modulo() {
-        let memory = run_code(math_modulo());
+        let memory = run_code(&math_modulo());
 
         assert_eq!(memory[0].convert_to_number(), 2.5);
         assert!((memory[1].convert_to_number() - 0.5) <= f64::EPSILON);
@@ -1079,7 +1079,7 @@ mod tests {
 
     #[test]
     pub fn b_math_floor() {
-        let memory = run_code(math_floor());
+        let memory = run_code(&math_floor());
         assert_eq!(memory[0].convert_to_number(), 5.0);
         assert_eq!(memory[1].convert_to_number(), -4.0);
         assert_eq!(memory[2].convert_to_number(), 0.0);
@@ -1098,7 +1098,7 @@ mod tests {
 
     #[test]
     pub fn b_math_round() {
-        let memory = run_code(math_round());
+        let memory = run_code(&math_round());
         assert_eq!(memory[0].convert_to_number(), 2.0);
         assert_eq!(memory[1].convert_to_number(), 3.0);
         assert_eq!(memory[2].convert_to_number(), 3.0);
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[test]
     pub fn b_math_abs() {
-        let memory = run_code(math_abs());
+        let memory = run_code(&math_abs());
         assert_eq!(memory[0].convert_to_number(), 2.3);
         assert_eq!(memory[1].convert_to_number(), 2.3);
         assert_eq!(memory[2].convert_to_number(), 0.0);
@@ -1122,7 +1122,7 @@ mod tests {
 
     #[test]
     pub fn b_math_sqrt() {
-        let memory = run_code(math_sqrt());
+        let memory = run_code(&math_sqrt());
         assert_eq!(memory[0].convert_to_number(), 1.0);
         assert_eq!(memory[1].convert_to_number(), 1.4142135623730951);
         assert_eq!(memory[2].convert_to_number(), 0.0);
@@ -1135,7 +1135,7 @@ mod tests {
 
     #[test]
     pub fn b_math_trig() {
-        let memory = run_code(math_trig());
+        let memory = run_code(&math_trig());
 
         // SIN
 

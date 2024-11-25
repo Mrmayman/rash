@@ -133,7 +133,7 @@ impl StackCache {
     ) {
         let mem_ptr = *self.variable_offsets.get(&ptr).unwrap() as i32;
 
-        let num = constants.get_int(num as i64, builder);
+        let num = constants.get_int(i64::from(num), builder);
         builder.ins().stack_store(num, self.slot, mem_ptr + 8);
 
         let id = constants.get_int(ID_BOOL, builder);
@@ -221,6 +221,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
             vars.insert(*ptr);
         }
         ScratchBlock::ControlRepeatUntil(_, vec)
+        | ScratchBlock::ControlRepeatScreenRefresh(_, vec)
         | ScratchBlock::ControlRepeat(_, vec)
         | ScratchBlock::ControlIf(_, vec) => {
             for block in vec {

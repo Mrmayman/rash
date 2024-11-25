@@ -14,6 +14,7 @@ pub fn repeat(
     builder: &mut FunctionBuilder<'_>,
     input: &Input,
     vec: &Vec<ScratchBlock>,
+    is_screen_refresh: bool,
 ) {
     let loop_block = builder.create_block();
     builder.append_block_param(loop_block, I64);
@@ -32,7 +33,7 @@ pub fn repeat(
     builder.switch_to_block(loop_block);
     // (counter < number)
     let counter = builder.block_params(loop_block)[0];
-    let number = builder.block_params(loop_block)[1];
+    let mut number = builder.block_params(loop_block)[1];
     let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
 
     // if (counter < number) jump to body_block else jump to end_block
@@ -42,7 +43,7 @@ pub fn repeat(
 
     builder.switch_to_block(body_block);
     let counter = builder.block_params(body_block)[0];
-    let incremented = builder.ins().iadd_imm(counter, 1);
+    let mut incremented = builder.ins().iadd_imm(counter, 1);
 
     let mut inside_types = compiler.variable_type_data.clone();
     update_type_data_for_block(compiler, &mut inside_types, vec);
@@ -53,14 +54,18 @@ pub fn repeat(
 
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
 
-    call_stack_push(compiler, builder, incremented);
-    call_stack_push(compiler, builder, number);
+    if is_screen_refresh {
+        call_stack_push(compiler, builder, incremented);
+        call_stack_push(compiler, builder, number);
+    }
     compiler.constants.clear();
     for block in vec {
         compiler.compile_block(block, builder);
     }
-    let number = call_stack_pop(compiler, builder);
-    let incremented = call_stack_pop(compiler, builder);
+    if is_screen_refresh {
+        number = call_stack_pop(compiler, builder);
+        incremented = call_stack_pop(compiler, builder);
+    }
     std::mem::swap(&mut inside_types, &mut compiler.variable_type_data);
     compiler.code_block = temp_block;
     compiler.variable_type_data = common_entries(&compiler.variable_type_data, &inside_types);

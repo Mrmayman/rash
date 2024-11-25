@@ -91,7 +91,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 }
 
 #[allow(unused)]
-pub fn run_code<'a>(code: Vec<ScratchBlock>) -> MutexGuard<'a, Box<[ScratchObject]>> {
+pub fn run_code<'a>(code: &[ScratchBlock]) -> MutexGuard<'a, Box<[ScratchObject]>> {
     let mut memory = MEMORY.lock().unwrap();
     *memory = vec![ScratchObject::Number(0.0); 256].into_boxed_slice();
     run(&code, &memory);

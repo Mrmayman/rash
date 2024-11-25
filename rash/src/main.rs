@@ -1,9 +1,12 @@
-use compiler::{compile, print_func_addresses, MEMORY};
+use compile_fn::compile;
+use compiler::{print_func_addresses, MEMORY};
+use data_types::ScratchObject;
 use input_primitives::STRINGS_TO_DROP;
 
 mod block_test;
 mod blocks;
 mod callbacks;
+mod compile_fn;
 mod compiler;
 mod constant_set;
 mod data_types;
@@ -30,22 +33,30 @@ mod stack_cache;
 const ARITHMETIC_NAN_CHECK: bool = true;
 
 fn main() {
-    // let arg1 = std::env::args().nth(1).unwrap();
-    // println!("opening dir {arg1}");
-
     assert_eq!(std::mem::size_of::<usize>(), 8);
 
     print_func_addresses();
-
-    // let compiler = Compiler::new();
     compile();
-
     drop_strings();
+    print_memory();
+}
 
-    // print memory
-    for (i, obj) in MEMORY.lock().unwrap().iter().enumerate().take(16) {
-        println!("{i}: {obj:?}");
+fn print_memory() {
+    let lock = MEMORY.lock().unwrap();
+
+    // Only print the changed values that aren't zero.
+    let print_until_idx = lock
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, n)| !matches!(**n, ScratchObject::Number(0.0)))
+        .map(|(i, _)| i);
+    if let Some(print_until_idx) = print_until_idx {
+        for (i, obj) in lock.iter().enumerate().take(print_until_idx + 1) {
+            println!("{i}: {obj:?}");
+        }
     }
+    println!("...: {:?}", ScratchObject::Number(0.0));
 }
 
 fn drop_strings() {
