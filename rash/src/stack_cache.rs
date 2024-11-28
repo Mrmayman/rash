@@ -236,8 +236,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
                 accesses_var(block, vars);
             }
         }
-        ScratchBlock::WhenFlagClicked
-        | ScratchBlock::OpAdd(_, _)
+        ScratchBlock::OpAdd(_, _)
         | ScratchBlock::OpSub(_, _)
         | ScratchBlock::OpMul(_, _)
         | ScratchBlock::OpDiv(_, _)
@@ -259,6 +258,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::OpMCos(_)
         | ScratchBlock::OpMTan(_)
         | ScratchBlock::ScreenRefresh
+        | ScratchBlock::ControlStopThisScript
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

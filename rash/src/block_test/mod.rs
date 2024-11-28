@@ -8,7 +8,6 @@ mod utils;
 #[allow(unused)]
 pub fn screen_refresh() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), 1.0.into()),
         ScratchBlock::ScreenRefresh,
         ScratchBlock::VarSet(Ptr(1), 1.0.into()),
@@ -18,7 +17,6 @@ pub fn screen_refresh() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn screen_refresh_repeat() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), 1.0.into()),
         ScratchBlock::ControlRepeat(
             5.0.into(),
@@ -32,25 +30,21 @@ pub fn screen_refresh_repeat() -> Vec<ScratchBlock> {
 
 #[allow(unused)]
 pub fn screen_refresh_nested_repeat() -> Vec<ScratchBlock> {
-    vec![
-        ScratchBlock::WhenFlagClicked,
-        ScratchBlock::ControlRepeatScreenRefresh(
+    vec![ScratchBlock::ControlRepeatScreenRefresh(
+        5.0.into(),
+        vec![ScratchBlock::ControlRepeatScreenRefresh(
             5.0.into(),
-            vec![ScratchBlock::ControlRepeatScreenRefresh(
-                5.0.into(),
-                vec![
-                    ScratchBlock::VarChange(Ptr(3), 1.0.into()),
-                    ScratchBlock::ScreenRefresh,
-                ],
-            )],
-        ),
-    ]
+            vec![
+                ScratchBlock::VarChange(Ptr(3), 1.0.into()),
+                ScratchBlock::ScreenRefresh,
+            ],
+        )],
+    )]
 }
 
 #[allow(unused)]
 pub fn repeated_sum() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(7),
             ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), false.into()).into(),
@@ -74,7 +68,6 @@ pub fn repeated_sum() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn repeated_join_string() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(7), "hello ".into()),
         ScratchBlock::ControlRepeat(
             100.0.into(),
@@ -97,7 +90,6 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn if_test() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::ControlIf(1.0.into(), vec![ScratchBlock::VarSet(Ptr(0), 1.0.into())]),
         ScratchBlock::ControlIf(0.0.into(), vec![ScratchBlock::VarSet(Ptr(1), 1.0.into())]),
         ScratchBlock::ControlIf(true.into(), vec![ScratchBlock::VarSet(Ptr(2), 1.0.into())]),
@@ -147,7 +139,6 @@ pub fn if_test() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn if_else_test() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::ControlIfElse(
             true.into(),
             vec![ScratchBlock::VarSet(Ptr(0), 1.0.into())],
@@ -187,7 +178,6 @@ pub fn pi() -> Vec<ScratchBlock> {
     const D: Ptr = Ptr(1);
     const I: Ptr = Ptr(2);
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(PI, 0.0.into()),
         ScratchBlock::VarSet(D, 1.0.into()),
         ScratchBlock::VarSet(I, 0.0.into()),
@@ -225,26 +215,21 @@ pub fn pi() -> Vec<ScratchBlock> {
 
 #[allow(unused)]
 pub fn nested_repeat() -> Vec<ScratchBlock> {
-    vec![
-        ScratchBlock::WhenFlagClicked,
-        ScratchBlock::ControlRepeat(
-            9.0.into(),
-            vec![ScratchBlock::ControlRepeat(
-                11.0.into(),
-                vec![ScratchBlock::VarSet(
-                    Ptr(0),
-                    ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(0)).into(), "H".into())
-                        .into(),
-                )],
+    vec![ScratchBlock::ControlRepeat(
+        9.0.into(),
+        vec![ScratchBlock::ControlRepeat(
+            11.0.into(),
+            vec![ScratchBlock::VarSet(
+                Ptr(0),
+                ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(0)).into(), "H".into()).into(),
             )],
-        ),
-    ]
+        )],
+    )]
 }
 
 #[allow(unused)]
 pub fn repeat_until() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), 0.0.into()),
         ScratchBlock::ControlRepeatUntil(
             ScratchBlock::OpCmpGreater(ScratchBlock::VarRead(Ptr(0)).into(), 10.0.into()).into(),
@@ -258,13 +243,14 @@ pub fn repeat_until() -> Vec<ScratchBlock> {
                 ScratchBlock::VarChange(Ptr(0), 1.0.into()),
             ],
         ),
+        ScratchBlock::ControlStopThisScript,
+        ScratchBlock::VarSet(Ptr(0), 69.0.into()),
     ]
 }
 
 #[allow(unused)]
 pub fn str_ops() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(0),
             ScratchBlock::OpStrJoin("hello".into(), "world".into()).into(),
@@ -313,7 +299,6 @@ pub fn str_ops() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn random() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(0),
             ScratchBlock::OpRandom(0.0.into(), 100.0.into()).into(),
@@ -343,7 +328,6 @@ pub fn random() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_add_test() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpAdd(50.0.into(), 25.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
@@ -389,7 +373,6 @@ pub fn math_add_test() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_sub_test() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpSub(50.0.into(), 25.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
@@ -435,7 +418,6 @@ pub fn math_sub_test() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_mul_test() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMul(50.0.into(), 2.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
@@ -505,7 +487,6 @@ pub fn math_mul_test() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_div_test() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpDiv(50.0.into(), 2.0.into()).into()),
         ScratchBlock::VarSet(
             Ptr(1),
@@ -575,7 +556,6 @@ pub fn math_div_test() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn bool_ops() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(
             Ptr(0),
             ScratchBlock::OpBAnd(true.into(), true.into()).into(),
@@ -615,7 +595,6 @@ pub fn bool_ops() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_round() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpRound(2.3.into()).into()),
         ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpRound(2.5.into()).into()),
         ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpRound(2.7.into()).into()),
@@ -630,7 +609,6 @@ pub fn math_round() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_abs() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMAbs(2.3.into()).into()),
         ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpMAbs((-2.3).into()).into()),
         ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpMAbs(0.0.into()).into()),
@@ -646,7 +624,6 @@ pub fn math_abs() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_modulo() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMod(5.5.into(), 3.0.into()).into()), // 5.5 % 3.0
         ScratchBlock::VarSet(
             Ptr(1),
@@ -706,7 +683,6 @@ pub fn math_modulo() -> Vec<ScratchBlock> {
 #[allow(unused)]
 pub fn math_floor() -> Vec<ScratchBlock> {
     vec![
-        ScratchBlock::WhenFlagClicked,
         ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMFloor(5.5.into()).into()),
         ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpMFloor((-3.2).into()).into()),
         ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpMFloor(0.0.into()).into()),

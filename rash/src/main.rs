@@ -1,7 +1,7 @@
 use compiler::{print_func_addresses, MEMORY};
 use data_types::ScratchObject;
 use input_primitives::STRINGS_TO_DROP;
-use scheduler::{ProjectBuilder, SpriteBuilder, SpriteId};
+use scheduler::{ProjectBuilder, Script, SpriteBuilder, SpriteId};
 
 mod block_test;
 mod blocks;
@@ -41,9 +41,11 @@ fn main() {
     let mut builder = ProjectBuilder::new();
 
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
-    sprite1.add_script(block_test::pi());
+    sprite1.add_script(Script::new_green_flag(block_test::repeat_until()));
     // TODO: Skip screen refresh in some very specific loops.
-    sprite1.add_script(block_test::screen_refresh_nested_repeat());
+    sprite1.add_script(Script::new_green_flag(
+        block_test::screen_refresh_nested_repeat(),
+    ));
     builder.finish_sprite(sprite1);
 
     let mut scheduler = builder.finish();

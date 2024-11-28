@@ -7,6 +7,54 @@ use crate::{compile_fn::compile, compiler::ScratchBlock};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct SpriteId(pub usize);
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CustomBlockId(pub usize);
+
+pub struct CustomBlock {
+    pub thread: ScratchThread,
+    pub num_args: usize,
+    pub id: CustomBlockId,
+    pub is_screen_refresh: bool,
+}
+
+pub struct Script {
+    pub blocks: Vec<ScratchBlock>,
+    pub kind: ScriptKind,
+}
+impl Script {
+    pub fn new_green_flag(blocks: Vec<ScratchBlock>) -> Script {
+        Self {
+            blocks,
+            kind: ScriptKind::GreenFlag,
+        }
+    }
+
+    pub fn new_custom_block(
+        blocks: Vec<ScratchBlock>,
+        num_args: usize,
+        id: CustomBlockId,
+        is_screen_refresh: bool,
+    ) -> Script {
+        Self {
+            blocks,
+            kind: ScriptKind::CustomBlock {
+                id,
+                num_args,
+                is_screen_refresh,
+            },
+        }
+    }
+}
+
+pub enum ScriptKind {
+    GreenFlag,
+    CustomBlock {
+        id: CustomBlockId,
+        num_args: usize,
+        is_screen_refresh: bool,
+    },
+}
+
 pub struct SpriteBuilder {
     id: SpriteId,
     scripts: Scripts,
@@ -20,9 +68,23 @@ impl SpriteBuilder {
         }
     }
 
-    pub fn add_script(&mut self, script: Vec<ScratchBlock>) {
-        let thread = compile(&script, self.id);
-        self.scripts.green_flags.push(thread);
+    pub fn add_script(&mut self, script: Script) {
+        let thread = compile(&script.blocks, self.id);
+        match script.kind {
+            ScriptKind::GreenFlag => {
+                self.scripts.green_flags.push(thread);
+            }
+            ScriptKind::CustomBlock {
+                id,
+                num_args,
+                is_screen_refresh,
+            } => self.scripts.custom_blocks.push(CustomBlock {
+                thread,
+                num_args,
+                id,
+                is_screen_refresh,
+            }),
+        }
     }
 }
 
@@ -117,6 +179,7 @@ impl Scheduler {
 #[derive(Default)]
 pub struct Scripts {
     pub green_flags: Vec<ScratchThread>,
+    pub custom_blocks: Vec<CustomBlock>,
 }
 
 impl Scripts {

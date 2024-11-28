@@ -26,6 +26,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     let mut sig = Signature::new(CallConv::SystemV);
     sig.params.push(AbiParam::new(I64));
+    sig.returns.push(AbiParam::new(I64));
     let mut func = Function::with_name_signature(UserFuncName::default(), sig);
 
     let mut func_ctx = FunctionBuilderContext::new();
@@ -51,8 +52,8 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     builder.seal_all_blocks();
 
-    let ins = builder.ins();
-    ins.return_(&[]);
+    let minus_one = builder.ins().iconst(I64, -1);
+    builder.ins().return_(&[minus_one]);
 
     builder.finalize();
 

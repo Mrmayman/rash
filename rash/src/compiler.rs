@@ -20,7 +20,6 @@ lazy_static! {
 #[allow(unused)]
 #[derive(Debug)]
 pub enum ScratchBlock {
-    WhenFlagClicked,
     /// Sets a variable to a value.
     VarSet(Ptr, Input),
     /// Sets a variable to variable + input.
@@ -69,6 +68,7 @@ pub enum ScratchBlock {
     ControlRepeatScreenRefresh(Input, Vec<ScratchBlock>),
     /// Repeats until a condition is true.
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
+    ControlStopThisScript,
     /// A block to trigger a screen refresh.
     ///
     /// Similar to coroutines in other languages,
@@ -132,14 +132,14 @@ impl ScratchBlock {
             | ScratchBlock::OpCmpGreater(_, _)
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => Some(VarTypeChecked::Bool),
-            ScratchBlock::WhenFlagClicked
-            | ScratchBlock::VarSet(_, _)
+            ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
             | ScratchBlock::ControlIfElse(_, _, _)
             | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlRepeat(_, _)
             | ScratchBlock::ScreenRefresh
+            | ScratchBlock::ControlStopThisScript
             | ScratchBlock::ControlRepeatUntil(_, _) => None,
         }
     }
@@ -199,8 +199,7 @@ impl ScratchBlock {
 
     pub fn could_be_nan(&self) -> bool {
         match self {
-            ScratchBlock::WhenFlagClicked
-            | ScratchBlock::VarSet(_, _)
+            ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
             | ScratchBlock::ControlIfElse(_, _, _)
@@ -225,6 +224,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlRepeatScreenRefresh(_, _)
+            | ScratchBlock::ControlStopThisScript
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -279,7 +279,6 @@ impl<'a> Compiler<'a> {
         builder: &mut FunctionBuilder<'_>,
     ) -> Option<ReturnValue> {
         match block {
-            ScratchBlock::WhenFlagClicked => {}
             ScratchBlock::VarSet(ptr, obj) => {
                 blocks::var::set(self, obj, builder, *ptr);
             }
@@ -426,6 +425,14 @@ impl<'a> Compiler<'a> {
                 builder.switch_to_block(self.code_block);
 
                 self.cache.init(builder, self.memory, &mut self.constants);
+            }
+            ScratchBlock::ControlStopThisScript => {
+                self.cache.save(builder, &mut self.constants, self.memory);
+                let minus_one = self.constants.get_int(-1, builder);
+                builder.ins().return_(&[minus_one]);
+                let new_block = builder.create_block();
+                builder.switch_to_block(new_block);
+                self.code_block = new_block;
             }
         }
         None
