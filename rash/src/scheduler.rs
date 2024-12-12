@@ -1,13 +1,16 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use memmap2::Mmap;
 
-use crate::{compile_fn::compile, compiler::ScratchBlock};
+use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObject};
+
+pub type ScratchFunction =
+    unsafe extern "sysv64" fn(i64, *mut Vec<i64>, *const ScratchObject, *mut Scheduler) -> i64;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct SpriteId(pub usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
 
 pub struct CustomBlock {
@@ -69,7 +72,11 @@ impl SpriteBuilder {
     }
 
     pub fn add_script(&mut self, script: Script) {
-        let thread = compile(&script.blocks, self.id);
+        let num_args = match script.kind {
+            ScriptKind::GreenFlag => 0,
+            ScriptKind::CustomBlock { num_args, .. } => num_args,
+        };
+        let thread = compile(&script.blocks, self.id, num_args);
         match script.kind {
             ScriptKind::GreenFlag => {
                 self.scripts.green_flags.push(thread);
@@ -78,12 +85,17 @@ impl SpriteBuilder {
                 id,
                 num_args,
                 is_screen_refresh,
-            } => self.scripts.custom_blocks.push(CustomBlock {
-                thread,
-                num_args,
-                id,
-                is_screen_refresh,
-            }),
+            } => {
+                self.scripts.custom_blocks.insert(
+                    id,
+                    CustomBlock {
+                        thread,
+                        num_args,
+                        id,
+                        is_screen_refresh,
+                    },
+                );
+            }
         }
     }
 }
@@ -136,11 +148,13 @@ impl Scheduler {
 
     fn run_threads(&mut self) -> bool {
         let mut ended_groups = Vec::new();
+        // TODO: Potential race condition
+        let self_ptr = self as *mut Self;
         for (i, group) in self.thread_groups.iter_mut().enumerate() {
             let mut ended_threads = Vec::new();
 
             for (i, thread) in group.iter_mut().enumerate() {
-                let has_ended = thread.tick();
+                let has_ended = thread.tick(self_ptr);
                 if has_ended {
                     ended_threads.push(i);
                 }
@@ -179,12 +193,13 @@ impl Scheduler {
 #[derive(Default)]
 pub struct Scripts {
     pub green_flags: Vec<ScratchThread>,
-    pub custom_blocks: Vec<CustomBlock>,
+    pub custom_blocks: HashMap<CustomBlockId, CustomBlock>,
 }
 
 impl Scripts {
     pub fn push(&mut self, script: Self) {
         self.green_flags.extend(script.green_flags);
+        self.custom_blocks.extend(script.custom_blocks);
     }
 }
 
@@ -192,7 +207,8 @@ pub struct ScratchThread {
     sprite_id: SpriteId,
     _buffer: Arc<Mmap>,
     stack: Vec<i64>,
-    func: unsafe extern "sysv64" fn(i64, *mut Vec<i64>) -> i64,
+    arguments: Option<*const ScratchObject>,
+    func: ScratchFunction,
     jumped_point: i64,
 }
 
@@ -206,8 +222,8 @@ impl Debug for ScratchThread {
     }
 }
 
-impl Clone for ScratchThread {
-    fn clone(&self) -> Self {
+impl ScratchThread {
+    pub fn spawn(&self, arguments: Option<*const ScratchObject>) -> Self {
         // Non-standard clone behaviour for use
         // when spawning new threads.
         Self {
@@ -216,12 +232,11 @@ impl Clone for ScratchThread {
             func: self.func,
             jumped_point: 0,
             sprite_id: self.sprite_id,
+            arguments,
         }
     }
-}
 
-impl ScratchThread {
-    pub fn new(buf: &[u8], sprite_id: SpriteId) -> Self {
+    pub fn new(buf: &[u8], sprite_id: SpriteId, arguments: Option<*const ScratchObject>) -> Self {
         let mut buffer = memmap2::MmapOptions::new()
             .len(buf.len())
             .map_anon()
@@ -230,8 +245,7 @@ impl ScratchThread {
         buffer.copy_from_slice(buf);
         let buffer = buffer.make_exec().unwrap();
 
-        let func: unsafe extern "sysv64" fn(i64, *mut Vec<i64>) -> i64 =
-            unsafe { std::mem::transmute(buffer.as_ptr()) };
+        let func: ScratchFunction = unsafe { std::mem::transmute(buffer.as_ptr()) };
 
         Self {
             _buffer: buffer.into(),
@@ -239,12 +253,20 @@ impl ScratchThread {
             func,
             jumped_point: 0,
             sprite_id,
+            arguments,
         }
     }
 
     /// Returns true if the thread has finished.
-    pub fn tick(&mut self) -> bool {
-        let result = unsafe { (self.func)(self.jumped_point, &mut self.stack) };
+    pub fn tick(&mut self, scheduler_ptr: *mut Scheduler) -> bool {
+        let result = unsafe {
+            (self.func)(
+                self.jumped_point,
+                &mut self.stack,
+                self.arguments.unwrap_or(std::ptr::null()),
+                scheduler_ptr,
+            )
+        };
         self.jumped_point = result;
         result == -1
     }

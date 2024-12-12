@@ -37,7 +37,16 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     builder.append_block_params_for_function_params(code_block);
     builder.switch_to_block(code_block);
     let vec_ptr = builder.block_params(code_block)[0];
-    let mut compiler = Compiler::new(code_block, &mut builder, program, memory, vec_ptr);
+    let zero = builder.ins().iconst(I64, 0);
+    let mut compiler = Compiler::new(
+        code_block,
+        &mut builder,
+        program,
+        memory,
+        vec_ptr,
+        zero,
+        Vec::new(),
+    );
     compiler
         .cache
         .init(&mut builder, memory, &mut compiler.constants);

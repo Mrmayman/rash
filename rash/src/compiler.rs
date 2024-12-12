@@ -2,13 +2,14 @@ use std::{collections::HashMap, sync::Mutex};
 
 use cranelift::prelude::*;
 use lazy_static::lazy_static;
-use types::F64;
+use types::{F64, I64};
 
 use crate::{
     blocks, callbacks,
     constant_set::ConstantMap,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ReturnValue},
+    scheduler::CustomBlockId,
     stack_cache::StackCache,
 };
 
@@ -69,6 +70,7 @@ pub enum ScratchBlock {
     /// Repeats until a condition is true.
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
     ControlStopThisScript,
+    FunctionCallNoScreenRefresh(CustomBlockId, Vec<Input>),
     /// A block to trigger a screen refresh.
     ///
     /// Similar to coroutines in other languages,
@@ -140,6 +142,7 @@ impl ScratchBlock {
             | ScratchBlock::ControlRepeat(_, _)
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::ControlRepeatUntil(_, _) => None,
         }
     }
@@ -225,6 +228,7 @@ impl ScratchBlock {
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -244,6 +248,7 @@ pub enum VarType {
 
 pub struct Compiler<'compiler> {
     pub variable_type_data: HashMap<Ptr, VarType>,
+    pub args_list: Vec<[Value; 4]>,
     pub constants: ConstantMap,
     pub code_block: Block,
     pub cache: StackCache,
@@ -251,6 +256,7 @@ pub struct Compiler<'compiler> {
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
     pub vec_ptr: Value,
+    pub scheduler_ptr: Value,
 }
 
 impl<'a> Compiler<'a> {
@@ -260,6 +266,8 @@ impl<'a> Compiler<'a> {
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
         vec_ptr: Value,
+        scheduler_ptr: Value,
+        args_list: Vec<[Value; 4]>,
     ) -> Self {
         Self {
             variable_type_data: HashMap::new(),
@@ -269,7 +277,9 @@ impl<'a> Compiler<'a> {
             break_points: Vec::new(),
             break_counter: 0,
             memory,
+            scheduler_ptr,
             vec_ptr,
+            args_list,
         }
     }
 
@@ -433,6 +443,37 @@ impl<'a> Compiler<'a> {
                 let new_block = builder.create_block();
                 builder.switch_to_block(new_block);
                 self.code_block = new_block;
+            }
+            ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, args) => {
+                let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
+
+                self.variable_type_data.clear();
+                self.cache.save(builder, &mut self.constants, self.memory);
+                let args: Vec<[Value; 4]> = args
+                    .iter()
+                    .map(|n| n.get_object(self, builder))
+                    .collect::<Vec<_>>();
+
+                let stack_slot = builder.create_sized_stack_slot(StackSlotData {
+                    kind: StackSlotKind::ExplicitSlot,
+                    size: (std::mem::size_of::<ScratchObject>() * args.len()) as u32,
+                    align_shift: 0,
+                });
+                for [i1, i2, i3, i4] in args {
+                    builder.ins().stack_store(i1, stack_slot, 0);
+                    builder.ins().stack_store(i2, stack_slot, 8);
+                    builder.ins().stack_store(i3, stack_slot, 16);
+                    builder.ins().stack_store(i4, stack_slot, 24);
+                }
+                let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
+
+                self.call_function(
+                    builder,
+                    callbacks::custom_block::call_no_screen_refresh as usize,
+                    &[I64, I64, I64],
+                    &[],
+                    &[slot_ptr, custom_block_id, self.scheduler_ptr],
+                );
             }
         }
         None

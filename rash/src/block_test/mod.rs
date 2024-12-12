@@ -35,7 +35,7 @@ pub fn screen_refresh_nested_repeat() -> Vec<ScratchBlock> {
         vec![ScratchBlock::ControlRepeatScreenRefresh(
             5.0.into(),
             vec![
-                ScratchBlock::VarChange(Ptr(3), 1.0.into()),
+                ScratchBlock::VarChange(Ptr(2), 1.0.into()),
                 ScratchBlock::ScreenRefresh,
             ],
         )],

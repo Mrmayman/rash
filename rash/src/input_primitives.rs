@@ -8,7 +8,7 @@ use crate::{
     callbacks,
     compiler::{Compiler, ScratchBlock},
     constant_set::ConstantMap,
-    data_types::ScratchObject,
+    data_types::{ScratchObject, ID_BOOL, ID_NUMBER},
     ARITHMETIC_NAN_CHECK,
 };
 
@@ -161,6 +161,54 @@ impl Input {
             Input::Block(scratch_block) => {
                 let b = compiler.compile_block(scratch_block, builder).unwrap();
                 b.get_bool(compiler, builder)
+            }
+        }
+    }
+
+    pub fn get_object(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> [Value; 4] {
+        match self {
+            Input::Obj(scratch_object) => {
+                // Transmute to [i64; 4]
+                let scratch_object = scratch_object.clone();
+                let is_string = matches!(scratch_object, ScratchObject::String(_));
+                let [i1, i2, i3, i4] =
+                    unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
+                if is_string {
+                    STRINGS_TO_DROP.lock().unwrap().push([i2, i3, i4]);
+                }
+
+                let i1 = compiler.constants.get_int(i1, builder);
+                let i2 = compiler.constants.get_int(i2, builder);
+                let i3 = compiler.constants.get_int(i3, builder);
+                let i4 = compiler.constants.get_int(i4, builder);
+                [i1, i2, i3, i4]
+            }
+            Input::Block(scratch_block) => {
+                let o = compiler.compile_block(scratch_block, builder).unwrap();
+                match o {
+                    ReturnValue::Object((i1, i2, i3, i4)) => [i1, i2, i3, i4],
+                    ReturnValue::ObjectPointer(_, slot) => {
+                        let i1 = builder.ins().stack_load(I64, slot, 0);
+                        let i2 = builder.ins().stack_load(I64, slot, 8);
+                        let i3 = builder.ins().stack_load(I64, slot, 16);
+                        let i4 = builder.ins().stack_load(I64, slot, 24);
+                        [i1, i2, i3, i4]
+                    }
+                    ReturnValue::Num(value) => {
+                        let id = builder.ins().iconst(I64, ID_NUMBER);
+                        let zero = compiler.constants.get_int(0, builder);
+                        [id, value, zero, zero]
+                    }
+                    ReturnValue::Bool(value) => {
+                        let id = builder.ins().iconst(I64, ID_BOOL);
+                        let zero = compiler.constants.get_int(0, builder);
+                        [id, value, zero, zero]
+                    }
+                }
             }
         }
     }

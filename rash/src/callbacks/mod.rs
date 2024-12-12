@@ -8,6 +8,7 @@ use core::f64;
 use crate::data_types::ScratchObject;
 use rand::Rng;
 
+pub mod custom_block;
 pub mod repeat_stack;
 pub mod types;
 

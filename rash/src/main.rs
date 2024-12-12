@@ -1,7 +1,7 @@
-use compiler::{print_func_addresses, MEMORY};
+use compiler::{ScratchBlock, MEMORY};
 use data_types::ScratchObject;
-use input_primitives::STRINGS_TO_DROP;
-use scheduler::{ProjectBuilder, Script, SpriteBuilder, SpriteId};
+use input_primitives::{Ptr, STRINGS_TO_DROP};
+use scheduler::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder, SpriteId};
 
 mod block_test;
 mod blocks;
@@ -35,12 +35,23 @@ const ARITHMETIC_NAN_CHECK: bool = true;
 
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
-
-    print_func_addresses();
+    // Uncomment this to run the GUI.
+    // pollster::block_on(rash_render::run());
+    // std::process::exit(0);
 
     let mut builder = ProjectBuilder::new();
+    compiler::print_func_addresses();
 
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
+    sprite1.add_script(Script::new_custom_block(
+        vec![ScratchBlock::VarSet(Ptr(3), 2.0.into())],
+        0,
+        CustomBlockId(0),
+        false,
+    ));
+    sprite1.add_script(Script::new_green_flag(vec![
+        ScratchBlock::FunctionCallNoScreenRefresh(CustomBlockId(0), Vec::new()),
+    ]));
     sprite1.add_script(Script::new_green_flag(block_test::repeat_until()));
     // TODO: Skip screen refresh in some very specific loops.
     sprite1.add_script(Script::new_green_flag(
