@@ -13,12 +13,61 @@ compiled to machine code and executed directly, much like Java.
 
 # What's the progress?
 
-Not much right now. Many basic operators are done, and basic logic is implemented.
-But there's still a lot left. Rash is currently command line only, and there's no
-graphical output yet.
-
 You can see the progress in implementing blocks at
 https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbXw9U/edit?usp=sharing
+
+## Todo list:
+- [ ] Implement loading from SB3 files
+- [ ] Implement Control operations
+- - [x] If
+- - [x] If-Else
+- - [x] Repeat
+- - [x] Repeat Until
+- - [ ] Forever
+- - [ ] Wait
+- - [ ] Wait Until
+- - [x] Stop this script
+- - [ ] Stop all
+- - [ ] Stop other scripts in sprite
+- [ ] Implement Math Operations
+- - [x] Arithmetic
+- - [x] And, Or, Not
+- - [x] Greater Than, Less Than
+- - [ ] Equals
+- - [x] Join, Contains, Length
+- - [x] Mod, Round, Abs
+- - [x] Floor
+- - [ ] Ceiling
+- - [x] Sqrt
+- - [x] Sin, Cos, Tan
+- - [ ] ASin, ACos, ATan
+- - [ ] Ln, Log
+- - [ ] E^, 10^
+- [ ] Implement Custom Blocks
+- - [x] Implement Custom Block Arguments
+- - [x] Implement Run-Without-Screen-Refresh Custom Blocks
+- - [ ] Implement Run-With-Screen-Refresh Custom Blocks
+- - [ ] Implement Run-With-Screen-Refresh called from
+       Run-Without-Screen-Refresh Custom Blocks
+- [x] Implement Variables
+- [ ] Implement Lists
+- [ ] Implement Broadcasts
+- [ ] Implement Cloning
+- [ ] Add Graphics
+- - [ ] Hide, Show blocks
+- - [ ] Position blocks
+- - [ ] Rotation blocks
+- - [ ] Render sprites & stage
+- - [ ] Render text
+- - [ ] Render speech and thought bubbles
+- - [ ] Sprite movement, rotation, size
+- - [ ] Sprite costumes and backdrops
+- - [ ] Sprite graphical effects (Ghost, Fisheye, etc)
+- - [ ] Pen canvas and clear operation
+- - [ ] Pen stamps
+- - [ ] Pen lines
+- - [ ] Variable monitors
+- [ ] Add sound
 
 # Running
 
