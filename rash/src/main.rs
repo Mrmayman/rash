@@ -36,8 +36,8 @@ const ARITHMETIC_NAN_CHECK: bool = true;
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
     // Uncomment this to run the GUI.
-    // pollster::block_on(rash_render::run());
-    // std::process::exit(0);
+    pollster::block_on(rash_render::run());
+    std::process::exit(0);
 
     let mut builder = ProjectBuilder::new();
     compiler::print_func_addresses();
