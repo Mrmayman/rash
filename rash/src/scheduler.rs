@@ -15,8 +15,6 @@ pub struct CustomBlockId(pub usize);
 
 pub struct CustomBlock {
     pub thread: ScratchThread,
-    pub num_args: usize,
-    pub id: CustomBlockId,
     pub is_screen_refresh: bool,
 }
 
@@ -71,7 +69,7 @@ impl SpriteBuilder {
         }
     }
 
-    pub fn add_script(&mut self, script: Script) {
+    pub fn add_script(&mut self, script: &Script) {
         let num_args = match script.kind {
             ScriptKind::GreenFlag => 0,
             ScriptKind::CustomBlock { num_args, .. } => num_args,
@@ -83,15 +81,13 @@ impl SpriteBuilder {
             }
             ScriptKind::CustomBlock {
                 id,
-                num_args,
                 is_screen_refresh,
+                ..
             } => {
                 self.scripts.custom_blocks.insert(
                     id,
                     CustomBlock {
                         thread,
-                        num_args,
-                        id,
                         is_screen_refresh,
                     },
                 );
@@ -109,7 +105,7 @@ impl ProjectBuilder {
         Self {
             scheduler: Scheduler {
                 sprite_order: Vec::new(),
-                thread_groups: Vec::new(),
+                threads: Vec::new(),
                 scripts: Scripts::default(),
             },
         }
@@ -130,7 +126,7 @@ impl ProjectBuilder {
 
 pub struct Scheduler {
     pub sprite_order: Vec<SpriteId>,
-    pub thread_groups: Vec<Vec<ScratchThread>>,
+    pub threads: Vec<ScratchThread>,
     pub scripts: Scripts,
 }
 
@@ -138,7 +134,7 @@ impl Scheduler {
     pub fn init(&mut self) {
         let mut green_flags = Vec::new();
         std::mem::swap(&mut self.scripts.green_flags, &mut green_flags);
-        self.thread_groups.push(green_flags);
+        self.threads.extend(green_flags);
     }
 
     pub fn tick(&mut self) -> bool {
@@ -147,46 +143,31 @@ impl Scheduler {
     }
 
     fn run_threads(&mut self) -> bool {
-        let mut ended_groups = Vec::new();
         // TODO: Potential race condition
         let self_ptr = self as *mut Self;
-        for (i, group) in self.thread_groups.iter_mut().enumerate() {
-            let mut ended_threads = Vec::new();
+        let mut ended_threads = Vec::new();
 
-            for (i, thread) in group.iter_mut().enumerate() {
-                let has_ended = thread.tick(self_ptr);
-                if has_ended {
-                    ended_threads.push(i);
-                }
-            }
-
-            ended_threads.sort_by_key(|&i| std::cmp::Reverse(i));
-
-            for thread in ended_threads {
-                group.remove(thread);
-            }
-
-            if group.is_empty() {
-                ended_groups.push(i);
+        for (i, thread) in self.threads.iter_mut().enumerate() {
+            let has_ended = thread.tick(self_ptr);
+            if has_ended {
+                ended_threads.push(i);
             }
         }
 
-        ended_groups.sort_by_key(|&i| std::cmp::Reverse(i));
-
-        for group in ended_groups {
-            self.thread_groups.remove(group);
+        ended_threads.sort_by_key(|&i| std::cmp::Reverse(i));
+        for thread in ended_threads {
+            self.threads.remove(thread);
         }
-        self.thread_groups.is_empty()
+
+        self.threads.is_empty()
     }
 
     fn sort(&mut self) {
-        for group in &mut self.thread_groups {
-            group.sort_by_key(|thread| {
-                self.sprite_order
-                    .iter()
-                    .rposition(|&id| id == thread.sprite_id)
-            });
-        }
+        self.threads.sort_by_key(|thread| {
+            self.sprite_order
+                .iter()
+                .rposition(|&id| id == thread.sprite_id)
+        });
     }
 }
 
@@ -205,7 +186,7 @@ impl Scripts {
 
 pub struct ScratchThread {
     sprite_id: SpriteId,
-    _buffer: Arc<Mmap>,
+    buffer: Arc<Mmap>,
     stack: Vec<i64>,
     arguments: Option<*const ScratchObject>,
     func: ScratchFunction,
@@ -227,7 +208,7 @@ impl ScratchThread {
         // Non-standard clone behaviour for use
         // when spawning new threads.
         Self {
-            _buffer: self._buffer.clone(),
+            buffer: self.buffer.clone(),
             stack: Vec::new(),
             func: self.func,
             jumped_point: 0,
@@ -248,7 +229,7 @@ impl ScratchThread {
         let func: ScratchFunction = unsafe { std::mem::transmute(buffer.as_ptr()) };
 
         Self {
-            _buffer: buffer.into(),
+            buffer: buffer.into(),
             stack: Vec::new(),
             func,
             jumped_point: 0,

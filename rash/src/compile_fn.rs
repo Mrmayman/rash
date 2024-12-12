@@ -1,13 +1,20 @@
 use std::sync::Arc;
 
-use codegen::{
-    control::ControlPlane,
-    ir::{Function, UserFuncName},
+use cranelift::{
+    codegen::{
+        self,
+        control::ControlPlane,
+        ir::{Function, UserFuncName},
+    },
+    prelude::{
+        isa::{self, CallConv, TargetIsa},
+        settings,
+        types::I64,
+        AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
+        MemFlags, Signature,
+    },
 };
-use cranelift::prelude::*;
-use isa::{CallConv, TargetIsa};
 use target_lexicon::Triple;
-use types::I64;
 
 use crate::{
     compiler::{Compiler, ScratchBlock, MEMORY},

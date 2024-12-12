@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use cranelift::prelude::*;
-use types::I64;
+use cranelift::prelude::{types::I64, FunctionBuilder, InstBuilder, IntCC, Value};
 
 use crate::{
     callbacks,
@@ -9,7 +8,7 @@ use crate::{
     input_primitives::{Input, Ptr},
 };
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     pub fn control_stop_this_script(&mut self, builder: &mut FunctionBuilder<'_>) {
         self.cache.save(builder, &mut self.constants, self.memory);
         let minus_one = self.constants.get_int(-1, builder);

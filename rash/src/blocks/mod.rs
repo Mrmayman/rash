@@ -1,6 +1,7 @@
-use codegen::ir::Inst;
-use cranelift::prelude::*;
-use isa::CallConv;
+use cranelift::{
+    codegen::ir::Inst,
+    prelude::{isa::CallConv, AbiParam, FunctionBuilder, InstBuilder, Signature, Type, Value},
+};
 
 use crate::compiler::Compiler;
 
@@ -9,7 +10,7 @@ pub mod custom_block;
 pub mod op;
 pub mod var;
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     pub fn call_function(
         &mut self,
         builder: &mut FunctionBuilder<'_>,

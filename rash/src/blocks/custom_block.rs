@@ -1,17 +1,18 @@
-use cranelift::prelude::*;
-use types::I64;
+use cranelift::prelude::{
+    types::I64, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+};
 
 use crate::{
     callbacks, compiler::Compiler, data_types::ScratchObject, input_primitives::Input,
     scheduler::CustomBlockId,
 };
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     pub fn call_no_screen_refresh(
         &mut self,
         custom_block_id: &CustomBlockId,
         builder: &mut FunctionBuilder<'_>,
-        args: &Vec<Input>,
+        args: &[Input],
     ) {
         let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
 

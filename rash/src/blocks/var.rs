@@ -1,5 +1,4 @@
-use cranelift::prelude::*;
-use types::I64;
+use cranelift::prelude::{types::I64, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind};
 
 use crate::{
     callbacks,
@@ -8,7 +7,7 @@ use crate::{
     input_primitives::{Input, Ptr, ReturnValue},
 };
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     pub fn var_read(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ReturnValue {
         match self.variable_type_data.get(&ptr) {
             Some(VarType::Number) => ReturnValue::Num(self.cache.load_f64(ptr, builder)),

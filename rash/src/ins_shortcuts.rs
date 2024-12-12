@@ -1,9 +1,11 @@
-use cranelift::prelude::*;
-use types::{F64, I64};
+use cranelift::prelude::{
+    types::{F64, I64},
+    FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+};
 
 use crate::{callbacks, compiler::Compiler, input_primitives::Ptr};
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     pub fn ins_create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value {
         let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
             StackSlotKind::ExplicitSlot,

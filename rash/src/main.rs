@@ -43,13 +43,13 @@ fn main() {
     compiler::print_func_addresses();
 
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
-    sprite1.add_script(Script::new_custom_block(
+    sprite1.add_script(&Script::new_custom_block(
         vec![ScratchBlock::VarChange(Ptr(3), 2.0.into())],
         0,
         CustomBlockId(1),
         false,
     ));
-    sprite1.add_script(Script::new_custom_block(
+    sprite1.add_script(&Script::new_custom_block(
         vec![
             ScratchBlock::VarSet(Ptr(3), 1.5.into()),
             ScratchBlock::FunctionCallNoScreenRefresh(CustomBlockId(1), Vec::new()),
@@ -58,14 +58,21 @@ fn main() {
         CustomBlockId(0),
         false,
     ));
-    sprite1.add_script(Script::new_green_flag(vec![
+    sprite1.add_script(&Script::new_green_flag(vec![
         ScratchBlock::FunctionCallNoScreenRefresh(CustomBlockId(0), Vec::new()),
     ]));
+
+    let mut sprite2 = SpriteBuilder::new(SpriteId(1));
+    sprite2.add_script(&Script::new_green_flag(vec![ScratchBlock::VarSet(
+        Ptr(3),
+        1.0.into(),
+    )]));
     // sprite1.add_script(Script::new_green_flag(block_test::repeat_until()));
     // TODO: Skip screen refresh in some very specific loops.
     // sprite1.add_script(Script::new_green_flag(
     //     block_test::screen_refresh_nested_repeat(),
     // ));
+    builder.finish_sprite(sprite2);
     builder.finish_sprite(sprite1);
 
     let mut scheduler = builder.finish();

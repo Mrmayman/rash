@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use cranelift::prelude::*;
+use cranelift::prelude::{Block, FunctionBuilder, InstBuilder, Value};
 use lazy_static::lazy_static;
-use types::F64;
 
 use crate::{
     callbacks,
@@ -296,28 +295,16 @@ impl<'a> Compiler<'a> {
                 self.var_set(obj, builder, *ptr);
             }
             ScratchBlock::OpAdd(a, b) => {
-                let a = a.get_number(self, builder);
-                let b = b.get_number(self, builder);
-                let res = builder.ins().fadd(a, b);
-                return Some(ReturnValue::Num(res));
+                return Some(ReturnValue::Num(self.op_add(a, b, builder)));
             }
             ScratchBlock::OpSub(a, b) => {
-                let a = a.get_number(self, builder);
-                let b = b.get_number(self, builder);
-                let res = builder.ins().fsub(a, b);
-                return Some(ReturnValue::Num(res));
+                return Some(ReturnValue::Num(self.op_sub(a, b, builder)));
             }
             ScratchBlock::OpMul(a, b) => {
-                let a = a.get_number(self, builder);
-                let b = b.get_number(self, builder);
-                let res = builder.ins().fmul(a, b);
-                return Some(ReturnValue::Num(res));
+                return Some(ReturnValue::Num(self.op_mul(a, b, builder)));
             }
             ScratchBlock::OpDiv(a, b) => {
-                let a = a.get_number(self, builder);
-                let b = b.get_number(self, builder);
-                let res = builder.ins().fdiv(a, b);
-                return Some(ReturnValue::Num(res));
+                return Some(ReturnValue::Num(self.op_div(a, b, builder)));
             }
             ScratchBlock::OpMod(a, b) => {
                 return Some(ReturnValue::Num(self.op_modulo(a, b, builder)));
@@ -347,37 +334,23 @@ impl<'a> Compiler<'a> {
                 self.control_repeat_until(builder, input, vec);
             }
             ScratchBlock::OpCmpGreater(a, b) => {
-                let a = a.get_number(self, builder);
-                let b = b.get_number(self, builder);
-                let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
-                return Some(ReturnValue::Bool(res));
+                return Some(ReturnValue::Bool(self.op_cmp_gt(a, b, builder)));
             }
             ScratchBlock::OpCmpLesser(a, b) => {
-                let a = a.get_number(self, builder);
-                let b = b.get_number(self, builder);
-                let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
-                return Some(ReturnValue::Bool(res));
+                return Some(ReturnValue::Bool(self.op_cmp_lt(a, b, builder)));
             }
             ScratchBlock::OpStrLen(input) => {
                 return Some(self.op_str_len(input, builder));
             }
             ScratchBlock::OpRandom(a, b) => return Some(self.op_random(a, b, builder)),
             ScratchBlock::OpBAnd(a, b) => {
-                let a = a.get_bool(self, builder);
-                let b = b.get_bool(self, builder);
-                let res = builder.ins().band(a, b);
-                return Some(ReturnValue::Bool(res));
+                return Some(ReturnValue::Bool(self.op_b_and(a, b, builder)));
             }
             ScratchBlock::OpBNot(a) => {
-                let a = a.get_bool(self, builder);
-                let res = builder.ins().bnot(a);
-                return Some(ReturnValue::Bool(res));
+                return Some(ReturnValue::Bool(self.op_b_not(a, builder)));
             }
             ScratchBlock::OpBOr(a, b) => {
-                let a = a.get_bool(self, builder);
-                let b = b.get_bool(self, builder);
-                let res = builder.ins().bor(a, b);
-                return Some(ReturnValue::Bool(res));
+                return Some(ReturnValue::Bool(self.op_b_or(a, b, builder)));
             }
             ScratchBlock::OpMFloor(n) => return Some(self.op_m_floor(n, builder)),
             ScratchBlock::OpStrLetterOf(letter, string) => {
@@ -394,35 +367,19 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Num(self.op_round(num, builder)))
             }
             ScratchBlock::OpMAbs(num) => {
-                let num = num.get_number(self, builder);
-                let abs = builder.ins().fabs(num);
-                return Some(ReturnValue::Num(abs));
+                return Some(ReturnValue::Num(self.op_m_abs(num, builder)));
             }
             ScratchBlock::OpMSqrt(num) => {
-                let num = num.get_number(self, builder);
-                let sqrt = builder.ins().sqrt(num);
-                return Some(ReturnValue::Num(sqrt));
+                return Some(ReturnValue::Num(self.op_m_sqrt(num, builder)));
             }
             ScratchBlock::OpMSin(num) => {
-                let num = num.get_number(self, builder);
-                let inst =
-                    self.call_function(builder, callbacks::op_sin as usize, &[F64], &[F64], &[num]);
-                let result = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(result));
+                return Some(ReturnValue::Num(self.op_m_sin(num, builder)));
             }
             ScratchBlock::OpMCos(num) => {
-                let num = num.get_number(self, builder);
-                let inst =
-                    self.call_function(builder, callbacks::op_cos as usize, &[F64], &[F64], &[num]);
-                let result = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(result));
+                return Some(ReturnValue::Num(self.op_m_cos(num, builder)));
             }
             ScratchBlock::OpMTan(num) => {
-                let num = num.get_number(self, builder);
-                let inst =
-                    self.call_function(builder, callbacks::op_tan as usize, &[F64], &[F64], &[num]);
-                let result = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(result));
+                return Some(ReturnValue::Num(self.op_m_tan(num, builder)));
             }
             ScratchBlock::ScreenRefresh => {
                 self.screen_refresh(builder);

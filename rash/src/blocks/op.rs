@@ -1,5 +1,7 @@
-use cranelift::prelude::*;
-use types::{F64, I64};
+use cranelift::prelude::{
+    types::{F64, I64},
+    FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+};
 
 use crate::{
     callbacks,
@@ -8,7 +10,98 @@ use crate::{
     input_primitives::{Input, ReturnValue},
 };
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
+    pub fn op_m_tan(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let num = num.get_number(self, builder);
+        let inst = self.call_function(builder, callbacks::op_tan as usize, &[F64], &[F64], &[num]);
+        let result = builder.inst_results(inst)[0];
+        result
+    }
+
+    pub fn op_m_cos(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let num = num.get_number(self, builder);
+        let inst = self.call_function(builder, callbacks::op_cos as usize, &[F64], &[F64], &[num]);
+        let result = builder.inst_results(inst)[0];
+        result
+    }
+
+    pub fn op_m_sin(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let num = num.get_number(self, builder);
+        let inst = self.call_function(builder, callbacks::op_sin as usize, &[F64], &[F64], &[num]);
+        let result = builder.inst_results(inst)[0];
+        result
+    }
+
+    pub fn op_m_sqrt(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let num = num.get_number(self, builder);
+        let sqrt = builder.ins().sqrt(num);
+        sqrt
+    }
+
+    pub fn op_m_abs(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let num = num.get_number(self, builder);
+        let abs = builder.ins().fabs(num);
+        abs
+    }
+
+    pub fn op_b_or(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_bool(self, builder);
+        let b = b.get_bool(self, builder);
+        let res = builder.ins().bor(a, b);
+        res
+    }
+
+    pub fn op_b_not(&mut self, a: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_bool(self, builder);
+        let res = builder.ins().bnot(a);
+        res
+    }
+
+    pub fn op_b_and(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_bool(self, builder);
+        let b = b.get_bool(self, builder);
+        let res = builder.ins().band(a, b);
+        res
+    }
+
+    pub fn op_cmp_lt(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_number(self, builder);
+        let b = b.get_number(self, builder);
+        let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
+        res
+    }
+
+    pub fn op_cmp_gt(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_number(self, builder);
+        let b = b.get_number(self, builder);
+        let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
+        res
+    }
+
+    pub fn op_add(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_number(self, builder);
+        let b = b.get_number(self, builder);
+        builder.ins().fadd(a, b)
+    }
+
+    pub fn op_sub(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_number(self, builder);
+        let b = b.get_number(self, builder);
+        builder.ins().fsub(a, b)
+    }
+
+    pub fn op_mul(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_number(self, builder);
+        let b = b.get_number(self, builder);
+        builder.ins().fmul(a, b)
+    }
+
+    pub fn op_div(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        let a = a.get_number(self, builder);
+        let b = b.get_number(self, builder);
+        builder.ins().fdiv(a, b)
+    }
+
     pub fn op_str_join(
         &mut self,
         a: &Input,

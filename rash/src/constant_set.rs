@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 
-use cranelift::prelude::*;
+use cranelift::prelude::{types::I64, FunctionBuilder, InstBuilder, Value};
 use ordered_float::OrderedFloat;
-use types::I64;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConstantType {

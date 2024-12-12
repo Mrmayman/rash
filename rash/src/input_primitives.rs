@@ -1,8 +1,12 @@
 use std::sync::Mutex;
 
-use codegen::ir::StackSlot;
-use cranelift::prelude::*;
-use types::{F64, I64};
+use cranelift::{
+    codegen::ir::StackSlot,
+    prelude::{
+        types::{F64, I64},
+        FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+    },
+};
 
 use crate::{
     callbacks,

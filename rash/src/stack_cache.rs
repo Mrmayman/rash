@@ -1,8 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use codegen::ir::StackSlot;
-use cranelift::prelude::*;
-use types::{F64, I64};
+use cranelift::{
+    codegen::ir::StackSlot,
+    prelude::{
+        types::{F64, I64},
+        FunctionBuilder, InstBuilder, MemFlags, StackSlotData, StackSlotKind, Value,
+    },
+};
 
 use crate::{
     compiler::ScratchBlock,

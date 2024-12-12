@@ -1,13 +1,19 @@
 use std::sync::MutexGuard;
 
-use codegen::{
-    control::ControlPlane,
-    ir::{Function, UserFuncName},
+use cranelift::{
+    codegen::{
+        self,
+        control::ControlPlane,
+        ir::{Function, UserFuncName},
+    },
+    prelude::{
+        isa::{self, CallConv},
+        settings,
+        types::I64,
+        AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature,
+    },
 };
-use cranelift::prelude::*;
-use isa::CallConv;
 use target_lexicon::Triple;
-use types::I64;
 
 use crate::{
     compiler::{Compiler, ScratchBlock, MEMORY},
@@ -104,6 +110,6 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 pub fn run_code<'a>(code: &[ScratchBlock]) -> MutexGuard<'a, Box<[ScratchObject]>> {
     let mut memory = MEMORY.lock().unwrap();
     *memory = vec![ScratchObject::Number(0.0); 256].into_boxed_slice();
-    run(&code, &memory);
+    run(code, &memory);
     memory
 }
