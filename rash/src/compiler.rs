@@ -2,10 +2,10 @@ use std::{collections::HashMap, sync::Mutex};
 
 use cranelift::prelude::*;
 use lazy_static::lazy_static;
-use types::{F64, I64};
+use types::F64;
 
 use crate::{
-    blocks, callbacks,
+    callbacks,
     constant_set::ConstantMap,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ReturnValue},
@@ -71,6 +71,7 @@ pub enum ScratchBlock {
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
     ControlStopThisScript,
     FunctionCallNoScreenRefresh(CustomBlockId, Vec<Input>),
+    FunctionGetArg(usize),
     /// A block to trigger a screen refresh.
     ///
     /// Similar to coroutines in other languages,
@@ -111,6 +112,7 @@ impl ScratchBlock {
                 Some(vartype) => Some((*vartype).into()),
                 None => Some(VarTypeChecked::Unknown),
             },
+            ScratchBlock::FunctionGetArg(_) => Some(VarTypeChecked::Unknown),
             ScratchBlock::OpAdd(_, _)
             | ScratchBlock::OpSub(_, _)
             | ScratchBlock::OpMul(_, _)
@@ -234,6 +236,7 @@ impl ScratchBlock {
             | ScratchBlock::OpDiv(_, _)
             | ScratchBlock::OpMod(_, _)
             | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::OpRandom(_, _) => true,
         }
     }
@@ -290,7 +293,7 @@ impl<'a> Compiler<'a> {
     ) -> Option<ReturnValue> {
         match block {
             ScratchBlock::VarSet(ptr, obj) => {
-                blocks::var::set(self, obj, builder, *ptr);
+                self.var_set(obj, builder, *ptr);
             }
             ScratchBlock::OpAdd(a, b) => {
                 let a = a.get_number(self, builder);
@@ -317,33 +320,31 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Num(res));
             }
             ScratchBlock::OpMod(a, b) => {
-                let modulo = blocks::op::modulo(self, a, b, builder);
-                return Some(ReturnValue::Num(modulo));
+                return Some(ReturnValue::Num(self.op_modulo(a, b, builder)));
             }
             ScratchBlock::VarRead(ptr) => {
-                return Some(blocks::var::read(self, builder, *ptr));
+                return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
-                let obj = blocks::op::str_join(self, a, b, builder);
-                return Some(ReturnValue::Object(obj));
+                return Some(ReturnValue::Object(self.op_str_join(a, b, builder)));
             }
             ScratchBlock::ControlRepeat(input, vec) => {
-                blocks::control::repeat(self, builder, input, vec, false);
+                self.control_repeat(builder, input, vec, false);
             }
             ScratchBlock::ControlRepeatScreenRefresh(input, vec) => {
-                blocks::control::repeat(self, builder, input, vec, true);
+                self.control_repeat(builder, input, vec, true);
             }
             ScratchBlock::VarChange(ptr, input) => {
-                blocks::var::change(self, input, builder, *ptr);
+                self.var_change(input, builder, *ptr);
             }
             ScratchBlock::ControlIf(input, vec) => {
-                blocks::control::if_statement(self, input, builder, vec);
+                self.control_if_statement(input, builder, vec);
             }
-            ScratchBlock::ControlIfElse(condition, then, r#else) => {
-                blocks::control::if_else(self, condition, builder, then, r#else);
+            ScratchBlock::ControlIfElse(condition, then_block, else_block) => {
+                self.control_if_else(condition, builder, then_block, else_block);
             }
             ScratchBlock::ControlRepeatUntil(input, vec) => {
-                blocks::control::repeat_until(self, builder, input, vec);
+                self.control_repeat_until(builder, input, vec);
             }
             ScratchBlock::OpCmpGreater(a, b) => {
                 let a = a.get_number(self, builder);
@@ -358,9 +359,9 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Bool(res));
             }
             ScratchBlock::OpStrLen(input) => {
-                return Some(blocks::op::str_len(self, input, builder));
+                return Some(self.op_str_len(input, builder));
             }
-            ScratchBlock::OpRandom(a, b) => return Some(blocks::op::random(self, a, b, builder)),
+            ScratchBlock::OpRandom(a, b) => return Some(self.op_random(a, b, builder)),
             ScratchBlock::OpBAnd(a, b) => {
                 let a = a.get_bool(self, builder);
                 let b = b.get_bool(self, builder);
@@ -378,19 +379,19 @@ impl<'a> Compiler<'a> {
                 let res = builder.ins().bor(a, b);
                 return Some(ReturnValue::Bool(res));
             }
-            ScratchBlock::OpMFloor(n) => return Some(blocks::op::m_floor(self, n, builder)),
+            ScratchBlock::OpMFloor(n) => return Some(self.op_m_floor(n, builder)),
             ScratchBlock::OpStrLetterOf(letter, string) => {
-                return Some(ReturnValue::Object(blocks::op::str_letter(
-                    self, letter, string, builder,
-                )))
+                return Some(ReturnValue::Object(
+                    self.op_str_letter(letter, string, builder),
+                ))
             }
             ScratchBlock::OpStrContains(string, pattern) => {
-                return Some(ReturnValue::Bool(blocks::op::str_contains(
-                    self, string, pattern, builder,
-                )))
+                return Some(ReturnValue::Bool(
+                    self.op_str_contains(string, pattern, builder),
+                ))
             }
             ScratchBlock::OpRound(num) => {
-                return Some(ReturnValue::Num(blocks::op::round(self, num, builder)))
+                return Some(ReturnValue::Num(self.op_round(num, builder)))
             }
             ScratchBlock::OpMAbs(num) => {
                 let num = num.get_number(self, builder);
@@ -424,59 +425,33 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Num(result));
             }
             ScratchBlock::ScreenRefresh => {
-                self.break_counter += 1;
-                self.cache.save(builder, &mut self.constants, self.memory);
-                let break_counter = self.constants.get_int(self.break_counter as i64, builder);
-
-                builder.ins().return_(&[break_counter]);
-                self.constants.clear();
-                self.code_block = builder.create_block();
-                self.break_points.push(self.code_block);
-                builder.switch_to_block(self.code_block);
-
-                self.cache.init(builder, self.memory, &mut self.constants);
+                self.screen_refresh(builder);
             }
             ScratchBlock::ControlStopThisScript => {
-                self.cache.save(builder, &mut self.constants, self.memory);
-                let minus_one = self.constants.get_int(-1, builder);
-                builder.ins().return_(&[minus_one]);
-                let new_block = builder.create_block();
-                builder.switch_to_block(new_block);
-                self.code_block = new_block;
+                self.control_stop_this_script(builder);
             }
             ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, args) => {
-                let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
-
-                self.variable_type_data.clear();
-                self.cache.save(builder, &mut self.constants, self.memory);
-                let args: Vec<[Value; 4]> = args
-                    .iter()
-                    .map(|n| n.get_object(self, builder))
-                    .collect::<Vec<_>>();
-
-                let stack_slot = builder.create_sized_stack_slot(StackSlotData {
-                    kind: StackSlotKind::ExplicitSlot,
-                    size: (std::mem::size_of::<ScratchObject>() * args.len()) as u32,
-                    align_shift: 0,
-                });
-                for [i1, i2, i3, i4] in args {
-                    builder.ins().stack_store(i1, stack_slot, 0);
-                    builder.ins().stack_store(i2, stack_slot, 8);
-                    builder.ins().stack_store(i3, stack_slot, 16);
-                    builder.ins().stack_store(i4, stack_slot, 24);
-                }
-                let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
-
-                self.call_function(
-                    builder,
-                    callbacks::custom_block::call_no_screen_refresh as usize,
-                    &[I64, I64, I64],
-                    &[],
-                    &[slot_ptr, custom_block_id, self.scheduler_ptr],
-                );
+                self.call_no_screen_refresh(custom_block_id, builder, args);
+            }
+            ScratchBlock::FunctionGetArg(idx) => {
+                return Some(ReturnValue::Object(self.args_list[*idx]))
             }
         }
         None
+    }
+
+    fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
+        self.break_counter += 1;
+        self.cache.save(builder, &mut self.constants, self.memory);
+        let break_counter = self.constants.get_int(self.break_counter as i64, builder);
+
+        builder.ins().return_(&[break_counter]);
+        self.constants.clear();
+        self.code_block = builder.create_block();
+        self.break_points.push(self.code_block);
+        builder.switch_to_block(self.code_block);
+
+        self.cache.init(builder, self.memory, &mut self.constants);
     }
 }
 

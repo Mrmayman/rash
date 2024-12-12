@@ -5,6 +5,7 @@ use isa::CallConv;
 use crate::compiler::Compiler;
 
 pub mod control;
+pub mod custom_block;
 pub mod op;
 pub mod var;
 

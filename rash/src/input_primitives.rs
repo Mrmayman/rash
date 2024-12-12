@@ -190,7 +190,7 @@ impl Input {
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
-                    ReturnValue::Object((i1, i2, i3, i4)) => [i1, i2, i3, i4],
+                    ReturnValue::Object(arr) => arr,
                     ReturnValue::ObjectPointer(_, slot) => {
                         let i1 = builder.ins().stack_load(I64, slot, 0);
                         let i2 = builder.ins().stack_load(I64, slot, 8);
@@ -229,7 +229,7 @@ impl Input {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
                     ReturnValue::Num(value) => (value, compiler.constants.get_int(0, builder)),
-                    ReturnValue::Object((i1, i2, i3, i4)) => {
+                    ReturnValue::Object([i1, i2, i3, i4]) => {
                         compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
                     }
                     ReturnValue::Bool(value) => (
@@ -254,7 +254,7 @@ impl Input {
 pub enum ReturnValue {
     Num(Value),
     Bool(Value),
-    Object((Value, Value, Value, Value)),
+    Object([Value; 4]),
     ObjectPointer(Value, StackSlot),
 }
 
@@ -262,13 +262,13 @@ impl ReturnValue {
     pub fn get_number(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             ReturnValue::Num(value) => value,
-            ReturnValue::Object((i1, i2, i3, i4)) => {
+            ReturnValue::Object(arr) => {
                 let num = compiler.call_function(
                     builder,
                     callbacks::types::to_number as usize,
                     &[I64, I64, I64, I64],
                     &[F64],
-                    &[i1, i2, i3, i4],
+                    &arr,
                 );
                 builder.inst_results(num)[0]
             }
@@ -306,7 +306,7 @@ impl ReturnValue {
                 );
                 stack_ptr
             }
-            ReturnValue::Object((i1, i2, i3, i4)) => {
+            ReturnValue::Object([i1, i2, i3, i4]) => {
                 get_string_from_obj(builder, compiler, i1, i2, i3, i4)
             }
             ReturnValue::Bool(value) => {
@@ -347,7 +347,7 @@ impl ReturnValue {
                 builder.ins().band(is_not_zero, is_not_nan)
             }
             ReturnValue::Bool(value) => *value,
-            ReturnValue::Object((i1, i2, i3, i4)) => {
+            ReturnValue::Object([i1, i2, i3, i4]) => {
                 let ins = compiler.call_function(
                     builder,
                     callbacks::types::to_bool as usize,

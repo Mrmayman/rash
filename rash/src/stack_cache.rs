@@ -260,6 +260,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::ScreenRefresh
         | ScratchBlock::ControlStopThisScript
         | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+        | ScratchBlock::FunctionGetArg(_)
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

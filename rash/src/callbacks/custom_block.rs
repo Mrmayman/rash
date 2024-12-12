@@ -12,6 +12,7 @@ pub fn call_no_screen_refresh(
     debug_assert!(!scheduler.is_null());
 
     let scheduler = unsafe { &mut *scheduler };
+    // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
     let Some(script) = scheduler.scripts.custom_blocks.get(&id) else {
