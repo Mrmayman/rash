@@ -7,10 +7,21 @@
 //! contain a JSON file called `project.json`,
 //! as well as the costumes and sounds.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Debug};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+pub const JSON_ID_NUMBER: i64 = 4;
+pub const JSON_ID_POSITIVE_NUMBER: i64 = 5;
+pub const JSON_ID_POSITIVE_INTEGER: i64 = 6;
+pub const JSON_ID_INTEGER: i64 = 7;
+pub const JSON_ID_ANGLE: i64 = 8;
+pub const JSON_ID_COLOR: i64 = 9;
+pub const JSON_ID_STRING: i64 = 10;
+pub const JSON_ID_BROADCAST: i64 = 11;
+pub const JSON_ID_VARIABLE: i64 = 12;
+pub const JSON_ID_LIST: i64 = 13;
 
 /// # The main JSON structure of a Scratch project.
 ///
@@ -57,14 +68,22 @@ pub struct Target {
     pub textToSpeechLanguage: Option<Value>,
 }
 
-/*impl Target {
-    pub fn get_hat_blocks(&self) -> Vec<(&String, &JsonBlock)> {
-        self.blocks
-            .iter()
-            .filter(|(_, block)| !block.has_parent())
-            .collect()
+impl Target {
+    pub fn get_hat_blocks(&self) -> impl Iterator<Item = (&String, &JsonBlock)> {
+        self.blocks.iter().filter(|(_, block)| {
+            matches!(
+                block,
+                JsonBlock::Block {
+                    block: Block {
+                        next: Some(_),
+                        parent: None,
+                        ..
+                    }
+                }
+            )
+        })
     }
-}*/
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
@@ -91,21 +110,6 @@ pub enum JsonBlock {
     },
     Array(Vec<Value>),
 }
-
-/*impl JsonBlock {
-    pub fn has_parent(&self) -> bool {
-        matches!(
-            self,
-            JsonBlock::Block {
-                block: Block {
-                    parent: Some(_),
-                    ..
-                },
-                ..
-            }
-        )
-    }
-}*/
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]

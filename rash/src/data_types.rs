@@ -104,30 +104,7 @@ impl ScratchObject {
     pub fn convert_to_number(&self) -> f64 {
         match self {
             ScratchObject::Number(number) => *number,
-            ScratchObject::String(string) => {
-                let s = string.parse().unwrap_or({
-                    // Couldn't parse the string normally, so it must be typed strangely.
-                    // Checking some edge cases.
-
-                    let lowercase = string.to_lowercase();
-                    let string = lowercase.trim();
-
-                    if string.starts_with("0x") {
-                        convert_base_literal(string, 16)
-                    } else if string.starts_with("0b") {
-                        convert_base_literal(string, 2)
-                    } else if string.starts_with("0o") {
-                        convert_base_literal(string, 8)
-                    } else {
-                        Default::default()
-                    }
-                });
-                if s.is_nan() {
-                    0.0
-                } else {
-                    s
-                }
-            }
+            ScratchObject::String(string) => string_to_number(string),
             ScratchObject::Bool(boolean) => {
                 if *boolean {
                     1.0
@@ -228,6 +205,31 @@ impl ScratchObject {
             ScratchObject::Bool(true) => "true".to_owned(),
             ScratchObject::Bool(false) => "false".to_owned(),
         }
+    }
+}
+
+pub fn string_to_number(string: &str) -> f64 {
+    let s = string.parse().unwrap_or({
+        // Couldn't parse the string normally, so it must be typed strangely.
+        // Checking some edge cases.
+
+        let lowercase = string.to_lowercase();
+        let string = lowercase.trim();
+
+        if string.starts_with("0x") {
+            convert_base_literal(string, 16)
+        } else if string.starts_with("0b") {
+            convert_base_literal(string, 2)
+        } else if string.starts_with("0o") {
+            convert_base_literal(string, 8)
+        } else {
+            Default::default()
+        }
+    });
+    if s.is_nan() {
+        0.0
+    } else {
+        s
     }
 }
 

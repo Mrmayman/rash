@@ -1,8 +1,9 @@
-use compiler::{ScratchBlock, MEMORY};
+use compiler::MEMORY;
 use data_types::ScratchObject;
-use input_primitives::{Ptr, STRINGS_TO_DROP};
-use scheduler::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder, SpriteId};
+use input_primitives::STRINGS_TO_DROP;
+use sb3::ProjectLoader;
 
+mod block_print;
 mod block_test;
 mod blocks;
 mod callbacks;
@@ -10,6 +11,7 @@ mod compile_fn;
 mod compiler;
 mod constant_set;
 mod data_types;
+mod error;
 mod input_primitives;
 mod ins_shortcuts;
 mod sb3;
@@ -36,46 +38,14 @@ const ARITHMETIC_NAN_CHECK: bool = true;
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
     // Uncomment this to run the GUI.
-    pollster::block_on(rash_render::run());
-    std::process::exit(0);
+    // pollster::block_on(rash_render::run());
 
-    let mut builder = ProjectBuilder::new();
-    compiler::print_func_addresses();
-
-    let mut sprite1 = SpriteBuilder::new(SpriteId(0));
-    sprite1.add_script(&Script::new_custom_block(
-        vec![ScratchBlock::VarChange(Ptr(3), 2.0.into())],
-        0,
-        CustomBlockId(1),
-        false,
-    ));
-    sprite1.add_script(&Script::new_custom_block(
-        vec![
-            ScratchBlock::VarSet(Ptr(3), 1.5.into()),
-            ScratchBlock::FunctionCallNoScreenRefresh(CustomBlockId(1), Vec::new()),
-        ],
-        0,
-        CustomBlockId(0),
-        false,
-    ));
-    sprite1.add_script(&Script::new_green_flag(vec![
-        ScratchBlock::FunctionCallNoScreenRefresh(CustomBlockId(0), Vec::new()),
-    ]));
-
-    let mut sprite2 = SpriteBuilder::new(SpriteId(1));
-    sprite2.add_script(&Script::new_green_flag(vec![ScratchBlock::VarSet(
-        Ptr(3),
-        1.0.into(),
-    )]));
-    // sprite1.add_script(Script::new_green_flag(block_test::repeat_until()));
+    let loader = ProjectLoader::new(&std::path::PathBuf::from(
+        std::env::args().into_iter().nth(1).unwrap(),
+    ))
+    .unwrap();
+    let mut scheduler = loader.build();
     // TODO: Skip screen refresh in some very specific loops.
-    // sprite1.add_script(Script::new_green_flag(
-    //     block_test::screen_refresh_nested_repeat(),
-    // ));
-    builder.finish_sprite(sprite2);
-    builder.finish_sprite(sprite1);
-
-    let mut scheduler = builder.finish();
 
     let mut num_ticks = 1;
     while !scheduler.tick() {

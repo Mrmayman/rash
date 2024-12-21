@@ -412,6 +412,7 @@ impl<'a> Compiler<'a> {
     }
 }
 
+#[allow(unused)]
 pub fn print_func_addresses() {
     println!("var_read: {:X}", callbacks::var_read as usize);
     println!("op_str_join: {:X}", callbacks::op_str_join as usize);
