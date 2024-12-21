@@ -12,7 +12,7 @@ mod constant_set;
 mod data_types;
 mod input_primitives;
 mod ins_shortcuts;
-mod json;
+mod sb3;
 mod scheduler;
 mod stack_cache;
 

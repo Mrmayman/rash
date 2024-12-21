@@ -155,14 +155,24 @@ impl<'a> Renderer<'a> {
             cache: None,
         });
 
-        let sprites_state = vec![GraphicsState {
-            x: 36.0,
-            y: 28.0,
-            size: 100.0,
-            _padding: Default::default(),
-            texture_width: 100.0,
-            texture_height: 100.0,
-        }];
+        let sprites_state = vec![
+            GraphicsState {
+                x: 36.0,
+                y: 28.0,
+                size: 100.0,
+                _padding: Default::default(),
+                texture_width: 100.0,
+                texture_height: 100.0,
+            },
+            GraphicsState {
+                x: -36.0,
+                y: -28.0,
+                size: 50.0,
+                _padding: Default::default(),
+                texture_width: 100.0,
+                texture_height: 100.0,
+            },
+        ];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),

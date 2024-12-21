@@ -17,4 +17,5 @@ struct Global {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) vert_pos: vec3<f32>,
+    @location(1) in_vertex_index: u32,
 };

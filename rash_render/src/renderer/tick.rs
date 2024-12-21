@@ -61,7 +61,10 @@ impl Renderer<'_> {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
+            for i in 0..self.sprites_state.len() {
+                let i = i as u32 * 6;
+                render_pass.draw(i..(i + 6), 0..1);
+            }
         }
 
         // submit will accept anything that implements IntoIter

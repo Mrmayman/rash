@@ -12,7 +12,10 @@ mod renderer;
 pub async fn run() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_title("Rash")
+        .build(&event_loop)
+        .unwrap();
 
     let mut renderer = Renderer::new(&window).await;
 
