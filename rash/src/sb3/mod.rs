@@ -11,12 +11,13 @@ use tempfile::TempDir;
 
 use crate::{
     compiler::ScratchBlock,
-    data_types::string_to_number,
+    data_types::{number_to_string, string_to_number},
     error::{ErrorConvert, ErrorConvertPath, RashError, RashErrorKind, Trace},
     input_primitives::{Input, Ptr},
     scheduler::{ProjectBuilder, Scheduler, Script, SpriteBuilder, SpriteId},
 };
 
+mod blocks;
 pub mod json;
 
 pub struct ProjectLoader {
@@ -118,24 +119,9 @@ impl Block {
         match self.opcode.as_str() {
             "data_setvariableto" => {
                 // self.fields.VARIABLE[1]
-                let variable_id = self
-                    .fields
-                    .get("VARIABLE")
-                    .ok_or(RashError::field_not_found("self.fields.VARIABLE"))?
-                    .as_array()
-                    .unwrap()
-                    .get(1)
-                    .ok_or(RashError::field_not_found("self.fields.VARIABLE[1]"))?
-                    .as_str()
-                    .unwrap();
+                let variable_id = self.get_variable_field()?;
 
-                let variable_ptr = if let Some(n) = variable_map.get(variable_id) {
-                    *n
-                } else {
-                    let ptr = Ptr(variable_map.len());
-                    variable_map.insert(variable_id.to_owned(), ptr);
-                    ptr
-                };
+                let variable_ptr = variable_map_get(variable_map, variable_id);
 
                 let value = self
                     .get_number_input(blocks, variable_map, "VALUE")
@@ -143,20 +129,47 @@ impl Block {
 
                 Ok(ScratchBlock::VarSet(variable_ptr, value))
             }
-            "operator_add" => {
-                let num1 = self
-                    .get_number_input(blocks, variable_map, "NUM1")
-                    .trace("Block::compile.operator_add.NUM1")?;
-                let num2 = self
-                    .get_number_input(blocks, variable_map, "NUM2")
-                    .trace("Block::compile.operator_add.NUM2")?;
-                Ok(ScratchBlock::OpAdd(num1, num2))
+            "operator_add" => self.c_op_add(blocks, variable_map),
+            "operator_subtract" => self.c_op_subtract(blocks, variable_map),
+            "operator_multiply" => self.c_op_multiply(blocks, variable_map),
+            "operator_divide" => self.c_op_divide(blocks, variable_map),
+            "operator_random" => self.c_op_random(blocks, variable_map),
+            "operator_join" => self.c_op_join(blocks, variable_map),
+            "operator_letter_of" => self.c_op_str_letter_of(blocks, variable_map),
+            "operator_contains" => self.c_op_str_contains(blocks, variable_map),
+            "operator_length" => self.c_op_str_length(blocks, variable_map),
+            "operator_mod" => self.c_op_mod(blocks, variable_map),
+            "operator_round" => self.c_op_round(blocks, variable_map),
+            "data_changevariableby" => {
+                let variable = self.get_variable_field()?;
+                let value = self
+                    .get_number_input(blocks, variable_map, "VALUE")
+                    .trace("Block::compile.data_changevariableby.VALUE")?;
+                Ok(ScratchBlock::VarChange(
+                    variable_map_get(variable_map, variable),
+                    value,
+                ))
             }
             _ => {
-                println!("Unknown opcode: {}", self.opcode);
+                println!("Unknown opcode: {}\n{self:#?}\n", self.opcode);
                 Ok(ScratchBlock::VarSet(Ptr(0), 0.0.into()))
             }
         }
+    }
+
+    fn get_variable_field(&self) -> Result<&str, RashError> {
+        Ok(self
+            .fields
+            .get("VARIABLE")
+            .ok_or(RashError::field_not_found("self.fields.VARIABLE"))
+            .trace("Block::compile.data_setvariableto")?
+            .as_array()
+            .unwrap()
+            .get(1)
+            .ok_or(RashError::field_not_found("self.fields.VARIABLE[1]"))
+            .trace("Block::compile.data_setvariableto")?
+            .as_str()
+            .unwrap())
     }
 
     fn get_number_input(
@@ -202,7 +215,7 @@ impl Block {
                     JSON_ID_STRING => vec.get(1).unwrap().as_str().unwrap().into(),
                     JSON_ID_VARIABLE => {
                         let id = vec.get(2).unwrap().as_str().unwrap();
-                        let ptr = *variable_map.get(id).unwrap();
+                        let ptr = variable_map_get(variable_map, id);
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
@@ -216,5 +229,76 @@ impl Block {
         };
 
         Ok(input)
+    }
+
+    fn get_string_input(
+        &self,
+        blocks: &BTreeMap<String, JsonBlock>,
+        variable_map: &mut HashMap<String, Ptr>,
+        name: &str,
+    ) -> Result<Input, RashError> {
+        let input = match self
+            .inputs
+            .get(name)
+            .ok_or(RashError::field_not_found(&format!("self.inputs.{name}")))?
+            .as_array()
+            .unwrap()
+            .get(1)
+            .ok_or(RashError::field_not_found(&format!(
+                "self.inputs.{name}[1]"
+            )))? {
+            serde_json::Value::String(n) => match blocks.get(n).unwrap() {
+                JsonBlock::Block { block } => block
+                    .compile(variable_map, blocks)
+                    .trace("Block::get_number_input")?
+                    .into(),
+                JsonBlock::Array(_) => todo!(),
+            },
+            serde_json::Value::Array(vec) => {
+                let n = vec.get(0).unwrap().as_i64().unwrap();
+                match n {
+                    JSON_ID_NUMBER
+                    | JSON_ID_ANGLE
+                    | JSON_ID_INTEGER
+                    | JSON_ID_POSITIVE_NUMBER
+                    | JSON_ID_POSITIVE_INTEGER => match vec.get(1) {
+                        Some(serde_json::Value::Number(number)) => {
+                            number_to_string(number.as_f64().unwrap()).into()
+                        }
+                        Some(serde_json::Value::String(string)) => string.clone().into(),
+                        None => {
+                            return Err(RashError::field_not_found(&format!(
+                                "self.inputs.{name}[1][1]"
+                            )))
+                        }
+                        _ => panic!(),
+                    },
+                    JSON_ID_STRING => vec.get(1).unwrap().as_str().unwrap().into(),
+                    JSON_ID_VARIABLE => {
+                        let id = vec.get(2).unwrap().as_str().unwrap();
+                        let ptr = variable_map_get(variable_map, id);
+                        ScratchBlock::VarRead(ptr).into()
+                    }
+                    _ => {
+                        panic!("Unknown input: {:?}", vec)
+                    }
+                }
+            }
+            _ => {
+                panic!("Unknown input: {:?}", self.inputs)
+            }
+        };
+
+        Ok(input)
+    }
+}
+
+fn variable_map_get<'a>(variable_map: &mut HashMap<String, Ptr>, variable: &str) -> Ptr {
+    if let Some(ptr) = variable_map.get(variable) {
+        *ptr
+    } else {
+        let ptr = Ptr(variable_map.len());
+        variable_map.insert(variable.to_owned(), ptr);
+        ptr
     }
 }

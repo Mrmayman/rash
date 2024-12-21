@@ -167,40 +167,8 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Bool(false).convert_to_string(), "false");
     /// ```
     pub fn convert_to_string(&self) -> String {
-        // If number is bigger than this then represent as exponentials.
-        const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
-        // If number is smaller than this then represent as exponentials.
-        const NEGATIVE_EXPONENTIAL_THRESHOLD: f64 = 2e-6;
-
         match self {
-            ScratchObject::Number(num) => {
-                if *num == 0.0 {
-                    "0".to_owned()
-                } else if num.is_infinite() {
-                    if num.is_sign_positive() {
-                        "Infinity".to_owned()
-                    } else {
-                        "-Infinity".to_owned()
-                    }
-                } else if num.abs() >= POSITIVE_EXPONENTIAL_THRESHOLD {
-                    // Number so big it is exponential
-                    // Eg: 1000000000000000000000 is 1e+21
-                    let formatted = format!("{num:e}");
-                    if formatted.contains("e-") {
-                        formatted
-                    } else {
-                        // Rust formats it as 1e21, ignoring the plus
-                        // So we must add it ourselves to match Scratch
-                        formatted.replace('e', "e+")
-                    }
-                } else if num.abs() < NEGATIVE_EXPONENTIAL_THRESHOLD {
-                    // Number so small it is exponential
-                    // Eg: 0.0000001 is 1e-7
-                    format!("{num:e}")
-                } else {
-                    num.to_string()
-                }
-            }
+            ScratchObject::Number(num) => number_to_string(*num),
             ScratchObject::String(s) => s.to_owned(), // Faster than s.to_string()
             ScratchObject::Bool(true) => "true".to_owned(),
             ScratchObject::Bool(false) => "false".to_owned(),
@@ -208,6 +176,42 @@ impl ScratchObject {
     }
 }
 
+#[inline]
+pub fn number_to_string(num: f64) -> String {
+    // If number is bigger than this then represent as exponentials.
+    const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
+    // If number is smaller than this then represent as exponentials.
+    const NEGATIVE_EXPONENTIAL_THRESHOLD: f64 = 2e-6;
+
+    if num == 0.0 {
+        "0".to_owned()
+    } else if num.is_infinite() {
+        if num.is_sign_positive() {
+            "Infinity".to_owned()
+        } else {
+            "-Infinity".to_owned()
+        }
+    } else if num.abs() >= POSITIVE_EXPONENTIAL_THRESHOLD {
+        // Number so big it is exponential
+        // Eg: 1000000000000000000000 is 1e+21
+        let formatted = format!("{num:e}");
+        if formatted.contains("e-") {
+            formatted
+        } else {
+            // Rust formats it as 1e21, ignoring the plus
+            // So we must add it ourselves to match Scratch
+            formatted.replace('e', "e+")
+        }
+    } else if num.abs() < NEGATIVE_EXPONENTIAL_THRESHOLD {
+        // Number so small it is exponential
+        // Eg: 0.0000001 is 1e-7
+        format!("{num:e}")
+    } else {
+        num.to_string()
+    }
+}
+
+#[inline]
 pub fn string_to_number(string: &str) -> f64 {
     let s = string.parse().unwrap_or({
         // Couldn't parse the string normally, so it must be typed strangely.
