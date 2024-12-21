@@ -58,7 +58,7 @@ impl ProjectLoader {
         Ok(Self { dir, json })
     }
 
-    pub fn build(self) -> Scheduler {
+    pub fn build(self) -> Result<Scheduler, RashError> {
         let mut builder = ProjectBuilder::new();
 
         for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
@@ -86,7 +86,10 @@ impl ProjectLoader {
                     blocks.push(
                         block
                             .compile(&mut variable_map, &sprite_json.blocks)
-                            .unwrap(),
+                            .trace(&format!(
+                                "ProjectLoader::build (sprite: {})",
+                                sprite_json.name
+                            ))?,
                     );
 
                     id = block.next.clone();
@@ -106,7 +109,7 @@ impl ProjectLoader {
 
             builder.finish_sprite(sprite);
         }
-        builder.finish()
+        Ok(builder.finish())
     }
 }
 
@@ -140,6 +143,10 @@ impl Block {
             "operator_length" => self.c_op_str_length(blocks, variable_map),
             "operator_mod" => self.c_op_mod(blocks, variable_map),
             "operator_round" => self.c_op_round(blocks, variable_map),
+            "operator_gt" => self.c_op_greater(blocks, variable_map),
+            "operator_lt" => self.c_op_less(blocks, variable_map),
+            "operator_and" => self.c_op_and(blocks, variable_map),
+            "operator_not" => self.c_op_not(blocks, variable_map),
             "data_changevariableby" => {
                 let variable = self.get_variable_field()?;
                 let value = self
@@ -172,31 +179,38 @@ impl Block {
             .unwrap())
     }
 
-    fn get_number_input(
+    fn get_boolean_input(
         &self,
         blocks: &BTreeMap<String, JsonBlock>,
         variable_map: &mut HashMap<String, Ptr>,
         name: &str,
     ) -> Result<Input, RashError> {
-        let input = match self
-            .inputs
-            .get(name)
-            .ok_or(RashError::field_not_found(&format!("self.inputs.{name}")))?
+        let Some(input) = self.inputs.get(name) else {
+            return Ok(false.into());
+        };
+        let input = match input
             .as_array()
             .unwrap()
             .get(1)
             .ok_or(RashError::field_not_found(&format!(
                 "self.inputs.{name}[1]"
             )))? {
+            serde_json::Value::Null => false.into(),
             serde_json::Value::String(n) => match blocks.get(n).unwrap() {
                 JsonBlock::Block { block } => block
                     .compile(variable_map, blocks)
-                    .trace("Block::get_number_input")?
+                    .trace("Block::get_boolean_input")?
                     .into(),
                 JsonBlock::Array(_) => todo!(),
             },
             serde_json::Value::Array(vec) => {
-                let n = vec.get(0).unwrap().as_i64().unwrap();
+                let n = vec
+                    .get(0)
+                    .ok_or(RashError::field_not_found(&format!(
+                        "self.inputs.{name}[1][0]"
+                    )))?
+                    .as_i64()
+                    .unwrap();
                 match n {
                     JSON_ID_NUMBER
                     | JSON_ID_ANGLE
@@ -219,7 +233,73 @@ impl Block {
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
-                        panic!("Unknown input: {:?}", vec)
+                        panic!("Unknown array input: {:?}", vec)
+                    }
+                }
+            }
+            _ => {
+                panic!("Unknown input: {:?}", self.inputs)
+            }
+        };
+
+        Ok(input)
+    }
+
+    fn get_number_input(
+        &self,
+        blocks: &BTreeMap<String, JsonBlock>,
+        variable_map: &mut HashMap<String, Ptr>,
+        name: &str,
+    ) -> Result<Input, RashError> {
+        let input = match self
+            .inputs
+            .get(name)
+            .ok_or(RashError::field_not_found(&format!("self.inputs.{name}")))?
+            .as_array()
+            .unwrap()
+            .get(1)
+            .ok_or(RashError::field_not_found(&format!(
+                "self.inputs.{name}[1]"
+            )))? {
+            serde_json::Value::Null => false.into(),
+            serde_json::Value::String(n) => match blocks.get(n).unwrap() {
+                JsonBlock::Block { block } => block
+                    .compile(variable_map, blocks)
+                    .trace("Block::get_number_input")?
+                    .into(),
+                JsonBlock::Array(_) => todo!(),
+            },
+            serde_json::Value::Array(vec) => {
+                let n = vec
+                    .get(0)
+                    .ok_or(RashError::field_not_found(&format!(
+                        "self.inputs.{name}[1][0]"
+                    )))?
+                    .as_i64()
+                    .unwrap();
+                match n {
+                    JSON_ID_NUMBER
+                    | JSON_ID_ANGLE
+                    | JSON_ID_INTEGER
+                    | JSON_ID_POSITIVE_NUMBER
+                    | JSON_ID_POSITIVE_INTEGER => match vec.get(1) {
+                        Some(serde_json::Value::Number(number)) => number.as_f64().unwrap().into(),
+                        Some(serde_json::Value::String(string)) => string_to_number(string).into(),
+                        None => {
+                            return Err(RashError::field_not_found(&format!(
+                                "self.inputs.{name}[1][1]"
+                            )))
+                        }
+                        _ => panic!(),
+                    },
+                    JSON_ID_STRING => vec.get(1).unwrap().as_str().unwrap().into(),
+                    JSON_ID_VARIABLE => {
+                        let id = vec.get(2).unwrap().as_str().unwrap();
+                        let ptr = variable_map_get(variable_map, id);
+                        ScratchBlock::VarRead(ptr).into()
+                    }
+                    _ => {
+                        panic!("Unknown array input: {:?}", vec)
                     }
                 }
             }
@@ -250,7 +330,7 @@ impl Block {
             serde_json::Value::String(n) => match blocks.get(n).unwrap() {
                 JsonBlock::Block { block } => block
                     .compile(variable_map, blocks)
-                    .trace("Block::get_number_input")?
+                    .trace("Block::get_string_input")?
                     .into(),
                 JsonBlock::Array(_) => todo!(),
             },

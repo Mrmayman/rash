@@ -37,6 +37,7 @@ const ARITHMETIC_NAN_CHECK: bool = true;
 
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
+
     // Uncomment this to run the GUI.
     // pollster::block_on(rash_render::run());
 
@@ -44,7 +45,13 @@ fn main() {
         std::env::args().into_iter().nth(1).unwrap(),
     ))
     .unwrap();
-    let mut scheduler = loader.build();
+    let mut scheduler = match loader.build() {
+        Ok(n) => n,
+        Err(err) => {
+            println!("{err}");
+            return;
+        }
+    };
     // TODO: Skip screen refresh in some very specific loops.
 
     let mut num_ticks = 1;

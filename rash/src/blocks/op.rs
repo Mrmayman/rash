@@ -68,14 +68,18 @@ impl Compiler<'_> {
         let a = a.get_number(self, builder);
         let b = b.get_number(self, builder);
         let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
-        res
+        let one = self.constants.get_int(1, builder);
+        let zero = self.constants.get_int(0, builder);
+        builder.ins().select(res, one, zero)
     }
 
     pub fn op_cmp_gt(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_number(self, builder);
         let b = b.get_number(self, builder);
         let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
-        res
+        let one = self.constants.get_int(1, builder);
+        let zero = self.constants.get_int(0, builder);
+        builder.ins().select(res, one, zero)
     }
 
     pub fn op_add(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {

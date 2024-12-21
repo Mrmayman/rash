@@ -348,7 +348,10 @@ impl ReturnValue {
                 let zero = compiler.constants.get_float(0.0, builder);
                 let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
                 let is_not_nan = builder.ins().fcmp(FloatCC::Equal, *value, *value);
-                builder.ins().band(is_not_zero, is_not_nan)
+                let res = builder.ins().band(is_not_zero, is_not_nan);
+                let one = compiler.constants.get_int(1, builder);
+                let zero = compiler.constants.get_int(0, builder);
+                builder.ins().select(res, one, zero)
             }
             ReturnValue::Bool(value) => *value,
             ReturnValue::Object([i1, i2, i3, i4]) => {

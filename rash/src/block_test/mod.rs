@@ -4,6 +4,7 @@ use crate::{
 };
 
 mod utils;
+// pub use utils::run_code;
 
 #[allow(unused)]
 pub fn screen_refresh() -> Vec<ScratchBlock> {
@@ -83,6 +84,48 @@ pub fn repeated_join_string() -> Vec<ScratchBlock> {
                         .into(),
                 ),
             ],
+        ),
+    ]
+}
+
+#[allow(unused)]
+pub fn bool_return() -> Vec<ScratchBlock> {
+    vec![ScratchBlock::VarSet(
+        Ptr(0),
+        ScratchBlock::OpBAnd(
+            ScratchBlock::OpCmpGreater(3.0.into(), 2.0.into()).into(),
+            false.into(),
+        )
+        .into(),
+    )]
+}
+
+#[allow(unused)]
+pub fn comparison() -> Vec<ScratchBlock> {
+    vec![
+        ScratchBlock::VarSet(
+            Ptr(0),
+            ScratchBlock::OpCmpGreater(3.0.into(), 2.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(1),
+            ScratchBlock::OpCmpGreater(2.0.into(), 3.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(2),
+            ScratchBlock::OpCmpGreater(3.0.into(), 3.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(3),
+            ScratchBlock::OpCmpLesser(3.0.into(), 2.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(4),
+            ScratchBlock::OpCmpLesser(2.0.into(), 3.0.into()).into(),
+        ),
+        ScratchBlock::VarSet(
+            Ptr(5),
+            ScratchBlock::OpCmpLesser(3.0.into(), 3.0.into()).into(),
         ),
     ]
 }
@@ -1155,5 +1198,22 @@ mod tests {
         assert!(memory[25].convert_to_number().is_infinite());
         assert!(memory[25].convert_to_number().is_sign_negative());
         assert!(memory[26].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
+    }
+
+    #[test]
+    fn b_bool_return() {
+        let memory = run_code(&bool_return());
+        assert_eq!(memory[0].convert_to_number(), 0.0);
+    }
+
+    #[test]
+    fn b_comparison() {
+        let memory = run_code(&comparison());
+        assert_eq!(memory[0].convert_to_number(), 1.0);
+        assert_eq!(memory[1].convert_to_number(), 0.0);
+        assert_eq!(memory[2].convert_to_number(), 0.0);
+        assert_eq!(memory[3].convert_to_number(), 0.0);
+        assert_eq!(memory[4].convert_to_number(), 1.0);
+        assert_eq!(memory[5].convert_to_number(), 0.0);
     }
 }

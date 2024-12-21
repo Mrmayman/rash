@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::{Debug, Display},
+    path::{Path, PathBuf},
+};
 
 use zip_extract::ZipExtractError;
 
@@ -7,6 +10,34 @@ use zip_extract::ZipExtractError;
 pub struct RashError {
     pub trace: Vec<String>,
     pub kind: RashErrorKind,
+}
+
+impl Display for RashError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "rash error: ")?;
+        match &self.kind {
+            RashErrorKind::IoError(error, path_buf) => {
+                if let Some(path) = path_buf {
+                    write!(f, "io error: at {path:?}: {error}")?;
+                } else {
+                    write!(f, "io error: {error}")?;
+                }
+            }
+            RashErrorKind::ZipExtract(zip_extract_error) => {
+                write!(f, "zip extract error: {zip_extract_error}")?;
+            }
+            RashErrorKind::Serde(error) => {
+                write!(f, "json error: {error}")?;
+            }
+            RashErrorKind::FieldNotFound(field) => {
+                write!(f, "field not found: {field}")?;
+            }
+        };
+        for t in &self.trace {
+            write!(f, "\n  at {}", t)?;
+        }
+        Ok(())
+    }
 }
 
 impl RashError {

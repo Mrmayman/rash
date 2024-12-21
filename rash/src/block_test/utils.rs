@@ -72,7 +72,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     builder.finalize();
 
-    // println!("{}", func.display());
+    println!("{}", func.display());
 
     let mut ctx = codegen::Context::for_function(func);
     let mut plane = ControlPlane::default();

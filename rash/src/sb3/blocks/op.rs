@@ -11,6 +11,61 @@ type Blocks = BTreeMap<String, JsonBlock>;
 type VarMap = HashMap<String, Ptr>;
 
 impl Block {
+    pub fn c_op_not(
+        &self,
+        blocks: &Blocks,
+        variable_map: &mut VarMap,
+    ) -> Result<ScratchBlock, RashError> {
+        let bool = self
+            .get_boolean_input(blocks, variable_map, "OPERAND")
+            .trace("Block::compile.operator_not.OPERAND")?;
+        Ok(ScratchBlock::OpBNot(bool))
+    }
+
+    pub fn c_op_and(
+        &self,
+        blocks: &Blocks,
+        variable_map: &mut VarMap,
+    ) -> Result<ScratchBlock, RashError> {
+        let bool1 = self
+            .get_number_input(blocks, variable_map, "OPERAND1")
+            .trace("Block::compile.operator_and.OPERAND1")?;
+        let bool2 = self
+            .get_number_input(blocks, variable_map, "OPERAND2")
+            .trace("Block::compile.operator_and.OPERAND2")?;
+        Ok(ScratchBlock::OpBAnd(bool1, bool2))
+    }
+
+    pub fn c_op_greater(
+        &self,
+        blocks: &Blocks,
+        variable_map: &mut VarMap,
+    ) -> Result<ScratchBlock, RashError> {
+        const FN_N: &str = "Block::compile.operator_gt";
+        let num1 = self
+            .get_number_input(blocks, variable_map, "OPERAND1")
+            .trace(FN_N)?;
+        let num2 = self
+            .get_number_input(blocks, variable_map, "OPERAND2")
+            .trace(FN_N)?;
+        Ok(ScratchBlock::OpCmpGreater(num1, num2))
+    }
+
+    pub fn c_op_less(
+        &self,
+        blocks: &Blocks,
+        variable_map: &mut VarMap,
+    ) -> Result<ScratchBlock, RashError> {
+        const FN_N: &str = "Block::compile.operator_lt";
+        let num1 = self
+            .get_number_input(blocks, variable_map, "OPERAND1")
+            .trace(FN_N)?;
+        let num2 = self
+            .get_number_input(blocks, variable_map, "OPERAND2")
+            .trace(FN_N)?;
+        Ok(ScratchBlock::OpCmpLesser(num1, num2))
+    }
+
     pub fn c_op_round(
         &self,
         blocks: &Blocks,
