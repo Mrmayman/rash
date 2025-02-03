@@ -14,8 +14,9 @@ use crate::{
     data_types::{number_to_string, string_to_number},
     error::{ErrorConvert, ErrorConvertPath, RashError, RashErrorKind, Trace},
     input_primitives::{Input, Ptr},
-    scheduler::{ProjectBuilder, Scheduler, Script, SpriteBuilder, SpriteId},
+    scheduler::{ProjectBuilder, Scheduler, Script, SpriteBuilder},
 };
+use rash_render::SpriteId;
 
 mod blocks;
 pub mod json;
@@ -62,7 +63,7 @@ impl ProjectLoader {
         let mut builder = ProjectBuilder::new();
 
         for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
-            let mut sprite = SpriteBuilder::new(SpriteId(sprite_i));
+            let mut sprite = SpriteBuilder::new(SpriteId(sprite_i as i64));
 
             let mut variable_map = HashMap::new();
 
@@ -95,7 +96,9 @@ impl ProjectLoader {
                     id = block.next.clone();
                 }
 
-                println!("{blocks:#?}");
+                for block in &blocks {
+                    println!("{}", block.format(0))
+                }
 
                 match hat_block.opcode.as_str() {
                     "event_whenflagclicked" => {
@@ -156,6 +159,16 @@ impl Block {
                     variable_map_get(variable_map, variable),
                     value,
                 ))
+            }
+            "motion_gotoxy" => {
+                let x = self
+                    .get_number_input(blocks, variable_map, "X")
+                    .trace("Block::compile.motion_gotoxy.X")?;
+                let y = self
+                    .get_number_input(blocks, variable_map, "Y")
+                    .trace("Block::compile.motion_gotoxy.X")?;
+
+                Ok(ScratchBlock::MotionGoToXY(x, y))
             }
             _ => {
                 println!("Unknown opcode: {}\n{self:#?}\n", self.opcode);

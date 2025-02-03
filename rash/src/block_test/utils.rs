@@ -13,6 +13,7 @@ use cranelift::{
         AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature,
     },
 };
+use rash_render::SpriteId;
 use target_lexicon::Triple;
 
 use crate::{
@@ -51,7 +52,9 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         memory,
         vec_ptr,
         zero,
+        zero,
         Vec::new(),
+        SpriteId(0),
     );
     compiler
         .cache

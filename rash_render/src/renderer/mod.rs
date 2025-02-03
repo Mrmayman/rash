@@ -1,13 +1,18 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
-use buffers::{GlobalBuffer, GraphicsState};
+use buffers::GlobalBuffer;
 use winit::window::Window;
 
 pub mod buffers;
 pub mod init;
 pub mod tick;
 
-pub struct Renderer<'a> {
+pub fn to_bytes<T: ?Sized>(s: &T, size: usize) -> &[u8] {
+    let ptr = s as *const T as *const u8;
+    unsafe { std::slice::from_raw_parts(ptr, size) }
+}
+
+pub struct InnerRenderer<'a> {
     pub surface: wgpu::Surface<'a>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -16,12 +21,11 @@ pub struct Renderer<'a> {
     pub render_pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
     pub sprites_buffer: wgpu::Buffer,
-    pub sprites_state: Vec<GraphicsState>,
     pub global_buffer: wgpu::Buffer,
     pub global_state: GlobalBuffer,
     pub last_time: Instant,
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
-    pub window: &'a Window,
+    pub window: Arc<Window>,
 }

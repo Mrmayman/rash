@@ -1,4 +1,5 @@
 #[repr(C)]
+#[derive(Clone)]
 pub struct GraphicsState {
     pub x: f32,
     pub y: f32,

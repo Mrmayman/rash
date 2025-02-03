@@ -18,8 +18,14 @@ use crate::{
 
 pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
+
+impl std::fmt::Debug for Ptr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "*({})", self.0)
+    }
+}
 
 impl Ptr {
     pub fn constant(
@@ -53,6 +59,15 @@ impl Ptr {
 pub enum Input {
     Obj(ScratchObject),
     Block(Box<ScratchBlock>),
+}
+
+impl Input {
+    pub fn format(&self, indent: usize) -> String {
+        match self {
+            Input::Obj(scratch_object) => format!("{scratch_object:?}"),
+            Input::Block(scratch_block) => format!("({})", scratch_block.format(indent)),
+        }
+    }
 }
 
 impl From<ScratchObject> for Input {

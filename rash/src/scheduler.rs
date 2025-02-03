@@ -1,14 +1,17 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use memmap2::Mmap;
+use rash_render::{Run, RunState, SpriteId};
 
 use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObject};
 
-pub type ScratchFunction =
-    unsafe extern "sysv64" fn(i64, *mut Vec<i64>, *const ScratchObject, *mut Scheduler) -> i64;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct SpriteId(pub usize);
+pub type ScratchFunction = unsafe extern "sysv64" fn(
+    i64,
+    *mut Vec<i64>,
+    *const ScratchObject,
+    *mut Scheduler,
+    *mut RunState,
+) -> i64;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
@@ -130,6 +133,21 @@ pub struct Scheduler {
     pub scripts: Scripts,
 }
 
+impl Run for Scheduler {
+    fn update(&mut self, state: &mut RunState) -> bool {
+        self.sort();
+        self.run_threads(state)
+    }
+
+    fn num_sprites(&self) -> usize {
+        self.sprite_order.len()
+    }
+
+    fn sprite_order(&self) -> Vec<SpriteId> {
+        self.sprite_order.clone()
+    }
+}
+
 impl Scheduler {
     pub fn init(&mut self) {
         let mut green_flags = Vec::new();
@@ -137,18 +155,13 @@ impl Scheduler {
         self.threads.extend(green_flags);
     }
 
-    pub fn tick(&mut self) -> bool {
-        self.sort();
-        self.run_threads()
-    }
-
-    fn run_threads(&mut self) -> bool {
+    fn run_threads(&mut self, graphics: &mut RunState) -> bool {
         // TODO: Potential race condition
         let self_ptr = self as *mut Self;
         let mut ended_threads = Vec::new();
 
         for (i, thread) in self.threads.iter_mut().enumerate() {
-            let has_ended = thread.tick(self_ptr);
+            let has_ended = thread.tick(self_ptr, graphics);
             if has_ended {
                 ended_threads.push(i);
             }
@@ -239,13 +252,14 @@ impl ScratchThread {
     }
 
     /// Returns true if the thread has finished.
-    pub fn tick(&mut self, scheduler_ptr: *mut Scheduler) -> bool {
+    pub fn tick(&mut self, scheduler_ptr: *mut Scheduler, graphics: *mut RunState) -> bool {
         let result = unsafe {
             (self.func)(
                 self.jumped_point,
                 &mut self.stack,
                 self.arguments.unwrap_or(std::ptr::null()),
                 scheduler_ptr,
+                graphics,
             )
         };
         self.jumped_point = result;

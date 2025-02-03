@@ -1,3 +1,5 @@
+use rash_render::RunState;
+
 use crate::{
     data_types::ScratchObject,
     scheduler::{CustomBlockId, Scheduler},
@@ -7,6 +9,7 @@ pub fn call_no_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,
     scheduler: *mut Scheduler,
+    graphics: *mut RunState,
 ) {
     debug_assert!(!arg_buffer.is_null());
     debug_assert!(!scheduler.is_null());
@@ -23,5 +26,5 @@ pub fn call_no_screen_refresh(
     };
 
     let mut script = script.thread.spawn(Some(arg_buffer));
-    while !script.tick(scheduler) {}
+    while !script.tick(scheduler, graphics) {}
 }

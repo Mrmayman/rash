@@ -1,7 +1,11 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use cranelift::prelude::{Block, FunctionBuilder, InstBuilder, Value};
+use cranelift::prelude::{
+    types::{F64, I64},
+    Block, FunctionBuilder, InstBuilder, Value,
+};
 use lazy_static::lazy_static;
+use rash_render::{RunState, SpriteId};
 
 use crate::{
     callbacks,
@@ -11,6 +15,8 @@ use crate::{
     scheduler::CustomBlockId,
     stack_cache::StackCache,
 };
+
+mod display;
 
 lazy_static! {
     pub static ref MEMORY: Mutex<Box<[ScratchObject]>> =
@@ -81,6 +87,7 @@ pub enum ScratchBlock {
     /// make sure to use
     /// [`ScratchBlock::ControlRepeatScreenRefresh`]
     ScreenRefresh,
+    MotionGoToXY(Input, Input),
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -144,6 +151,7 @@ impl ScratchBlock {
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::ControlRepeatUntil(_, _) => None,
         }
     }
@@ -227,6 +235,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::ScreenRefresh
+            | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
@@ -259,6 +268,8 @@ pub struct Compiler<'compiler> {
     pub memory: &'compiler [ScratchObject],
     pub vec_ptr: Value,
     pub scheduler_ptr: Value,
+    pub graphics_ptr: Value,
+    pub sprite_id: SpriteId,
 }
 
 impl<'a> Compiler<'a> {
@@ -269,7 +280,9 @@ impl<'a> Compiler<'a> {
         memory: &'a [ScratchObject],
         vec_ptr: Value,
         scheduler_ptr: Value,
+        graphics_ptr: Value,
         args_list: Vec<[Value; 4]>,
+        sprite_id: SpriteId,
     ) -> Self {
         Self {
             variable_type_data: HashMap::new(),
@@ -282,6 +295,8 @@ impl<'a> Compiler<'a> {
             scheduler_ptr,
             vec_ptr,
             args_list,
+            graphics_ptr,
+            sprite_id,
         }
     }
 
@@ -392,6 +407,20 @@ impl<'a> Compiler<'a> {
             }
             ScratchBlock::FunctionGetArg(idx) => {
                 return Some(ReturnValue::Object(self.args_list[*idx]))
+            }
+            ScratchBlock::MotionGoToXY(x, y) => {
+                let x = x.get_number(self, builder);
+                let y = y.get_number(self, builder);
+
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                self.call_function(
+                    builder,
+                    RunState::c_go_to as usize,
+                    &[I64, I64, F64, F64],
+                    &[],
+                    &[self.graphics_ptr, id, x, y],
+                );
             }
         }
         None

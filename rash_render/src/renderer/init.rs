@@ -1,17 +1,18 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::to_bytes;
+use super::to_bytes;
 
 use super::{
     buffers::{GlobalBuffer, GraphicsState},
-    Renderer,
+    InnerRenderer,
 };
 
-impl<'a> Renderer<'a> {
-    pub async fn new(window: &'a Window) -> Self {
+impl<'a> InnerRenderer<'a> {
+    pub async fn new(window: Arc<Window>, num_sprites: usize) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -21,7 +22,8 @@ impl<'a> Renderer<'a> {
             ..Default::default()
         });
 
-        let surface = instance.create_surface(window).unwrap();
+        let window_2 = window.clone();
+        let surface = instance.create_surface(window_2).unwrap();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -163,15 +165,8 @@ impl<'a> Renderer<'a> {
                 _padding: Default::default(),
                 texture_width: 100.0,
                 texture_height: 100.0,
-            },
-            GraphicsState {
-                x: -36.0,
-                y: -28.0,
-                size: 50.0,
-                _padding: Default::default(),
-                texture_width: 100.0,
-                texture_height: 100.0,
-            },
+            };
+            num_sprites
         ];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -216,7 +211,6 @@ impl<'a> Renderer<'a> {
             config,
             size,
             bind_group,
-            sprites_state,
             sprites_buffer,
             global_state,
             global_buffer,

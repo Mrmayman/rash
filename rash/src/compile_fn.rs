@@ -18,8 +18,9 @@ use target_lexicon::Triple;
 
 use crate::{
     compiler::{Compiler, ScratchBlock, MEMORY},
-    scheduler::{ScratchThread, SpriteId},
+    scheduler::ScratchThread,
 };
+use rash_render::SpriteId;
 
 pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> ScratchThread {
     let isa = get_isa();
@@ -39,6 +40,8 @@ pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> Scratc
 
     let args_ptr = builder.block_params(jmp2_block)[2];
     let scheduler_ptr = builder.block_params(jmp2_block)[3];
+    let graphics_ptr = builder.block_params(jmp2_block)[4];
+
     let mut args_list = Vec::new();
     for _ in 0..num_args {
         let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, 0);
@@ -63,7 +66,9 @@ pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> Scratc
         &lock,
         repeat_stack_ptr,
         scheduler_ptr,
+        graphics_ptr,
         args_list,
+        id,
     );
 
     compiler
@@ -135,6 +140,7 @@ fn get_isa() -> Arc<dyn TargetIsa> {
 
 fn create_function() -> Function {
     let mut sig = Signature::new(CallConv::SystemV);
+    sig.params.push(AbiParam::new(I64));
     sig.params.push(AbiParam::new(I64));
     sig.params.push(AbiParam::new(I64));
     sig.params.push(AbiParam::new(I64));

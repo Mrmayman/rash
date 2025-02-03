@@ -1,13 +1,15 @@
 use std::time::Instant;
 
-use crate::to_bytes;
+use crate::SpriteId;
+
+use super::to_bytes;
 
 use super::{
     buffers::{GlobalBuffer, GraphicsState},
-    Renderer,
+    InnerRenderer,
 };
 
-impl Renderer<'_> {
+impl InnerRenderer<'_> {
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
@@ -28,7 +30,7 @@ impl Renderer<'_> {
         );
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, sprite_order: &[SpriteId]) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -61,8 +63,8 @@ impl Renderer<'_> {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
-            for i in 0..self.sprites_state.len() {
-                let i = i as u32 * 6;
+            for i in sprite_order {
+                let i = i.0 as u32 * 6;
                 render_pass.draw(i..(i + 6), 0..1);
             }
         }
@@ -74,25 +76,28 @@ impl Renderer<'_> {
         Ok(())
     }
 
-    pub fn tick(&mut self, control_flow: &winit::event_loop::EventLoopWindowTarget<()>) {
+    pub fn tick(
+        &mut self,
+        control_flow: &winit::event_loop::EventLoopWindowTarget<()>,
+        graphics: &[GraphicsState],
+        sprite_order: &[SpriteId],
+    ) {
         let delta = self.last_time.elapsed().as_secs_f64() * 60.0;
         // This tells winit that we want another frame after this one
         self.window.request_redraw();
 
-        // self.update()
-        self.sprites_state[0].x += delta as f32;
         // Write to the storage buffer
 
         self.queue.write_buffer(
             &self.sprites_buffer,
             0,
             to_bytes(
-                self.sprites_state.as_slice(),
-                self.sprites_state.len() * std::mem::size_of::<GraphicsState>(),
+                graphics,
+                graphics.len() * std::mem::size_of::<GraphicsState>(),
             ),
         );
 
-        match self.render() {
+        match self.render(sprite_order) {
             Ok(_) => {}
             // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => self.resize(self.size),

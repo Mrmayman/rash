@@ -1,7 +1,9 @@
 use compiler::MEMORY;
 use data_types::ScratchObject;
 use input_primitives::STRINGS_TO_DROP;
+use rash_render::{Renderer, SpriteId};
 use sb3::ProjectLoader;
+use scheduler::Scheduler;
 
 mod block_print;
 mod block_test;
@@ -32,37 +34,37 @@ mod stack_cache;
 /// # Performance
 /// Pi benchmark:
 /// - Without NaN check: `4.6 ms`
-/// - With NaN check: `8.8 ms`
+/// - With NaN check: `6.5 ms`
 const ARITHMETIC_NAN_CHECK: bool = true;
 
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
 
-    // Uncomment this to run the GUI.
-    // pollster::block_on(rash_render::run());
+    let Some(value) = std::env::args().into_iter().nth(1) else {
+        eprintln!("Usage: rash /path/to/project.sb3");
+        return;
+    };
 
-    let loader = ProjectLoader::new(&std::path::PathBuf::from(
-        std::env::args().into_iter().nth(1).unwrap(),
-    ))
-    .unwrap();
-    let mut scheduler = match loader.build() {
+    let loader = ProjectLoader::new(&std::path::PathBuf::from(value)).unwrap();
+    let scheduler = match loader.build() {
         Ok(n) => n,
         Err(err) => {
             println!("{err}");
             return;
         }
     };
-    // TODO: Skip screen refresh in some very specific loops.
 
-    let mut num_ticks = 1;
-    while !scheduler.tick() {
-        num_ticks += 1;
-        // std::thread::sleep(std::time::Duration::from_millis(1000 / 30))
-    }
-    println!("Ticks: {num_ticks}");
+    pollster::block_on(run(scheduler));
+
+    // TODO: Skip screen refresh in some very specific loops.
 
     drop_strings();
     print_memory();
+}
+
+async fn run(scheduler: Scheduler) {
+    let renderer = Renderer::new("Rash", Box::new(scheduler)).await;
+    renderer.run();
 }
 
 fn print_memory() {

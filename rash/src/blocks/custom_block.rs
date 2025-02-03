@@ -39,9 +39,14 @@ impl Compiler<'_> {
         self.call_function(
             builder,
             callbacks::custom_block::call_no_screen_refresh as usize,
-            &[I64, I64, I64],
+            &[I64, I64, I64, I64],
             &[],
-            &[slot_ptr, custom_block_id, self.scheduler_ptr],
+            &[
+                slot_ptr,
+                custom_block_id,
+                self.scheduler_ptr,
+                self.graphics_ptr,
+            ],
         );
         self.cache.init(builder, self.memory, &mut self.constants);
     }
