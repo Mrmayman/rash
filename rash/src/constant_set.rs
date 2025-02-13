@@ -22,7 +22,6 @@ impl ConstantMap {
 
     pub fn get_int(&mut self, num: i64, builder: &mut FunctionBuilder) -> Value {
         if let Some(value) = self.map.get(&ConstantType::Int(num)) {
-            // println!("Using existing int constant: {num}");
             *value
         } else {
             let value = builder.ins().iconst(I64, num);
@@ -33,7 +32,6 @@ impl ConstantMap {
 
     pub fn get_float(&mut self, num: f64, builder: &mut FunctionBuilder) -> Value {
         if let Some(value) = self.map.get(&ConstantType::Float(OrderedFloat(num))) {
-            // println!("Using existing float constant: {num}");
             *value
         } else {
             let value = builder.ins().f64const(num);

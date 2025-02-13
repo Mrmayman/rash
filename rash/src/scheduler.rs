@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use memmap2::Mmap;
-use rash_render::{Run, RunState, SpriteId};
+use rash_render::{CostumeId, IntermediateCostume, IntermediateState, Run, RunState, SpriteId};
 
 use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObject};
 
@@ -25,6 +25,7 @@ pub struct Script {
     pub blocks: Vec<ScratchBlock>,
     pub kind: ScriptKind,
 }
+
 impl Script {
     pub fn new_green_flag(blocks: Vec<ScratchBlock>) -> Script {
         Self {
@@ -110,6 +111,11 @@ impl ProjectBuilder {
                 sprite_order: Vec::new(),
                 threads: Vec::new(),
                 scripts: Scripts::default(),
+                costume_names: HashMap::new(),
+                costume_numbers: HashMap::new(),
+                costume_hashes: HashMap::new(),
+                costume_intermediate: HashMap::new(),
+                temp_init_state: HashMap::new(),
             },
         }
     }
@@ -121,9 +127,26 @@ impl ProjectBuilder {
         self.scheduler.scripts.push(sprite.scripts);
     }
 
+    pub fn set_costume(
+        &mut self,
+        costume_names: HashMap<(SpriteId, String), String>,
+        costume_numbers: HashMap<(SpriteId, usize), String>,
+        costume_hashes: HashMap<String, CostumeId>,
+        costume_intermediate: HashMap<CostumeId, IntermediateCostume>,
+    ) {
+        self.scheduler.costume_names = costume_names;
+        self.scheduler.costume_numbers = costume_numbers;
+        self.scheduler.costume_hashes = costume_hashes;
+        self.scheduler.costume_intermediate = costume_intermediate;
+    }
+
     pub fn finish(mut self) -> Scheduler {
         self.scheduler.init();
         self.scheduler
+    }
+
+    pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, rash_render::IntermediateState>) {
+        self.scheduler.temp_init_state = state_map;
     }
 }
 
@@ -131,6 +154,11 @@ pub struct Scheduler {
     pub sprite_order: Vec<SpriteId>,
     pub threads: Vec<ScratchThread>,
     pub scripts: Scripts,
+    pub costume_names: HashMap<(SpriteId, String), String>,
+    pub costume_numbers: HashMap<(SpriteId, usize), String>,
+    pub costume_hashes: HashMap<String, CostumeId>,
+    pub costume_intermediate: HashMap<CostumeId, IntermediateCostume>,
+    pub temp_init_state: HashMap<SpriteId, IntermediateState>,
 }
 
 impl Run for Scheduler {
@@ -139,12 +167,20 @@ impl Run for Scheduler {
         self.run_threads(state)
     }
 
-    fn num_sprites(&self) -> usize {
+    fn get_num_sprites(&self) -> usize {
         self.sprite_order.len()
     }
 
-    fn sprite_order(&self) -> Vec<SpriteId> {
+    fn get_sprite_order(&self) -> Vec<SpriteId> {
         self.sprite_order.clone()
+    }
+
+    fn get_costumes(&self) -> HashMap<CostumeId, IntermediateCostume> {
+        self.costume_intermediate.clone()
+    }
+
+    fn get_state(&self) -> HashMap<SpriteId, rash_render::IntermediateState> {
+        self.temp_init_state.clone()
     }
 }
 

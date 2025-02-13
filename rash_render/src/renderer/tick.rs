@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::time::Instant;
 
-use crate::SpriteId;
+use crate::{CostumeId, SpriteId};
 
+use super::texture::Costume;
 use super::to_bytes;
 
 use super::{
@@ -30,7 +32,12 @@ impl InnerRenderer<'_> {
         );
     }
 
-    pub fn render(&mut self, sprite_order: &[SpriteId]) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        sprite_order: &[SpriteId],
+        graphics: &[GraphicsState],
+        costume: &HashMap<CostumeId, Costume>,
+    ) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -64,6 +71,9 @@ impl InnerRenderer<'_> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
             for i in sprite_order {
+                let costume_id = graphics.get(i.0 as usize).unwrap().costume;
+                let costume = costume.get(&costume_id).unwrap();
+                render_pass.set_bind_group(1, &costume.bind_group, &[]);
                 let i = i.0 as u32 * 6;
                 render_pass.draw(i..(i + 6), 0..1);
             }
@@ -81,8 +91,9 @@ impl InnerRenderer<'_> {
         control_flow: &winit::event_loop::EventLoopWindowTarget<()>,
         graphics: &[GraphicsState],
         sprite_order: &[SpriteId],
+        costumes: &HashMap<CostumeId, Costume>,
     ) {
-        let delta = self.last_time.elapsed().as_secs_f64() * 60.0;
+        let _delta = self.last_time.elapsed().as_secs_f64() * 60.0;
         // This tells winit that we want another frame after this one
         self.window.request_redraw();
 
@@ -91,13 +102,10 @@ impl InnerRenderer<'_> {
         self.queue.write_buffer(
             &self.sprites_buffer,
             0,
-            to_bytes(
-                graphics,
-                graphics.len() * std::mem::size_of::<GraphicsState>(),
-            ),
+            to_bytes(graphics, std::mem::size_of_val(graphics)),
         );
 
-        match self.render(sprite_order) {
+        match self.render(sprite_order, graphics, costumes) {
             Ok(_) => {}
             // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => self.resize(self.size),

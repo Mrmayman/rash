@@ -266,6 +266,12 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
         | ScratchBlock::FunctionGetArg(_)
         | ScratchBlock::MotionGoToXY(_, _)
+        | ScratchBlock::MotionChangeX(_)
+        | ScratchBlock::MotionChangeY(_)
+        | ScratchBlock::MotionSetX(_)
+        | ScratchBlock::MotionSetY(_)
+        | ScratchBlock::MotionGetX
+        | ScratchBlock::MotionGetY
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

@@ -39,7 +39,7 @@ impl ScratchBlock {
                     out.push('\n');
                 }
                 out.push_str(&" ".repeat(indent * 4));
-                out.push_str("}");
+                out.push('}');
 
                 out
             }
@@ -56,7 +56,7 @@ impl ScratchBlock {
                     out.push('\n');
                 }
                 out.push_str(&" ".repeat(indent * 4));
-                out.push_str("}");
+                out.push('}');
 
                 out
             }
@@ -67,7 +67,7 @@ impl ScratchBlock {
                     out.push('\n');
                 }
                 out.push_str(&" ".repeat(indent * 4));
-                out.push_str("}");
+                out.push('}');
 
                 out
             }
@@ -78,7 +78,7 @@ impl ScratchBlock {
                     out.push('\n');
                 }
                 out.push_str(&" ".repeat(indent * 4));
-                out.push_str("}");
+                out.push('}');
 
                 out
             }
@@ -89,7 +89,7 @@ impl ScratchBlock {
                     out.push('\n');
                 }
                 out.push_str(&" ".repeat(indent * 4));
-                out.push_str("}");
+                out.push('}');
 
                 out
             }
@@ -98,7 +98,7 @@ impl ScratchBlock {
                 let mut out = format!("call ({})(", custom_block_id.0);
                 let len = vec.len();
                 for (i, arg) in vec.iter().enumerate() {
-                    out.push_str(&format!("{}", arg.format(0)));
+                    out.push_str(&arg.format(0));
                     if i < len - 1 {
                         out.push_str(", ");
                     }
@@ -114,6 +114,12 @@ impl ScratchBlock {
             ScratchBlock::MotionGoToXY(input, input1) => {
                 func_call_inner("motion.go_to_xy", &[input, input1])
             }
+            ScratchBlock::MotionChangeX(input) => func_call_inner("motion.x += ", &[input]),
+            ScratchBlock::MotionChangeY(input) => func_call_inner("motion.y += ", &[input]),
+            ScratchBlock::MotionSetX(input) => func_call_inner("motion.x = ", &[input]),
+            ScratchBlock::MotionSetY(input) => func_call_inner("motion.y = ", &[input]),
+            ScratchBlock::MotionGetX => "motion.x".to_owned(),
+            ScratchBlock::MotionGetY => "motion.y".to_owned(),
         };
 
         format!("{}{out}", " ".repeat(indent * 4))

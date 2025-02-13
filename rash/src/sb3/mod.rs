@@ -16,7 +16,7 @@ use crate::{
     input_primitives::{Input, Ptr},
     scheduler::{ProjectBuilder, Scheduler, Script, SpriteBuilder},
 };
-use rash_render::SpriteId;
+use rash_render::{CostumeId, IntermediateCostume, IntermediateState, SpriteId};
 
 mod blocks;
 pub mod json;
@@ -60,60 +60,147 @@ impl ProjectLoader {
     }
 
     pub fn build(self) -> Result<Scheduler, RashError> {
+        const FN_N: &str = "ProjectLoader::build";
+
         let mut builder = ProjectBuilder::new();
 
+        let mut costume_names = HashMap::new();
+        let mut costume_numbers = HashMap::new();
+        let mut costume_hashes = HashMap::new();
+        let mut costume_ids = HashMap::new();
+
+        let mut costume_id = CostumeId(0);
+        let mut variable_map = HashMap::new();
+
+        let mut state_map = HashMap::new();
+
         for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
-            let mut sprite = SpriteBuilder::new(SpriteId(sprite_i as i64));
+            let id = SpriteId(sprite_i as i64);
+            let mut sprite = SpriteBuilder::new(id);
 
-            let mut variable_map = HashMap::new();
+            self.load_costumes(
+                sprite_json,
+                &mut costume_names,
+                &mut costume_numbers,
+                id,
+                &mut costume_hashes,
+                &mut costume_id,
+                &mut costume_ids,
+            )
+            .trace(FN_N)?;
 
-            for (_, hat_block) in sprite_json.get_hat_blocks() {
-                let JsonBlock::Block { block: hat_block } = hat_block else {
-                    println!("Array hat block encountered");
-                    continue;
-                };
+            let costume = costume_numbers
+                .get(&(id, sprite_json.currentCostume as usize))
+                .unwrap();
+            let costume = *costume_hashes.get(costume).unwrap();
+            let state = IntermediateState {
+                x: sprite_json.x.unwrap_or_default(),
+                y: sprite_json.y.unwrap_or_default(),
+                size: sprite_json.size.unwrap_or(100.0),
+                costume,
+            };
 
-                let mut blocks: Vec<ScratchBlock> = Vec::new();
+            state_map.insert(id, state);
 
-                let mut id = hat_block.next.clone();
-
-                while let Some(block_id) = id {
-                    let block = sprite_json.blocks.get(&block_id).unwrap();
-                    let JsonBlock::Block { block } = block else {
-                        println!("Array block encountered");
-                        break;
-                    };
-
-                    blocks.push(
-                        block
-                            .compile(&mut variable_map, &sprite_json.blocks)
-                            .trace(&format!(
-                                "ProjectLoader::build (sprite: {})",
-                                sprite_json.name
-                            ))?,
-                    );
-
-                    id = block.next.clone();
-                }
-
-                for block in &blocks {
-                    println!("{}", block.format(0))
-                }
-
-                match hat_block.opcode.as_str() {
-                    "event_whenflagclicked" => {
-                        sprite.add_script(&Script::new_green_flag(blocks));
-                    }
-                    _ => {
-                        println!("Unknown hat block opcode: {}", hat_block.opcode);
-                    }
-                }
-            }
+            load_blocks(sprite_json, &mut variable_map, &mut sprite)?;
 
             builder.finish_sprite(sprite);
         }
+
+        builder.set_costume(costume_names, costume_numbers, costume_hashes, costume_ids);
+        builder.set_init_state(state_map);
+
         Ok(builder.finish())
     }
+
+    fn load_costumes(
+        &self,
+        sprite_json: &json::Target,
+        costume_names: &mut HashMap<(SpriteId, String), String>,
+        costume_numbers: &mut HashMap<(SpriteId, usize), String>,
+        id: SpriteId,
+        costume_hashes: &mut HashMap<String, CostumeId>,
+        costume_id: &mut CostumeId,
+        costume_ids: &mut HashMap<CostumeId, IntermediateCostume>,
+    ) -> Result<(), RashError> {
+        const FN_N: &str = "ProjectLoader::load_costumes";
+
+        for (i, costume) in sprite_json.costumes.iter().enumerate() {
+            let path = self.dir.path();
+            let path = path.join(&costume.md5ext);
+            let bytes = std::fs::read(&path).to_p(&path, "std::fs::read (costume)", FN_N)?;
+
+            let intermediate = IntermediateCostume {
+                bytes,
+                name: costume.name.clone(),
+                hash: costume.assetId.clone(),
+                rotation_center_x: costume.rotationCenterX,
+                rotation_center_y: costume.rotationCenterY,
+            };
+
+            costume_names.insert((id, costume.name.clone()), costume.assetId.clone());
+            costume_numbers.insert((id, i), costume.assetId.clone());
+
+            if costume_hashes.contains_key(&costume.assetId) {
+                continue;
+            }
+            costume_hashes.insert(costume.assetId.clone(), *costume_id);
+            costume_ids.insert(*costume_id, intermediate);
+            costume_id.0 += 1;
+        }
+        Ok(())
+    }
+}
+
+fn load_blocks(
+    sprite_json: &json::Target,
+    variable_map: &mut HashMap<String, Ptr>,
+    sprite: &mut SpriteBuilder,
+) -> Result<(), RashError> {
+    for (_, hat_block) in sprite_json.get_hat_blocks() {
+        let JsonBlock::Block { block: hat_block } = hat_block else {
+            println!("Array hat block encountered");
+            continue;
+        };
+
+        let mut blocks: Vec<ScratchBlock> = Vec::new();
+
+        let mut id = hat_block.next.clone();
+
+        while let Some(block_id) = id {
+            let block = sprite_json.blocks.get(&block_id).unwrap();
+            let JsonBlock::Block { block } = block else {
+                println!("Array block encountered");
+                break;
+            };
+
+            blocks.push(
+                block
+                    .compile(variable_map, &sprite_json.blocks)
+                    .trace(&format!(
+                        "ProjectLoader::build (sprite: {})",
+                        sprite_json.name
+                    ))?,
+            );
+
+            id = block.next.clone();
+        }
+
+        for block in &blocks {
+            println!("{}", block.format(0))
+        }
+
+        match hat_block.opcode.as_str() {
+            "event_whenflagclicked" => {
+                sprite.add_script(&Script::new_green_flag(blocks));
+            }
+            _ => {
+                println!("Unknown hat block opcode: {}", hat_block.opcode);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 impl Block {
@@ -284,7 +371,7 @@ impl Block {
             },
             serde_json::Value::Array(vec) => {
                 let n = vec
-                    .get(0)
+                    .first()
                     .ok_or(RashError::field_not_found(&format!(
                         "self.inputs.{name}[1][0]"
                     )))?
@@ -348,7 +435,13 @@ impl Block {
                 JsonBlock::Array(_) => todo!(),
             },
             serde_json::Value::Array(vec) => {
-                let n = vec.get(0).unwrap().as_i64().unwrap();
+                let n = vec
+                    .first()
+                    .ok_or(RashError::field_not_found(&format!(
+                        "self.inputs.{name}[1][0]"
+                    )))?
+                    .as_i64()
+                    .unwrap();
                 match n {
                     JSON_ID_NUMBER
                     | JSON_ID_ANGLE
@@ -386,7 +479,7 @@ impl Block {
     }
 }
 
-fn variable_map_get<'a>(variable_map: &mut HashMap<String, Ptr>, variable: &str) -> Ptr {
+fn variable_map_get(variable_map: &mut HashMap<String, Ptr>, variable: &str) -> Ptr {
     if let Some(ptr) = variable_map.get(variable) {
         *ptr
     } else {

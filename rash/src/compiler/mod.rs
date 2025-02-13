@@ -88,6 +88,12 @@ pub enum ScratchBlock {
     /// [`ScratchBlock::ControlRepeatScreenRefresh`]
     ScreenRefresh,
     MotionGoToXY(Input, Input),
+    MotionChangeX(Input),
+    MotionChangeY(Input),
+    MotionSetX(Input),
+    MotionSetY(Input),
+    MotionGetX,
+    MotionGetY,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -132,6 +138,8 @@ impl ScratchBlock {
             | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VarTypeChecked::String)
@@ -152,6 +160,10 @@ impl ScratchBlock {
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::MotionGoToXY(_, _)
+            | ScratchBlock::MotionChangeX(_)
+            | ScratchBlock::MotionChangeY(_)
+            | ScratchBlock::MotionSetX(_)
+            | ScratchBlock::MotionSetY(_)
             | ScratchBlock::ControlRepeatUntil(_, _) => None,
         }
     }
@@ -235,9 +247,15 @@ impl ScratchBlock {
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::ScreenRefresh
-            | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlStopThisScript
+            | ScratchBlock::MotionGoToXY(_, _)
+            | ScratchBlock::MotionChangeX(_)
+            | ScratchBlock::MotionChangeY(_)
+            | ScratchBlock::MotionSetX(_)
+            | ScratchBlock::MotionSetY(_)
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
@@ -421,6 +439,86 @@ impl<'a> Compiler<'a> {
                     &[],
                     &[self.graphics_ptr, id, x, y],
                 );
+            }
+            ScratchBlock::MotionChangeX(x) => {
+                let x = x.get_number(self, builder);
+
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                self.call_function(
+                    builder,
+                    RunState::c_change_x as usize,
+                    &[I64, I64, F64],
+                    &[],
+                    &[self.graphics_ptr, id, x],
+                );
+            }
+            ScratchBlock::MotionChangeY(y) => {
+                let y = y.get_number(self, builder);
+
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                self.call_function(
+                    builder,
+                    RunState::c_change_y as usize,
+                    &[I64, I64, F64],
+                    &[],
+                    &[self.graphics_ptr, id, y],
+                );
+            }
+            ScratchBlock::MotionSetX(x) => {
+                let x = x.get_number(self, builder);
+
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                self.call_function(
+                    builder,
+                    RunState::c_set_x as usize,
+                    &[I64, I64, F64],
+                    &[],
+                    &[self.graphics_ptr, id, x],
+                );
+            }
+            ScratchBlock::MotionSetY(y) => {
+                let y = y.get_number(self, builder);
+
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                self.call_function(
+                    builder,
+                    RunState::c_set_y as usize,
+                    &[I64, I64, F64],
+                    &[],
+                    &[self.graphics_ptr, id, y],
+                );
+            }
+            ScratchBlock::MotionGetX => {
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                let inst = self.call_function(
+                    builder,
+                    RunState::c_get_x as usize,
+                    &[I64, I64],
+                    &[F64],
+                    &[self.graphics_ptr, id],
+                );
+
+                let val = builder.inst_results(inst)[0];
+                return Some(ReturnValue::Num(val));
+            }
+            ScratchBlock::MotionGetY => {
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+
+                let inst = self.call_function(
+                    builder,
+                    RunState::c_get_y as usize,
+                    &[I64, I64],
+                    &[F64],
+                    &[self.graphics_ptr, id],
+                );
+
+                let val = builder.inst_results(inst)[0];
+                return Some(ReturnValue::Num(val));
             }
         }
         None

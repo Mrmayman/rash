@@ -1,7 +1,7 @@
 use compiler::MEMORY;
 use data_types::ScratchObject;
 use input_primitives::STRINGS_TO_DROP;
-use rash_render::{Renderer, SpriteId};
+use rash_render::Renderer;
 use sb3::ProjectLoader;
 use scheduler::Scheduler;
 
@@ -40,7 +40,7 @@ const ARITHMETIC_NAN_CHECK: bool = true;
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
 
-    let Some(value) = std::env::args().into_iter().nth(1) else {
+    let Some(value) = std::env::args().nth(1) else {
         eprintln!("Usage: rash /path/to/project.sb3");
         return;
     };
@@ -63,7 +63,7 @@ fn main() {
 }
 
 async fn run(scheduler: Scheduler) {
-    let renderer = Renderer::new("Rash", Box::new(scheduler)).await;
+    let renderer = Renderer::new("Rash", Box::new(scheduler)).await.unwrap();
     renderer.run();
 }
 

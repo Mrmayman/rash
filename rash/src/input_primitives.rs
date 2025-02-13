@@ -115,9 +115,6 @@ impl Input {
             }
             Input::Block(scratch_block) => {
                 let could_be_nan = scratch_block.could_be_nan();
-                // if could_be_nan {
-                //     println!("Could be nan: {scratch_block:?}");
-                // }
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 (o.get_number(compiler, builder), could_be_nan)
             }

@@ -1,10 +1,12 @@
 use std::{sync::Arc, time::Instant};
 
 use buffers::GlobalBuffer;
+use wgpu::{BindGroupLayout, Sampler};
 use winit::window::Window;
 
 pub mod buffers;
 pub mod init;
+pub mod texture;
 pub mod tick;
 
 pub fn to_bytes<T: ?Sized>(s: &T, size: usize) -> &[u8] {
@@ -24,6 +26,8 @@ pub struct InnerRenderer<'a> {
     pub global_buffer: wgpu::Buffer,
     pub global_state: GlobalBuffer,
     pub last_time: Instant,
+    pub sampler: Sampler,
+    pub costume_layout: BindGroupLayout,
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.

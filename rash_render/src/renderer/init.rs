@@ -4,6 +4,9 @@ use std::time::Instant;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use crate::CostumeId;
+
+use super::texture::Costume;
 use super::to_bytes;
 
 use super::{
@@ -11,7 +14,7 @@ use super::{
     InnerRenderer,
 };
 
-impl<'a> InnerRenderer<'a> {
+impl InnerRenderer<'_> {
     pub async fn new(window: Arc<Window>, num_sprites: usize) -> Self {
         let size = window.inner_size();
 
@@ -62,7 +65,14 @@ impl<'a> InnerRenderer<'a> {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_caps.present_modes[0],
+            present_mode: if surface_caps
+                .present_modes
+                .contains(&wgpu::PresentMode::Fifo)
+            {
+                wgpu::PresentMode::Fifo
+            } else {
+                surface_caps.present_modes[0]
+            },
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -109,10 +119,12 @@ impl<'a> InnerRenderer<'a> {
             ],
         });
 
+        let costume_bind_group_layout = Costume::get_bind_group_layout(&device);
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&bind_group_layout],
+                bind_group_layouts: &[&bind_group_layout, &costume_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -130,7 +142,7 @@ impl<'a> InnerRenderer<'a> {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -162,9 +174,11 @@ impl<'a> InnerRenderer<'a> {
                 x: 36.0,
                 y: 28.0,
                 size: 100.0,
-                _padding: Default::default(),
+                costume: CostumeId(0),
                 texture_width: 100.0,
                 texture_height: 100.0,
+                center_x: 0.0,
+                center_y: 0.0,
             };
             num_sprites
         ];
@@ -202,6 +216,8 @@ impl<'a> InnerRenderer<'a> {
             ],
         });
 
+        let sampler = Costume::create_sampler(&device);
+
         Self {
             window,
             surface,
@@ -214,6 +230,8 @@ impl<'a> InnerRenderer<'a> {
             sprites_buffer,
             global_state,
             global_buffer,
+            sampler,
+            costume_layout: costume_bind_group_layout,
             last_time: Instant::now(),
         }
     }
