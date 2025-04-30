@@ -59,23 +59,18 @@ pub enum ScratchBlock {
     OpStrContains(Input, Input),
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
-    /// A repeat loop that *doesn't support* screen refresh.
-    /// MUCH faster than [`ScratchBlock::ControlRepeatScreenRefresh`]
-    /// but you can't use [`ScratchBlock::ScreenRefresh`] inside.
-    ControlRepeat(Input, Vec<ScratchBlock>),
     /// A repeat loop that *supports* screen refresh
-    /// (pausing/resuming of code). It is slower than
-    /// [`ScratchBlock::ControlRepeat`] which doesn't
-    /// support screen refresh.
+    /// (pausing/resuming of code).
     ///
     /// This loop doesn't provide screen refresh by default
     /// but you can insert [`ScratchBlock::ScreenRefresh`]
     /// inside it.
-    ControlRepeatScreenRefresh(Input, Vec<ScratchBlock>),
+    ControlRepeat(Input, Vec<ScratchBlock>),
     /// Repeats until a condition is true.
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
     ControlStopThisScript,
     FunctionCallNoScreenRefresh(CustomBlockId, Vec<Input>),
+    FunctionCallScreenRefresh(CustomBlockId, Vec<Input>),
     FunctionGetArg(usize),
     /// A block to trigger a screen refresh.
     ///
@@ -94,6 +89,8 @@ pub enum ScratchBlock {
     MotionSetY(Input),
     MotionGetX,
     MotionGetY,
+
+    Log(Input),
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -154,17 +151,18 @@ impl ScratchBlock {
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
             | ScratchBlock::ControlIfElse(_, _, _)
-            | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlRepeat(_, _)
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::FunctionCallScreenRefresh(_, _)
             | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::MotionChangeX(_)
             | ScratchBlock::MotionChangeY(_)
             | ScratchBlock::MotionSetX(_)
             | ScratchBlock::MotionSetY(_)
-            | ScratchBlock::ControlRepeatUntil(_, _) => None,
+            | ScratchBlock::ControlRepeatUntil(_, _)
+            | ScratchBlock::Log(_) => None,
         }
     }
 
@@ -174,6 +172,8 @@ impl ScratchBlock {
         variable_type_data: &HashMap<Ptr, VarType>,
     ) -> Option<VarTypeChecked> {
         match self {
+            ScratchBlock::FunctionCallScreenRefresh(_, _)
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _) => Some(VarTypeChecked::Unknown),
             ScratchBlock::VarSet(ptr, input) => {
                 if var_ptr == *ptr {
                     match input {
@@ -198,23 +198,27 @@ impl ScratchBlock {
             | ScratchBlock::ControlRepeatUntil(_, vec) => vec
                 .iter()
                 .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                .last(),
+                .next_back(),
             ScratchBlock::ControlIfElse(_, then, else_block) => {
                 let then = then
                     .iter()
-                    .map(|n| n.affects_var(var_ptr, variable_type_data))
-                    .last()
-                    .flatten();
+                    .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
+                    .next_back();
                 let else_block = else_block
                     .iter()
-                    .map(|n| n.affects_var(var_ptr, variable_type_data))
-                    .last()
-                    .flatten();
+                    .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
+                    .next_back();
 
                 match (then, else_block) {
                     (None, None) => None,
                     (None, Some(n)) | (Some(n), None) => Some(n),
-                    (Some(a), Some(b)) => (a == b).then_some(a),
+                    (Some(a), Some(b)) => {
+                        if a == b {
+                            Some(a)
+                        } else {
+                            Some(VarTypeChecked::Unknown)
+                        }
+                    }
                 }
             }
             _ => None,
@@ -247,7 +251,6 @@ impl ScratchBlock {
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::ScreenRefresh
-            | ScratchBlock::ControlRepeatScreenRefresh(_, _)
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::MotionChangeX(_)
@@ -257,6 +260,8 @@ impl ScratchBlock {
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::FunctionCallScreenRefresh(_, _)
+            | ScratchBlock::Log(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -264,6 +269,59 @@ impl ScratchBlock {
             | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::OpRandom(_, _) => true,
+        }
+    }
+
+    pub fn could_refresh_screen(&self) -> bool {
+        match self {
+            ScratchBlock::VarSet(_, _)
+            | ScratchBlock::VarChange(_, _)
+            | ScratchBlock::VarRead(_)
+            | ScratchBlock::OpAdd(_, _)
+            | ScratchBlock::OpSub(_, _)
+            | ScratchBlock::OpMul(_, _)
+            | ScratchBlock::OpDiv(_, _)
+            | ScratchBlock::OpRound(_)
+            | ScratchBlock::OpStrJoin(_, _)
+            | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpStrLen(_)
+            | ScratchBlock::OpBAnd(_, _)
+            | ScratchBlock::OpBNot(_)
+            | ScratchBlock::OpBOr(_, _)
+            | ScratchBlock::OpMFloor(_)
+            | ScratchBlock::OpMAbs(_)
+            | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::OpMSin(_)
+            | ScratchBlock::OpMCos(_)
+            | ScratchBlock::OpMTan(_)
+            | ScratchBlock::OpCmpGreater(_, _)
+            | ScratchBlock::OpCmpLesser(_, _)
+            | ScratchBlock::OpRandom(_, _)
+            | ScratchBlock::OpStrLetterOf(_, _)
+            | ScratchBlock::OpStrContains(_, _)
+            | ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::FunctionGetArg(_)
+            | ScratchBlock::Log(_)
+            | ScratchBlock::MotionGoToXY(_, _)
+            | ScratchBlock::MotionChangeX(_)
+            | ScratchBlock::MotionChangeY(_)
+            | ScratchBlock::MotionSetX(_)
+            | ScratchBlock::MotionSetY(_)
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY => false,
+
+            ScratchBlock::ControlIf(_, scratch_blocks)
+            | ScratchBlock::ControlRepeatUntil(_, scratch_blocks)
+            | ScratchBlock::ControlRepeat(_, scratch_blocks) => {
+                scratch_blocks.iter().any(|n| n.could_refresh_screen())
+            }
+            ScratchBlock::ControlIfElse(_, scratch_blocks, scratch_blocks1) => {
+                scratch_blocks.iter().any(|n| n.could_refresh_screen())
+                    || scratch_blocks1.iter().any(|n| n.could_refresh_screen())
+            }
+
+            ScratchBlock::ScreenRefresh | ScratchBlock::FunctionCallScreenRefresh(_, _) => true,
         }
     }
 }
@@ -284,10 +342,15 @@ pub struct Compiler<'compiler> {
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
+
     pub vec_ptr: Value,
     pub scheduler_ptr: Value,
     pub graphics_ptr: Value,
+    pub child_thread_ptr: Value,
+
     pub sprite_id: SpriteId,
+    pub is_screen_refresh: bool,
+    pub is_called_as_refresh: Value,
 }
 
 impl<'a> Compiler<'a> {
@@ -301,6 +364,9 @@ impl<'a> Compiler<'a> {
         graphics_ptr: Value,
         args_list: Vec<[Value; 4]>,
         sprite_id: SpriteId,
+        is_screen_refresh: bool,
+        is_called_as_refresh: Value,
+        child_thread_ptr: Value,
     ) -> Self {
         Self {
             variable_type_data: HashMap::new(),
@@ -315,6 +381,9 @@ impl<'a> Compiler<'a> {
             args_list,
             graphics_ptr,
             sprite_id,
+            is_screen_refresh,
+            is_called_as_refresh,
+            child_thread_ptr,
         }
     }
 
@@ -348,11 +417,14 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpStrJoin(a, b) => {
                 return Some(ReturnValue::Object(self.op_str_join(a, b, builder)));
             }
+            ScratchBlock::Log(msg) => self.dbg_log(msg, builder),
             ScratchBlock::ControlRepeat(input, vec) => {
-                self.control_repeat(builder, input, vec, false);
-            }
-            ScratchBlock::ControlRepeatScreenRefresh(input, vec) => {
-                self.control_repeat(builder, input, vec, true);
+                self.control_repeat(
+                    builder,
+                    input,
+                    vec,
+                    vec.iter().any(|n| n.could_refresh_screen()),
+                );
             }
             ScratchBlock::VarChange(ptr, input) => {
                 self.var_change(input, builder, *ptr);
@@ -415,13 +487,16 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Num(self.op_m_tan(num, builder)));
             }
             ScratchBlock::ScreenRefresh => {
-                self.screen_refresh(builder);
+                self.screen_refresh(builder, true);
             }
             ScratchBlock::ControlStopThisScript => {
                 self.control_stop_this_script(builder);
             }
             ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, args) => {
-                self.call_no_screen_refresh(custom_block_id, builder, args);
+                self.call_custom_block(custom_block_id, builder, args, false);
+            }
+            ScratchBlock::FunctionCallScreenRefresh(custom_block_id, args) => {
+                self.call_custom_block(custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
                 return Some(ReturnValue::Object(self.args_list[*idx]))
@@ -524,9 +599,15 @@ impl<'a> Compiler<'a> {
         None
     }
 
-    fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
+    pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>, save_cache: bool) {
+        if !self.is_screen_refresh {
+            return;
+        }
+
         self.break_counter += 1;
-        self.cache.save(builder, &mut self.constants, self.memory);
+        if save_cache {
+            self.cache.save(builder, &mut self.constants, self.memory);
+        }
         let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
         builder.ins().return_(&[break_counter]);
@@ -535,7 +616,7 @@ impl<'a> Compiler<'a> {
         self.break_points.push(self.code_block);
         builder.switch_to_block(self.code_block);
 
-        self.cache.init(builder, self.memory, &mut self.constants);
+        self.cache.init(builder, &mut self.constants, self.memory);
     }
 }
 
@@ -543,7 +624,9 @@ impl<'a> Compiler<'a> {
 pub fn print_func_addresses() {
     println!("var_read: {:X}", callbacks::var_read as usize);
     println!("op_str_join: {:X}", callbacks::op_str_join as usize);
+
     println!("f64::floor: {:X}", f64::floor as usize);
+
     println!(
         "to_string_from_num: {:X}",
         callbacks::types::to_string_from_num as usize
@@ -554,5 +637,28 @@ pub fn print_func_addresses() {
         callbacks::types::to_string_from_bool as usize
     );
     println!("to_number: {:X}", callbacks::types::to_number as usize);
+    println!(
+        "to_number_with_decimal_check: {:X}",
+        callbacks::types::to_number_with_decimal_check as usize
+    );
     println!("drop_obj: {:X}", callbacks::types::drop_obj as usize);
+    println!("to_bool: {:X}", callbacks::types::to_bool as usize);
+
+    println!(
+        "custom_block(): {:X}",
+        callbacks::custom_block::call_no_screen_refresh as usize
+    );
+    println!(
+        "custom_block.await: {:X}",
+        callbacks::custom_block::call_screen_refresh as usize
+    );
+
+    println!(
+        "stack_pop: {:X}",
+        callbacks::repeat_stack::stack_pop as usize
+    );
+    println!(
+        "stack_push: {:X}",
+        callbacks::repeat_stack::stack_push as usize
+    );
 }

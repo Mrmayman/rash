@@ -13,9 +13,10 @@ pub use renderer::texture::IntermediateCostume;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct SpriteId(pub i64);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
 pub struct CostumeId(pub i32);
 
+#[derive(Clone, Debug, Default)]
 pub struct SpriteData {
     graphics: GraphicsState,
 }
@@ -143,11 +144,14 @@ pub trait Run {
     fn get_state(&self) -> HashMap<SpriteId, IntermediateState>;
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct RunState {
     graphics: HashMap<SpriteId, SpriteData>,
 }
 
 impl RunState {
+    // TODO: Implement Pen trails
+
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
     pub unsafe extern "C" fn c_go_to(this: *mut Self, id: i64, x: f64, y: f64) {

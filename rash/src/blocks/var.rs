@@ -61,15 +61,13 @@ impl Compiler<'_> {
                 }
             }
             Input::Block(block) => {
-                // compile block
-                let val = self.compile_block(block, builder);
-                let val = val.unwrap();
-                if !matches!(
-                    self.variable_type_data.get(&ptr),
-                    Some(VarType::Number | VarType::Bool)
-                ) {
+                let val = self.compile_block(block, builder)
+                    .expect("blocks inside other blocks (like an add operator in a set var block) should return something!");
+
+                if matches!(self.variable_type_data.get(&ptr), Some(VarType::String)) {
                     self.ins_drop_obj(builder, ptr);
                 }
+
                 match val {
                     ReturnValue::Num(value) | ReturnValue::Bool(value) => {
                         self.cache.store_small_value(

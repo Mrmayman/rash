@@ -57,8 +57,8 @@ impl StackCache {
     pub fn init(
         &self,
         builder: &mut FunctionBuilder,
-        memory: &[ScratchObject],
         constants: &mut ConstantMap,
+        memory: &[ScratchObject],
     ) {
         for (ptr, offset) in &self.variable_offsets {
             let ptr = ptr.constant(constants, builder, memory);
@@ -225,7 +225,6 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
             vars.insert(*ptr);
         }
         ScratchBlock::ControlRepeatUntil(_, vec)
-        | ScratchBlock::ControlRepeatScreenRefresh(_, vec)
         | ScratchBlock::ControlRepeat(_, vec)
         | ScratchBlock::ControlIf(_, vec) => {
             for block in vec {
@@ -264,6 +263,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::ScreenRefresh
         | ScratchBlock::ControlStopThisScript
         | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+        | ScratchBlock::FunctionCallScreenRefresh(_, _)
         | ScratchBlock::FunctionGetArg(_)
         | ScratchBlock::MotionGoToXY(_, _)
         | ScratchBlock::MotionChangeX(_)
@@ -272,6 +272,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::MotionSetY(_)
         | ScratchBlock::MotionGetX
         | ScratchBlock::MotionGetY
+        | ScratchBlock::Log(_)
         | ScratchBlock::OpRandom(_, _) => {}
     }
 }

@@ -6,11 +6,13 @@ use rash_render::{CostumeId, IntermediateCostume, IntermediateState, Run, RunSta
 use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObject};
 
 pub type ScratchFunction = unsafe extern "sysv64" fn(
-    i64,
+    i64, // Jump ID
     *mut Vec<i64>,
     *const ScratchObject,
     *mut Scheduler,
     *mut RunState,
+    i64, // Is screen refresh
+    *mut Option<ScratchThread>,
 ) -> i64;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -19,6 +21,7 @@ pub struct CustomBlockId(pub usize);
 pub struct CustomBlock {
     pub thread: ScratchThread,
     pub is_screen_refresh: bool,
+    pub num_args: usize,
 }
 
 pub struct Script {
@@ -60,6 +63,17 @@ pub enum ScriptKind {
     },
 }
 
+impl ScriptKind {
+    pub fn is_screen_refresh(&self) -> bool {
+        match self {
+            ScriptKind::GreenFlag => true,
+            ScriptKind::CustomBlock {
+                is_screen_refresh, ..
+            } => *is_screen_refresh,
+        }
+    }
+}
+
 pub struct SpriteBuilder {
     id: SpriteId,
     scripts: Scripts,
@@ -78,7 +92,12 @@ impl SpriteBuilder {
             ScriptKind::GreenFlag => 0,
             ScriptKind::CustomBlock { num_args, .. } => num_args,
         };
-        let thread = compile(&script.blocks, self.id, num_args);
+        let thread = compile(
+            &script.blocks,
+            self.id,
+            num_args,
+            script.kind.is_screen_refresh(),
+        );
         match script.kind {
             ScriptKind::GreenFlag => {
                 self.scripts.green_flags.push(thread);
@@ -93,6 +112,7 @@ impl SpriteBuilder {
                     CustomBlock {
                         thread,
                         is_screen_refresh,
+                        num_args,
                     },
                 );
             }
@@ -235,11 +255,15 @@ impl Scripts {
 
 pub struct ScratchThread {
     sprite_id: SpriteId,
-    buffer: Arc<Mmap>,
-    stack: Vec<i64>,
-    arguments: Option<*const ScratchObject>,
-    func: ScratchFunction,
+    is_screen_refresh: bool,
+    arguments: Vec<ScratchObject>,
+
+    stack_repeat: Vec<i64>,
     jumped_point: i64,
+    child_thread: Box<Option<ScratchThread>>,
+
+    buffer: Arc<Mmap>,
+    func: ScratchFunction,
 }
 
 impl Debug for ScratchThread {
@@ -253,20 +277,22 @@ impl Debug for ScratchThread {
 }
 
 impl ScratchThread {
-    pub fn spawn(&self, arguments: Option<*const ScratchObject>) -> Self {
+    pub fn spawn(&self, is_screen_refresh: bool, arguments: Vec<ScratchObject>) -> Self {
         // Non-standard clone behaviour for use
         // when spawning new threads.
         Self {
             buffer: self.buffer.clone(),
-            stack: Vec::new(),
+            stack_repeat: Vec::new(),
             func: self.func,
             jumped_point: 0,
             sprite_id: self.sprite_id,
+            is_screen_refresh,
+            child_thread: Box::new(None),
             arguments,
         }
     }
 
-    pub fn new(buf: &[u8], sprite_id: SpriteId, arguments: Option<*const ScratchObject>) -> Self {
+    pub fn new(buf: &[u8], sprite_id: SpriteId, is_screen_refresh: bool) -> Self {
         let mut buffer = memmap2::MmapOptions::new()
             .len(buf.len())
             .map_anon()
@@ -279,23 +305,41 @@ impl ScratchThread {
 
         Self {
             buffer: buffer.into(),
-            stack: Vec::new(),
+            stack_repeat: Vec::new(),
             func,
             jumped_point: 0,
             sprite_id,
-            arguments,
+            is_screen_refresh,
+            child_thread: Box::new(None),
+            arguments: Vec::new(),
         }
     }
 
     /// Returns true if the thread has finished.
     pub fn tick(&mut self, scheduler_ptr: *mut Scheduler, graphics: *mut RunState) -> bool {
+        if let Some(thread) = &mut *self.child_thread {
+            let child_ended = thread.tick(scheduler_ptr, graphics);
+
+            if child_ended {
+                *self.child_thread = None;
+            }
+
+            return child_ended;
+        }
+
         let result = unsafe {
             (self.func)(
                 self.jumped_point,
-                &mut self.stack,
-                self.arguments.unwrap_or(std::ptr::null()),
+                &mut self.stack_repeat,
+                if self.arguments.is_empty() {
+                    std::ptr::null()
+                } else {
+                    self.arguments.as_ptr()
+                },
                 scheduler_ptr,
                 graphics,
+                self.is_screen_refresh as i64,
+                &mut *self.child_thread,
             )
         };
         self.jumped_point = result;

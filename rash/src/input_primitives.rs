@@ -128,6 +128,35 @@ impl Input {
         num
     }
 
+    pub fn get_number_int(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
+        let (mut num, could_be_nan) = match self {
+            Input::Obj(scratch_object) => {
+                let o = scratch_object.convert_to_number();
+                (compiler.constants.get_int(o as i64, builder), o.is_nan())
+            }
+            Input::Block(scratch_block) => {
+                let could_be_nan = scratch_block.could_be_nan();
+
+                let o = compiler.compile_block(scratch_block, builder).unwrap();
+                let get_number = o.get_number(compiler, builder);
+                let number = builder.ins().fcvt_to_sint(I64, get_number);
+
+                (number, could_be_nan)
+            }
+        };
+        if ARITHMETIC_NAN_CHECK && could_be_nan {
+            let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
+            let zero_value = compiler.constants.get_float(0.0, builder);
+            num = builder.ins().select(is_not_nan, num, zero_value);
+        }
+
+        num
+    }
+
     pub fn get_string(
         &self,
         compiler: &mut Compiler,

@@ -8,11 +8,12 @@ use crate::{
 };
 
 impl Compiler<'_> {
-    pub fn call_no_screen_refresh(
+    pub fn call_custom_block(
         &mut self,
         custom_block_id: &CustomBlockId,
         builder: &mut FunctionBuilder<'_>,
         args: &[Input],
+        is_screen_refresh: bool,
     ) {
         let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
 
@@ -36,18 +37,58 @@ impl Compiler<'_> {
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
-        self.call_function(
-            builder,
-            callbacks::custom_block::call_no_screen_refresh as usize,
-            &[I64, I64, I64, I64],
-            &[],
-            &[
-                slot_ptr,
-                custom_block_id,
-                self.scheduler_ptr,
-                self.graphics_ptr,
-            ],
-        );
-        self.cache.init(builder, self.memory, &mut self.constants);
+        if is_screen_refresh {
+            let inst = self.call_function(
+                builder,
+                callbacks::custom_block::call_screen_refresh as usize,
+                &[I64, I64, I64, I64, I64, I64],
+                &[I64],
+                &[
+                    slot_ptr,
+                    custom_block_id,
+                    self.scheduler_ptr,
+                    self.graphics_ptr,
+                    self.child_thread_ptr,
+                    self.is_called_as_refresh,
+                ],
+            );
+
+            let is_alive = builder.inst_results(inst)[0];
+
+            let inside_block = builder.create_block();
+            let end_block = builder.create_block();
+
+            self.constants.clear();
+            builder
+                .ins()
+                .brif(is_alive, inside_block, &[], end_block, &[]);
+            // builder.seal_block(self.code_block);
+
+            builder.switch_to_block(inside_block);
+
+            self.code_block = inside_block;
+            self.screen_refresh(builder, false);
+
+            builder.ins().jump(end_block, &[]);
+
+            builder.switch_to_block(end_block);
+            self.constants.clear();
+            self.code_block = end_block;
+        } else {
+            self.call_function(
+                builder,
+                callbacks::custom_block::call_no_screen_refresh as usize,
+                &[I64, I64, I64, I64],
+                &[],
+                &[
+                    slot_ptr,
+                    custom_block_id,
+                    self.scheduler_ptr,
+                    self.graphics_ptr,
+                ],
+            );
+        }
+
+        self.cache.init(builder, &mut self.constants, self.memory);
     }
 }

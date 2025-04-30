@@ -32,8 +32,7 @@ impl Compiler<'_> {
         builder.append_block_param(body_block, I64);
         let end_block = builder.create_block();
 
-        let number = input.get_number(self, builder);
-        let number = builder.ins().fcvt_to_sint(I64, number);
+        let number = input.get_number_int(self, builder);
 
         let counter = self.constants.get_int(0, builder);
         builder.ins().jump(loop_block, &[counter, number]);
@@ -118,7 +117,7 @@ impl Compiler<'_> {
             if let Some(var_type) = code
                 .iter()
                 .filter_map(|block| block.affects_var(var, variable_type_data))
-                .last()
+                .next_back()
             {
                 match var_type {
                     VarTypeChecked::Number => {

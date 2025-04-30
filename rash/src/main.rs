@@ -1,9 +1,9 @@
-use compiler::MEMORY;
+use compiler::{ScratchBlock, MEMORY};
 use data_types::ScratchObject;
-use input_primitives::STRINGS_TO_DROP;
-use rash_render::Renderer;
+use input_primitives::{Ptr, STRINGS_TO_DROP};
+use rash_render::{Renderer, Run, RunState, SpriteId};
 use sb3::ProjectLoader;
-use scheduler::Scheduler;
+use scheduler::{CustomBlockId, ProjectBuilder, Scheduler, Script, SpriteBuilder};
 
 mod block_print;
 mod block_test;
@@ -45,6 +45,13 @@ fn main() {
         return;
     };
 
+    if value == "demo" {
+        run_demo();
+        drop_strings();
+        print_memory();
+        std::process::exit(0);
+    }
+
     let loader = ProjectLoader::new(&std::path::PathBuf::from(value)).unwrap();
     let scheduler = match loader.build() {
         Ok(n) => n,
@@ -62,6 +69,62 @@ fn main() {
     print_memory();
 }
 
+fn run_demo() {
+    let mut builder = ProjectBuilder::new();
+    compiler::print_func_addresses();
+
+    let mut sprite1 = SpriteBuilder::new(SpriteId(0));
+    sprite1.add_script(&Script::new_custom_block(
+        vec![ScratchBlock::ControlRepeat(
+            3.0.into(),
+            vec![
+                ScratchBlock::VarChange(Ptr(3), ScratchBlock::FunctionGetArg(0).into()),
+                ScratchBlock::ScreenRefresh,
+            ],
+        )],
+        1,
+        CustomBlockId(1),
+        true,
+    ));
+    sprite1.add_script(&Script::new_custom_block(
+        vec![
+            ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+            ScratchBlock::ControlRepeat(
+                5.0.into(),
+                vec![
+                    ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
+                    // ScratchBlock::VarChange(Ptr(3), 1.0.into()),
+                    ScratchBlock::ScreenRefresh,
+                ],
+            ),
+        ],
+        0,
+        CustomBlockId(0),
+        true,
+    ));
+    sprite1.add_script(&Script::new_green_flag(vec![
+        ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+        ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
+        // ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
+    ]));
+    // sprite1.add_script(Script::new_green_flag(block_test::repeat_until()));
+    // TODO: Skip screen refresh in some very specific loops.
+    // sprite1.add_script(Script::new_green_flag(
+    //     block_test::screen_refresh_nested_repeat(),
+    // ));
+    builder.finish_sprite(sprite1);
+
+    let mut scheduler = builder.finish();
+
+    let mut num_ticks = 1;
+    let mut graphics = RunState::default();
+    while !scheduler.update(&mut graphics) {
+        num_ticks += 1;
+        // std::thread::sleep(std::time::Duration::from_millis(1000 / 30))
+    }
+    println!("Ticks: {num_ticks}");
+}
+
 async fn run(scheduler: Scheduler) {
     let renderer = Renderer::new("Rash", Box::new(scheduler)).await.unwrap();
     renderer.run();
@@ -69,6 +132,8 @@ async fn run(scheduler: Scheduler) {
 
 fn print_memory() {
     let lock = MEMORY.lock().unwrap();
+
+    println!("MEMORY: {:X}", lock.as_ptr() as usize);
 
     // Only print the changed values that aren't zero.
     let print_until_idx = lock

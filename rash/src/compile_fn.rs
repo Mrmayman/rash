@@ -22,7 +22,18 @@ use crate::{
 };
 use rash_render::SpriteId;
 
-pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> ScratchThread {
+pub fn compile(
+    script: &[ScratchBlock],
+    id: SpriteId,
+    num_args: usize,
+    is_screen_refresh: bool,
+) -> ScratchThread {
+    println!();
+    for block in script {
+        println!("{}", block.format(0));
+    }
+    println!();
+
     let isa = get_isa();
 
     let mut func = create_function();
@@ -35,12 +46,24 @@ pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> Scratc
     let jmp2_block = builder.create_block();
     builder.append_block_params_for_function_params(jmp2_block);
     builder.switch_to_block(jmp2_block);
-    let param = builder.block_params(jmp2_block)[0];
-    let repeat_stack_ptr = builder.block_params(jmp2_block)[1];
 
+    let jump_id = builder.block_params(jmp2_block)[0];
+
+    let repeat_stack_ptr = builder.block_params(jmp2_block)[1];
     let args_ptr = builder.block_params(jmp2_block)[2];
     let scheduler_ptr = builder.block_params(jmp2_block)[3];
     let graphics_ptr = builder.block_params(jmp2_block)[4];
+
+    let is_called_as_refresh = builder.block_params(jmp2_block)[5];
+    let child_thread_ptr = builder.block_params(jmp2_block)[6];
+
+    // TODO: band with constant value will be kinda const
+    //       Opportunity for simplification
+    let is_inherent_refresh = builder.ins().iconst(I64, is_screen_refresh as i64);
+
+    let is_called_as_refresh = builder
+        .ins()
+        .band(is_inherent_refresh, is_called_as_refresh);
 
     let mut args_list = Vec::new();
     for _ in 0..num_args {
@@ -52,7 +75,7 @@ pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> Scratc
         args_list.push([i1, i2, i3, i4]);
     }
 
-    builder.ins().jump(jmp1_block, &[param]);
+    builder.ins().jump(jmp1_block, &[jump_id]);
 
     let code_block = builder.create_block();
     builder.switch_to_block(code_block);
@@ -69,11 +92,14 @@ pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> Scratc
         graphics_ptr,
         args_list,
         id,
+        is_screen_refresh,
+        is_called_as_refresh,
+        child_thread_ptr,
     );
 
     compiler
         .cache
-        .init(&mut builder, &lock, &mut compiler.constants);
+        .init(&mut builder, &mut compiler.constants, &lock);
 
     compiler.break_points.push(code_block);
 
@@ -95,17 +121,23 @@ pub fn compile(script: &[ScratchBlock], id: SpriteId, num_args: usize) -> Scratc
 
     println!("{}", func.display());
 
-    compile_ir(func, &isa, id)
+    compile_ir(func, &isa, id, compiler.is_screen_refresh)
 }
 
-fn compile_ir(func: Function, isa: &Arc<dyn TargetIsa>, id: SpriteId) -> ScratchThread {
+fn compile_ir(
+    func: Function,
+    isa: &Arc<dyn TargetIsa>,
+    id: SpriteId,
+    is_screen_refresh: bool,
+) -> ScratchThread {
     let mut ctx = codegen::Context::for_function(func);
     let mut plane = ControlPlane::default();
     ctx.optimize(isa.as_ref(), &mut plane).unwrap();
 
     let code = ctx.compile(&**isa, &mut plane).unwrap();
 
-    ScratchThread::new(code.code_buffer(), id, None)
+    // TODO: Implement arguments
+    ScratchThread::new(code.code_buffer(), id, is_screen_refresh)
 }
 
 fn prepare_screen_refresh_points(
@@ -140,11 +172,13 @@ fn get_isa() -> Arc<dyn TargetIsa> {
 
 fn create_function() -> Function {
     let mut sig = Signature::new(CallConv::SystemV);
-    sig.params.push(AbiParam::new(I64));
-    sig.params.push(AbiParam::new(I64));
-    sig.params.push(AbiParam::new(I64));
-    sig.params.push(AbiParam::new(I64));
-    sig.params.push(AbiParam::new(I64));
+    sig.params.push(AbiParam::new(I64)); // Jump ID
+    sig.params.push(AbiParam::new(I64)); // Repeat Stack
+    sig.params.push(AbiParam::new(I64)); // Args pointer
+    sig.params.push(AbiParam::new(I64)); // Scheduler
+    sig.params.push(AbiParam::new(I64)); // RunState
+    sig.params.push(AbiParam::new(I64)); // Is Screen Refresh?
+    sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)
     sig.returns.push(AbiParam::new(I64));
     Function::with_name_signature(UserFuncName::default(), sig)
 }

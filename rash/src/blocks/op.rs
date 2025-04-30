@@ -143,6 +143,21 @@ impl Compiler<'_> {
         [id, i1, i2, i3]
     }
 
+    pub fn dbg_log(&mut self, msg: &Input, builder: &mut FunctionBuilder<'_>) {
+        // Get strings
+        let (a, a_is_const) = msg.get_string(self, builder);
+
+        let a_is_const = self.constants.get_int(i64::from(a_is_const), builder);
+
+        self.call_function(
+            builder,
+            callbacks::dbg_log as usize,
+            &[I64, I64],
+            &[],
+            &[a, a_is_const],
+        );
+    }
+
     pub fn op_modulo(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_number(self, builder);
         let b = b.get_number(self, builder);

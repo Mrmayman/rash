@@ -53,14 +53,14 @@ https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbX
 - [ ] Implement Lists
 - [ ] Implement Broadcasts
 - [ ] Implement Cloning
-- [ ] Add Graphics
+- [x] Add Graphics
 - - [ ] Hide, Show blocks
-- - [ ] Position blocks
+- - [x] Position blocks
 - - [ ] Rotation blocks
-- - [ ] Render sprites & stage
+- - [ ] Size block
+- - [x] Render sprites & stage
 - - [ ] Render text
 - - [ ] Render speech and thought bubbles
-- - [ ] Sprite movement, rotation, size
 - - [ ] Sprite costumes and backdrops
 - - [ ] Sprite graphical effects (Ghost, Fisheye, etc)
 - - [ ] Pen canvas and clear operation

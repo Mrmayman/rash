@@ -178,15 +178,10 @@ pub extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
 ///   MEMORY array beforehand by the compiler).
 /// * `dest` - The pointer to the destination memory location.
 ///   (not a pointer to `ScratchObject` for simplicity sake)
-pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut i64) {
+pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut ScratchObject) {
+    // TODO: This is pointless, eliminate it.
     let obj = unsafe { (*ptr).clone() };
-    let data: [i64; 4] = unsafe { std::mem::transmute(obj) };
-    unsafe {
-        dest.write(data[0]);
-        dest.offset(1).write(data[1]);
-        dest.offset(2).write(data[2]);
-        dest.offset(3).write(data[3]);
-    }
+    unsafe { dest.write(obj) };
 }
 
 /// Callback from JIT code to generate a random number.
@@ -204,5 +199,13 @@ pub extern "C" fn op_random(a: f64, b: f64, is_decimal: i64) -> f64 {
         num
     } else {
         num.round()
+    }
+}
+
+pub extern "C" fn dbg_log(msg: *mut ScratchObject, is_const: i64) {
+    let msg_val = unsafe { (*msg).clone() };
+    println!("[info] {msg_val:?}");
+    if is_const == 0 {
+        unsafe { msg.drop_in_place() };
     }
 }

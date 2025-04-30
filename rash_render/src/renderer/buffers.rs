@@ -1,7 +1,7 @@
 use crate::CostumeId;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GraphicsState {
     pub x: f32,
     pub y: f32,

@@ -55,10 +55,13 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         zero,
         Vec::new(),
         SpriteId(0),
+        false,
+        zero,
+        zero,
     );
     compiler
         .cache
-        .init(&mut builder, memory, &mut compiler.constants);
+        .init(&mut builder, &mut compiler.constants, memory);
 
     for block in program {
         compiler.compile_block(block, &mut builder);

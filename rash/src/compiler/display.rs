@@ -32,6 +32,7 @@ impl ScratchBlock {
             ScratchBlock::OpStrContains(input, input1) => {
                 func_call_inner("str.contains", &[input, input1])
             }
+            ScratchBlock::Log(input) => func_call_inner("log", &[input]),
             ScratchBlock::ControlIf(input, vec) => {
                 let mut out = format!("if {} {{\n", input.format(0));
                 for block in vec {
@@ -71,17 +72,6 @@ impl ScratchBlock {
 
                 out
             }
-            ScratchBlock::ControlRepeatScreenRefresh(input, vec) => {
-                let mut out = format!("repeat (fast) {} {{\n", input.format(0));
-                for block in vec {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push('}');
-
-                out
-            }
             ScratchBlock::ControlRepeatUntil(input, vec) => {
                 let mut out = format!("repeat until {} {{\n", input.format(0));
                 for block in vec {
@@ -104,6 +94,19 @@ impl ScratchBlock {
                     }
                 }
                 out.push(')');
+
+                out
+            }
+            ScratchBlock::FunctionCallScreenRefresh(custom_block_id, vec) => {
+                let mut out = format!("call ({})(", custom_block_id.0);
+                let len = vec.len();
+                for (i, arg) in vec.iter().enumerate() {
+                    out.push_str(&arg.format(0));
+                    if i < len - 1 {
+                        out.push_str(", ");
+                    }
+                }
+                out.push_str(").await");
 
                 out
             }
