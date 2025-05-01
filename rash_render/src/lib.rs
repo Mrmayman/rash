@@ -8,6 +8,7 @@ use winit::{
 };
 
 mod renderer;
+mod svg_to_png;
 pub use renderer::texture::IntermediateCostume;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -32,7 +33,7 @@ pub struct Renderer<'a> {
 }
 
 impl Renderer<'_> {
-    pub async fn new(title: &str, runnable: Box<dyn Run>) -> Result<Self, image::ImageError> {
+    pub async fn new(title: &str, runnable: Box<dyn Run>) -> anyhow::Result<Self> {
         let event_loop = EventLoop::new().unwrap();
         let window = Arc::new(
             WindowBuilder::new()
@@ -44,10 +45,31 @@ impl Renderer<'_> {
         let num_sprites = runnable.get_num_sprites();
         let renderer = InnerRenderer::new(window.clone(), num_sprites).await;
 
-        let costumes: Result<HashMap<CostumeId, Costume>, image::ImageError> = runnable
+        let mut font_database = usvg_text_layout::fontdb::Database::new();
+        font_database.load_system_fonts();
+
+        let costumes: anyhow::Result<HashMap<CostumeId, Costume>> = runnable
             .get_costumes()
             .into_iter()
             .map(|(id, costume)| {
+                if costume.is_svg {
+                    if let Ok(svg_text) = String::from_utf8(costume.bytes.clone()) {
+                        let img = svg_to_png::render(&svg_text, &font_database)?;
+
+                        return Ok((
+                            id,
+                            Costume::from_image(
+                                &costume,
+                                &renderer.device,
+                                &renderer.queue,
+                                &img,
+                                &renderer.sampler,
+                                &renderer.costume_layout,
+                            ),
+                        ));
+                    }
+                }
+
                 Costume::from_bytes(
                     &costume,
                     &renderer.device,
@@ -56,6 +78,7 @@ impl Renderer<'_> {
                     &renderer.costume_layout,
                 )
                 .map(|n| (id, n))
+                .map_err(|err| err.into())
             })
             .collect();
         let costumes = costumes?;

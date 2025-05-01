@@ -22,10 +22,12 @@ fn vs_main(
     let global_resolution = vec2<f32>(screen_width * (global_state.resolution.x / global_state.resolution.y), screen_width);
 
     let sprite: Sprite = sprite_state[in_vertex_index / 6];
+    let sprite_center_pos_ = ((sprite.center_pos - (sprite.texture_size * 0.5)) / global_resolution);
+    let sprite_center_pos = vec2<f32>(-sprite_center_pos_.x, sprite_center_pos_.y);
 
     let local_position: vec2<f32> = (local_positions[in_vertex_index % 6]
         * ((sprite.texture_size * 0.5) / global_resolution))
-        - ((sprite.center_pos - (sprite.texture_size * 0.5)) / global_resolution);
+        + sprite_center_pos;
 
     let world_position: vec2<f32> =
         (local_position * sprite.size / 100.0)

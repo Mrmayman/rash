@@ -7,6 +7,7 @@ pub struct IntermediateCostume {
     pub hash: String,
     pub rotation_center_x: f64,
     pub rotation_center_y: f64,
+    pub is_svg: bool,
 }
 
 #[allow(unused)]
@@ -96,14 +97,22 @@ impl Costume {
             label: Some("diffuse_bind_group"),
         });
 
+        let mut rotation_center_x = costume.rotation_center_x;
+        let mut rotation_center_y = costume.rotation_center_y;
+
+        if costume.is_svg {
+            rotation_center_x *= 2.0;
+            rotation_center_y *= 2.0;
+        }
+
         Self {
             name: costume.name.clone(),
             hash: costume.hash.clone(),
             texture,
             view,
             bind_group,
-            rotation_center_x: costume.rotation_center_x,
-            rotation_center_y: costume.rotation_center_y,
+            rotation_center_x,
+            rotation_center_y,
             texture_width: dimensions.0,
             texture_height: dimensions.1,
         }

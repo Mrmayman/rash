@@ -12,19 +12,19 @@ use std::{collections::BTreeMap, fmt::Debug};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const JSON_ID_NUMBER: i64 = 4;
-pub const JSON_ID_POSITIVE_NUMBER: i64 = 5;
-pub const JSON_ID_POSITIVE_INTEGER: i64 = 6;
-pub const JSON_ID_INTEGER: i64 = 7;
-pub const JSON_ID_ANGLE: i64 = 8;
 #[allow(unused)]
-pub const JSON_ID_COLOR: i64 = 9;
-pub const JSON_ID_STRING: i64 = 10;
-#[allow(unused)]
-pub const JSON_ID_BROADCAST: i64 = 11;
-pub const JSON_ID_VARIABLE: i64 = 12;
-#[allow(unused)]
-pub const JSON_ID_LIST: i64 = 13;
+pub mod json_id {
+    pub const NUMBER: i64 = 4;
+    pub const POSITIVE_NUMBER: i64 = 5;
+    pub const POSITIVE_INTEGER: i64 = 6;
+    pub const INTEGER: i64 = 7;
+    pub const ANGLE: i64 = 8;
+    pub const COLOR: i64 = 9;
+    pub const STRING: i64 = 10;
+    pub const BROADCAST: i64 = 11;
+    pub const VARIABLE: i64 = 12;
+    pub const LIST: i64 = 13;
+}
 
 /// # The main JSON structure of a Scratch project.
 ///

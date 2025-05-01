@@ -15,3 +15,5 @@ Cargo.lock
 
 flamegraph.svg
 func.bin
+perf.data
+perf.data.old

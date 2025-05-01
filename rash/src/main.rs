@@ -61,6 +61,8 @@ fn main() {
         }
     };
 
+    // return;
+
     pollster::block_on(run(scheduler));
 
     // TODO: Skip screen refresh in some very specific loops.

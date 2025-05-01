@@ -10,6 +10,10 @@ use crate::{
 
 impl Compiler<'_> {
     pub fn control_stop_this_script(&mut self, builder: &mut FunctionBuilder<'_>) {
+        for _ in 0..(self.repeat_stack * 2) {
+            self.call_stack_pop(builder);
+        }
+
         self.cache.save(builder, &mut self.constants, self.memory);
         let minus_one = self.constants.get_int(-1, builder);
         builder.ins().return_(&[minus_one]);
@@ -25,6 +29,16 @@ impl Compiler<'_> {
         vec: &Vec<ScratchBlock>,
         is_screen_refresh: bool,
     ) {
+        // Basically,
+        //
+        // for (i = 0; i < number; i += 1) {
+        //      your code
+        // }
+        //
+        // The different parts will be annotated
+
+        let number = input.get_number_int(self, builder);
+
         let loop_block = builder.create_block();
         builder.append_block_param(loop_block, I64);
         builder.append_block_param(loop_block, I64);
@@ -32,24 +46,27 @@ impl Compiler<'_> {
         builder.append_block_param(body_block, I64);
         let end_block = builder.create_block();
 
-        let number = input.get_number_int(self, builder);
-
+        // i = 0
+        // Note: counter is the `i` here
         let counter = self.constants.get_int(0, builder);
         builder.ins().jump(loop_block, &[counter, number]);
-        // builder.seal_block(self.code_block);
 
         builder.switch_to_block(loop_block);
-        // (counter < number)
+        // (i < number)
         let counter = builder.block_params(loop_block)[0];
         let mut number = builder.block_params(loop_block)[1];
         let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
 
-        // if (counter < number) jump to body_block else jump to end_block
+        // if (i < number):
+        //      jump to body_block (continue)
+        // else:
+        //      jump to end_block (break)
         builder
             .ins()
             .brif(condition, body_block, &[counter], end_block, &[]);
 
         builder.switch_to_block(body_block);
+        // i += 1
         let counter = builder.block_params(body_block)[0];
         let mut incremented = builder.ins().iadd_imm(counter, 1);
 
@@ -67,9 +84,11 @@ impl Compiler<'_> {
             self.call_stack_push(builder, number);
         }
         self.constants.clear();
+        self.repeat_stack += 1;
         for block in vec {
             self.compile_block(block, builder);
         }
+        self.repeat_stack -= 1;
         if is_screen_refresh {
             number = self.call_stack_pop(builder);
             incremented = self.call_stack_pop(builder);
@@ -92,7 +111,7 @@ impl Compiler<'_> {
             callbacks::repeat_stack::stack_pop as usize,
             &[I64],
             &[I64],
-            &[self.vec_ptr],
+            &[self.loop_stack_ptr],
         );
         builder.inst_results(inst)[0]
     }
@@ -103,7 +122,7 @@ impl Compiler<'_> {
             callbacks::repeat_stack::stack_push as usize,
             &[I64, I64],
             &[],
-            &[self.vec_ptr, incremented],
+            &[self.loop_stack_ptr, incremented],
         );
     }
 
@@ -273,9 +292,11 @@ impl Compiler<'_> {
 
         let current_block = self.code_block;
         self.code_block = body_block;
+        self.repeat_stack += 1;
         for block in body {
             self.compile_block(block, builder);
         }
+        self.repeat_stack -= 1;
         self.code_block = current_block;
         self.variable_type_data = common_entries(&self.variable_type_data, &old_types);
 

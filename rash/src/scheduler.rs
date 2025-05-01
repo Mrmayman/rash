@@ -5,6 +5,90 @@ use rash_render::{CostumeId, IntermediateCostume, IntermediateState, Run, RunSta
 
 use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObject};
 
+/// The signature of the JIT-compiled function that
+/// runs Scratch code.
+///
+/// # Arguments
+/// ## `i64`: Jump ID
+/// Some scratch functions can pause.
+/// In that case, it returns a number representing
+/// where it paused. You pass that number to it again
+/// to continue the function from that point.
+///
+/// ## `*mut Vec<i64>`: The loop stack
+/// This represents what loop we're inside and how
+/// much progress out of how much is done inside that loop.
+/// Usually it's empty but if the function pauses inside
+/// a loop, it will have contents.
+/// For example:
+///
+/// ```no_run
+/// # fn repeat(_: usize) {}
+/// repeat(10) {
+///     repeat(15) {
+///         // stack =
+///         // 3, 10 <- (done (3 for example), out of)
+///         // 5, 15
+///     }
+///     // stack =
+///     // 3, 10 <- (done (3 for example), out of)
+///
+///     // We finished the inner `repeat 15` loop,
+///     // so now there's just 2 entries (1 loop)
+///     // left
+/// }
+/// ```
+///
+/// ## `*const ScratchObject`
+/// The arguments to the function if it is a custom block.
+/// If there aren't any arguments you can leave this as `null`
+/// (don't worry, the function will figure out for itself).
+///
+/// This is a pointer to the first item (easier to handle in machine code),
+/// the function will automatically offset and call the next items as necessary
+///
+/// ## `*mut Scheduler`: Thread Scheduler
+/// A handle to the Thread Scheduler. This is used for "spawning"
+/// Custom Blocks to be called, ie. getting a handle to another JIT
+/// function to be called from a JIT function.
+///
+/// ## `*mut RunState`: Running (and graphics) state.
+/// Primarily used for managing the graphical state of the project.
+/// Sprite positioning, scaling, colors, costumes and so on.
+///
+/// ## `i64`: Is Screen Refresh
+/// Yes if `1`, No if `0`. This is `i64` instead of `bool`
+/// for easy ABI handling in machine code.
+///
+/// If it is screen refresh, the function **is capable**
+/// of pausing and resuming from within like a coroutine.
+///
+/// More explanation in the first argument.
+///
+/// ## `*mut Option<ScratchThread>`: The "Child" function to be called
+///
+/// Let's say we have a function `a` that calls function `b`.
+///
+/// ```no_run
+/// # fn repeat(_: usize) {}
+/// fn a() {
+///     b()
+/// }
+/// fn b() {
+///     repeat(5) {
+///         // do something
+///         yield; // screen refresh
+///     }
+/// }
+/// ```
+///
+/// If function `b` pauses (the screen refresh or `yield`), while
+/// called by function `a`, then function `a` stores the `b`
+/// [`ScratchThread`] inside this `Option` (which is `None` by default),
+/// then function `a` also pauses.
+///
+/// Later when the scheduler continues `a`, it will see the child thread `b`
+/// and resume from there.
 pub type ScratchFunction = unsafe extern "sysv64" fn(
     i64, // Jump ID
     *mut Vec<i64>,

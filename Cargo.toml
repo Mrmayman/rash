@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["rash", "rash_render"]
+
+[profile.release-dbg]
+inherits = "release"
+debug = true

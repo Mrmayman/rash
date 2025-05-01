@@ -343,7 +343,59 @@ pub struct Compiler<'compiler> {
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
 
-    pub vec_ptr: Value,
+    /// Storing how many loops inside we are right now
+    /// while compiling the current code.
+    /// This is a **compile time value**
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn repeat(_: usize) {}
+    /// repeat(10) {
+    ///     repeat(15) {
+    ///         // repeat_stack: 2
+    ///         // since we are 2 loops inside
+    ///         your code
+    ///     }
+    ///     // repeat_stack: 1
+    ///     // since we are 1 loop inside
+    /// }
+    /// ```
+    ///
+    /// This is used with [`ScratchBlock::ControlRepeat`] and [`ScratchBlock::ControlRepeatUntil`]
+    pub repeat_stack: usize,
+
+    /// A [`Value`] of `*mut Vec<i64>` representing the stack
+    /// of loops. This is a **compile-time handle to a runtime
+    /// value**.
+    ///
+    /// For example:
+    ///
+    /// ```no_run
+    /// # fn repeat(_: usize) {}
+    /// repeat(10) {
+    ///     repeat(15) {
+    ///         // stack =
+    ///         // 3, 10 <- (done (3 for example), out of)
+    ///         // 5, 15
+    ///     }
+    ///     // stack =
+    ///     // 3, 10 <- (done (3 for example), out of)
+    ///
+    ///     // We finished the inner `repeat 15` loop,
+    ///     // so now there's just 2 entries (1 loop)
+    ///     // left
+    /// }
+    /// ```
+    ///
+    /// This is only used in Screen Refresh functions,
+    /// ie. functions that can pause. This is used to
+    /// store the state of the loop when the function
+    /// pauses, and later pop it back.
+    ///
+    /// If the function isn't Screen Refresh (can't pause),
+    /// this is never used.
+    pub loop_stack_ptr: Value,
     pub scheduler_ptr: Value,
     pub graphics_ptr: Value,
     pub child_thread_ptr: Value,
@@ -359,7 +411,7 @@ impl<'a> Compiler<'a> {
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
-        vec_ptr: Value,
+        loop_stack_ptr: Value,
         scheduler_ptr: Value,
         graphics_ptr: Value,
         args_list: Vec<[Value; 4]>,
@@ -375,9 +427,10 @@ impl<'a> Compiler<'a> {
             cache: StackCache::new(builder, code),
             break_points: Vec::new(),
             break_counter: 0,
+            repeat_stack: 0,
             memory,
             scheduler_ptr,
-            vec_ptr,
+            loop_stack_ptr,
             args_list,
             graphics_ptr,
             sprite_id,
