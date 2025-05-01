@@ -15,11 +15,16 @@ use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObje
 /// where it paused. You pass that number to it again
 /// to continue the function from that point.
 ///
+/// Default: `0`
+///
 /// ## `*mut Vec<i64>`: The loop stack
 /// This represents what loop we're inside and how
 /// much progress out of how much is done inside that loop.
 /// Usually it's empty but if the function pauses inside
 /// a loop, it will have contents.
+///
+/// Can be `null` if the function doesn't pause.
+///
 /// For example:
 ///
 /// ```no_run
@@ -41,31 +46,39 @@ use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObje
 ///
 /// ## `*const ScratchObject`
 /// The arguments to the function if it is a custom block.
-/// If there aren't any arguments you can leave this as `null`
+///
+/// Can be `null` if there aren't any arguments
 /// (don't worry, the function will figure out for itself).
 ///
 /// This is a pointer to the first item (easier to handle in machine code),
 /// the function will automatically offset and call the next items as necessary
 ///
-/// ## `*mut Scheduler`: Thread Scheduler
-/// A handle to the Thread Scheduler. This is used for "spawning"
+/// ## `*const Scripts`: Ready-made Scripts for running
+/// A handle to the [`Scripts`]. This is used for "spawning"
 /// Custom Blocks to be called, ie. getting a handle to another JIT
 /// function to be called from a JIT function.
+///
+/// Can be `null` if you aren't calling other Custom Blocks (functions)
+/// from your Scratch code.
 ///
 /// ## `*mut RunState`: Running (and graphics) state.
 /// Primarily used for managing the graphical state of the project.
 /// Sprite positioning, scaling, colors, costumes and so on.
 ///
-/// ## `i64`: Is Screen Refresh
-/// Yes if `1`, No if `0`. This is `i64` instead of `bool`
-/// for easy ABI handling in machine code.
+/// Can be `null` if you aren't doing any graphics operations.
+///
+/// ## `i64`: Is Screen Refresh (Pausable)
+/// Yes (recommended default) if `1`, No (faster) if `0`.
+/// This is `i64` instead of `bool` for easy ABI handling in machine code.
 ///
 /// If it is screen refresh, the function **is capable**
 /// of pausing and resuming from within like a coroutine.
 ///
-/// More explanation in the first argument.
+/// More explanation above in the comment for first argument.
 ///
 /// ## `*mut Option<ScratchThread>`: The "Child" function to be called
+///
+/// Must point to a valid `None` if not used. **Cannot be null!**.
 ///
 /// Let's say we have a function `a` that calls function `b`.
 ///
@@ -89,11 +102,11 @@ use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObje
 ///
 /// Later when the scheduler continues `a`, it will see the child thread `b`
 /// and resume from there.
-pub type ScratchFunction = unsafe extern "sysv64" fn(
+pub type ScratchFunction = unsafe extern "C" fn(
     i64, // Jump ID
     *mut Vec<i64>,
     *const ScratchObject,
-    *mut Scheduler,
+    *const Scripts,
     *mut RunState,
     i64, // Is screen refresh
     *mut Option<ScratchThread>,
@@ -296,12 +309,10 @@ impl Scheduler {
     }
 
     fn run_threads(&mut self, graphics: &mut RunState) -> bool {
-        // TODO: Potential race condition
-        let self_ptr = self as *mut Self;
         let mut ended_threads = Vec::new();
 
         for (i, thread) in self.threads.iter_mut().enumerate() {
-            let has_ended = thread.tick(self_ptr, graphics);
+            let has_ended = unsafe { thread.tick(&self.scripts, graphics) };
             if has_ended {
                 ended_threads.push(i);
             }
@@ -385,6 +396,9 @@ impl ScratchThread {
         buffer.copy_from_slice(buf);
         let buffer = buffer.make_exec().unwrap();
 
+        // Safety:
+        // If the cranelift compiler is working properly (I hope!)
+        // then this should be safe, as it is a valid function.
         let func: ScratchFunction = unsafe { std::mem::transmute(buffer.as_ptr()) };
 
         Self {
@@ -400,14 +414,30 @@ impl ScratchThread {
     }
 
     /// Returns true if the thread has finished.
-    pub fn tick(&mut self, scheduler_ptr: *mut Scheduler, graphics: *mut RunState) -> bool {
-        if let Some(thread) = &mut *self.child_thread {
-            let child_ended = thread.tick(scheduler_ptr, graphics);
+    ///
+    /// # Safety
+    /// This is highly unsafe because you're running
+    /// arbitrary machine code made by a kinda buggy compiler.
+    ///
+    /// This should be safe **as long as**:
+    /// - Number of custom-block arguments (when compiling)
+    ///   matches number of arguments when running (failing to do so
+    ///   may result in panics or undefined behaviour).
+    /// - `graphics` points to a valid, global instance
+    ///   of [`RunState`]
+    /// - There hopefully aren't any compiler bugs
+    ///   creating broken code
+    pub unsafe fn tick(&mut self, scripts: &Scripts, graphics: &mut RunState) -> bool {
+        const DONE: i64 = -1;
 
+        // If the parent (current) thread paused while
+        // running a child thread which also paused,
+        // then tick the child thread instead until it ends,
+        if let Some(thread) = &mut *self.child_thread {
+            let child_ended = thread.tick(scripts, graphics);
             if child_ended {
                 *self.child_thread = None;
             }
-
             return child_ended;
         }
 
@@ -420,13 +450,13 @@ impl ScratchThread {
                 } else {
                     self.arguments.as_ptr()
                 },
-                scheduler_ptr,
+                scripts,
                 graphics,
                 self.is_screen_refresh as i64,
                 &mut *self.child_thread,
             )
         };
         self.jumped_point = result;
-        result == -1
+        result == DONE
     }
 }

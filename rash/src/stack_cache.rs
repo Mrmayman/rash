@@ -21,6 +21,15 @@ use crate::{
 /// but this is slow. By having a local stack cache that
 /// syncs with the real variable storage, we can get
 /// a noticeable speedup (`6.8 ms -> 6.3 ms` in pi benchmark)
+///
+/// # Warning
+/// Call [`StackCache::init`] before generating the
+/// code, or you will get memory corruption and crashes.
+///
+/// Call [`StackCache::save`] before exiting a function
+/// to save the cache contents to memory, or some
+/// changes to variables won't get saved. This could lead
+/// to untrackable bugs!
 pub struct StackCache {
     slot: StackSlot,
     variable_offsets: HashMap<Ptr, usize>,
@@ -31,8 +40,13 @@ impl StackCache {
     /// accessed by the code in the `code` argument.
     ///
     /// # Warning
-    /// Call [`StackCache::init()`] before generating the
+    /// Call [`StackCache::init`] before generating the
     /// code, or you will get memory corruption and crashes.
+    ///
+    /// Call [`StackCache::save`] before exiting a function
+    /// to save the cache contents to memory, or some
+    /// changes to variables won't get saved. This could lead
+    /// to untrackable bugs!
     pub fn new(builder: &mut FunctionBuilder, code: &[ScratchBlock]) -> Self {
         let mut vars = HashSet::new();
         for block in code {

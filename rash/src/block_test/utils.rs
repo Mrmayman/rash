@@ -31,7 +31,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
     };
 
-    let mut sig = Signature::new(CallConv::SystemV);
+    let mut sig = Signature::new(CallConv::triple_default(isa.triple()));
     sig.params.push(AbiParam::new(I64));
     sig.returns.push(AbiParam::new(I64));
     let mut func = Function::with_name_signature(UserFuncName::default(), sig);
@@ -105,13 +105,28 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     let buffer = buffer.make_exec().unwrap();
 
     unsafe {
-        let code_fn: unsafe extern "sysv64" fn(*mut Vec<i64>) =
-            std::mem::transmute(buffer.as_ptr());
+        let code_fn: unsafe extern "C" fn(*mut Vec<i64>) = std::mem::transmute(buffer.as_ptr());
         let mut stack = Vec::new();
         code_fn(&mut stack);
     }
 }
 
+/// Simple headless runner for the JIT, limited in scope.
+/// Takes in an array of ScratchBlock operations, compiles and executes them.
+///
+/// This is only used for the test-suite.
+///
+/// Doesn't support:
+/// - Screen refresh (pausable functions)
+/// - Custom blocks (calling other functions)
+/// - Graphical or audio operations
+/// - Environment operations (input/sensing)
+/// - Timer operations
+///
+/// # Safety
+/// As long as the compiler is functioning correctly,
+/// this will be safe, as the machine code under correct
+/// circumstances would function correctly.
 #[allow(unused)]
 pub fn run_code<'a>(code: &[ScratchBlock]) -> MutexGuard<'a, Box<[ScratchObject]>> {
     let mut memory = MEMORY.lock().unwrap();

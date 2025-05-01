@@ -48,8 +48,8 @@ impl Block {
             };
             compiled_blocks.push(
                 block
-                    .compile(variable_map, &blocks)
-                    .trace(&format!("Block::compile_substack()"))?,
+                    .compile(variable_map, blocks)
+                    .trace("Block::compile_substack()")?,
             );
             id = block.next.clone();
         }
@@ -97,7 +97,7 @@ impl Block {
             },
             serde_json::Value::Array(vec) => {
                 let n = vec
-                    .get(0)
+                    .first()
                     .ok_or(RashError::field_not_found(&format!(
                         "self.inputs.{name}[1][0]"
                     )))?

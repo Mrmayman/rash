@@ -17,7 +17,7 @@ pub fn render(
     fontdb: &usvg_text_layout::fontdb::Database,
 ) -> anyhow::Result<DynamicImage> {
     // Check if the SVG is empty.
-    let parsed: Svg = serde_xml_rs::from_str(&input).unwrap();
+    let parsed: Svg = serde_xml_rs::from_str(input).unwrap();
     if parsed.width == "0" && parsed.height == "0" {
         let blank_image = image::DynamicImage::new_rgba8(1, 1);
         return Ok(blank_image);

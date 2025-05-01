@@ -36,7 +36,7 @@ pub fn compile(
 
     let isa = get_isa();
 
-    let mut func = create_function();
+    let mut func = create_function(&*isa);
     let mut func_ctx = FunctionBuilderContext::new();
     let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
 
@@ -51,19 +51,23 @@ pub fn compile(
 
     let repeat_stack_ptr = builder.block_params(jmp2_block)[1];
     let args_ptr = builder.block_params(jmp2_block)[2];
-    let scheduler_ptr = builder.block_params(jmp2_block)[3];
+    let script_ptr = builder.block_params(jmp2_block)[3];
     let graphics_ptr = builder.block_params(jmp2_block)[4];
 
     let is_called_as_refresh = builder.block_params(jmp2_block)[5];
     let child_thread_ptr = builder.block_params(jmp2_block)[6];
 
-    // TODO: band with constant value will be kinda const
-    //       Opportunity for simplification
-    let is_inherent_refresh = builder.ins().iconst(I64, is_screen_refresh as i64);
-
-    let is_called_as_refresh = builder
-        .ins()
-        .band(is_inherent_refresh, is_called_as_refresh);
+    // For a function to be screen-refresh capable
+    // (pausable), it must both inherently be screen refresh
+    // AND must be called by a screen refresh function.
+    //
+    // If a pausable function is called by a non-pausable
+    // function then it will run as non-pausable.
+    let is_called_as_refresh = if is_screen_refresh {
+        is_called_as_refresh
+    } else {
+        builder.ins().iconst(I64, 0)
+    };
 
     let mut args_list = Vec::new();
     for _ in 0..num_args {
@@ -88,7 +92,7 @@ pub fn compile(
         script,
         &lock,
         repeat_stack_ptr,
-        scheduler_ptr,
+        script_ptr,
         graphics_ptr,
         args_list,
         id,
@@ -170,12 +174,12 @@ fn get_isa() -> Arc<dyn TargetIsa> {
     }
 }
 
-fn create_function() -> Function {
-    let mut sig = Signature::new(CallConv::SystemV);
+fn create_function(isa: &dyn TargetIsa) -> Function {
+    let mut sig = Signature::new(CallConv::triple_default(isa.triple()));
     sig.params.push(AbiParam::new(I64)); // Jump ID
     sig.params.push(AbiParam::new(I64)); // Repeat Stack
     sig.params.push(AbiParam::new(I64)); // Args pointer
-    sig.params.push(AbiParam::new(I64)); // Scheduler
+    sig.params.push(AbiParam::new(I64)); // Scripts
     sig.params.push(AbiParam::new(I64)); // RunState
     sig.params.push(AbiParam::new(I64)); // Is Screen Refresh?
     sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)

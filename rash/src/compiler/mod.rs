@@ -396,7 +396,7 @@ pub struct Compiler<'compiler> {
     /// If the function isn't Screen Refresh (can't pause),
     /// this is never used.
     pub loop_stack_ptr: Value,
-    pub scheduler_ptr: Value,
+    pub script_ptr: Value,
     pub graphics_ptr: Value,
     pub child_thread_ptr: Value,
 
@@ -412,7 +412,7 @@ impl<'a> Compiler<'a> {
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
         loop_stack_ptr: Value,
-        scheduler_ptr: Value,
+        script_ptr: Value,
         graphics_ptr: Value,
         args_list: Vec<[Value; 4]>,
         sprite_id: SpriteId,
@@ -429,7 +429,7 @@ impl<'a> Compiler<'a> {
             break_counter: 0,
             repeat_stack: 0,
             memory,
-            scheduler_ptr,
+            script_ptr,
             loop_stack_ptr,
             args_list,
             graphics_ptr,

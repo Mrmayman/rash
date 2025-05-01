@@ -46,7 +46,7 @@ impl Compiler<'_> {
                 &[
                     slot_ptr,
                     custom_block_id,
-                    self.scheduler_ptr,
+                    self.script_ptr,
                     self.graphics_ptr,
                     self.child_thread_ptr,
                     self.is_called_as_refresh,
@@ -83,7 +83,7 @@ impl Compiler<'_> {
                 &[
                     slot_ptr,
                     custom_block_id,
-                    self.scheduler_ptr,
+                    self.script_ptr,
                     self.graphics_ptr,
                 ],
             );
