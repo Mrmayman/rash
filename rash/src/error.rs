@@ -6,7 +6,6 @@ use std::{
 use zip_extract::ZipExtractError;
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct RashError {
     pub trace: Vec<String>,
     pub kind: RashErrorKind,
@@ -50,7 +49,6 @@ impl RashError {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum RashErrorKind {
     IoError(std::io::Error, Option<PathBuf>),
     ZipExtract(ZipExtractError),

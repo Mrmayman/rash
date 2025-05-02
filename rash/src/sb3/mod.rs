@@ -7,7 +7,8 @@ use json::{Block, JsonBlock, JsonStruct};
 use tempfile::TempDir;
 
 use crate::{
-    compiler::ScratchBlock,
+    compiler::{ScratchBlock, MEMORY},
+    data_types::ScratchObject,
     error::{ErrorConvert, ErrorConvertPath, RashError, RashErrorKind, Trace},
     input_primitives::Ptr,
     scheduler::{ProjectBuilder, Scheduler, Script, SpriteBuilder},
@@ -59,6 +60,8 @@ impl ProjectLoader {
     pub fn build(self) -> Result<Scheduler, RashError> {
         const FN_N: &str = "ProjectLoader::build";
 
+        let memory = MEMORY.lock().unwrap();
+
         let mut builder = ProjectBuilder::new();
 
         let mut costume_names = HashMap::new();
@@ -99,7 +102,7 @@ impl ProjectLoader {
 
             state_map.insert(id, state);
 
-            load_blocks(sprite_json, &mut variable_map, &mut sprite)?;
+            load_blocks(sprite_json, &mut variable_map, &mut sprite, &memory)?;
 
             builder.finish_sprite(sprite);
         }
@@ -156,6 +159,7 @@ fn load_blocks(
     sprite_json: &json::Target,
     variable_map: &mut HashMap<String, Ptr>,
     sprite: &mut SpriteBuilder,
+    memory: &[ScratchObject],
 ) -> Result<(), RashError> {
     for (_, hat_block) in sprite_json.get_hat_blocks() {
         let JsonBlock::Block { block: hat_block } = hat_block else {
@@ -192,7 +196,7 @@ fn load_blocks(
 
         match hat_block.opcode.as_str() {
             "event_whenflagclicked" => {
-                sprite.add_script(&Script::new_green_flag(blocks));
+                sprite.add_script(&Script::new_green_flag(blocks), memory);
             }
             _ => {
                 println!("Unknown hat block opcode: {}", hat_block.opcode);
@@ -292,9 +296,10 @@ impl Block {
                     .get_number_input(blocks, variable_map, "TIMES")
                     .trace("Block::compile.control_if.CONDITION")?;
 
-                let compiled_blocks = self
+                let mut compiled_blocks = self
                     .compile_substack(variable_map, blocks, "SUBSTACK")
                     .trace("Block::compile.control_if")?;
+                compiled_blocks.push(ScratchBlock::ScreenRefresh);
 
                 Ok(ScratchBlock::ControlRepeat(times, compiled_blocks))
             }

@@ -540,7 +540,7 @@ impl<'a> Compiler<'a> {
                 return Some(ReturnValue::Num(self.op_m_tan(num, builder)));
             }
             ScratchBlock::ScreenRefresh => {
-                self.screen_refresh(builder, true);
+                self.screen_refresh(builder);
             }
             ScratchBlock::ControlStopThisScript => {
                 self.control_stop_this_script(builder);
@@ -652,19 +652,18 @@ impl<'a> Compiler<'a> {
         None
     }
 
-    pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>, save_cache: bool) {
+    pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
         if !self.is_screen_refresh {
             return;
         }
 
         self.break_counter += 1;
-        if save_cache {
-            self.cache.save(builder, &mut self.constants, self.memory);
-        }
+        self.cache.save(builder, &mut self.constants, self.memory);
         let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
         builder.ins().return_(&[break_counter]);
         self.constants.clear();
+
         self.code_block = builder.create_block();
         self.break_points.push(self.code_block);
         builder.switch_to_block(self.code_block);

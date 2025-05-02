@@ -53,27 +53,28 @@ impl Compiler<'_> {
                 ],
             );
 
-            let is_alive = builder.inst_results(inst)[0];
+            if self.is_screen_refresh {
+                let is_alive = builder.inst_results(inst)[0];
 
-            let inside_block = builder.create_block();
-            let end_block = builder.create_block();
+                let inside_block = builder.create_block();
+                let end_block = builder.create_block();
 
-            self.constants.clear();
-            builder
-                .ins()
-                .brif(is_alive, inside_block, &[], end_block, &[]);
-            // builder.seal_block(self.code_block);
+                builder
+                    .ins()
+                    .brif(is_alive, inside_block, &[], end_block, &[]);
 
-            builder.switch_to_block(inside_block);
+                builder.switch_to_block(inside_block);
+                self.break_counter += 1;
+                let break_counter = builder.ins().iconst(I64, self.break_counter as i64);
 
-            self.code_block = inside_block;
-            self.screen_refresh(builder, false);
+                builder.ins().return_(&[break_counter]);
 
-            builder.ins().jump(end_block, &[]);
+                self.break_points.push(end_block);
+                builder.switch_to_block(end_block);
 
-            builder.switch_to_block(end_block);
-            self.constants.clear();
-            self.code_block = end_block;
+                self.constants.clear();
+                self.code_block = end_block;
+            }
         } else {
             self.call_function(
                 builder,

@@ -81,7 +81,6 @@ impl std::fmt::Debug for ScratchObject {
 
 impl ScratchObject {
     /// Gets the data type of the `ScratchObject`.
-    #[allow(unused)]
     pub fn get_type(&self) -> VarType {
         match self {
             ScratchObject::Number(_) => VarType::Number,

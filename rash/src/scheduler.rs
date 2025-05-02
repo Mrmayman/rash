@@ -184,13 +184,14 @@ impl SpriteBuilder {
         }
     }
 
-    pub fn add_script(&mut self, script: &Script) {
+    pub fn add_script(&mut self, script: &Script, memory: &[ScratchObject]) {
         let num_args = match script.kind {
             ScriptKind::GreenFlag => 0,
             ScriptKind::CustomBlock { num_args, .. } => num_args,
         };
         let thread = compile(
             &script.blocks,
+            memory,
             self.id,
             num_args,
             script.kind.is_screen_refresh(),
@@ -279,6 +280,9 @@ pub struct Scheduler {
 }
 
 impl Run for Scheduler {
+    /// WARNING: Although it doesn't seem like this,
+    /// this function uses an internally-stored mutable reference
+    /// of the `memory: &[ScratchObject]` from earlier.
     fn update(&mut self, state: &mut RunState) -> bool {
         self.sort();
         self.run_threads(state)
@@ -423,12 +427,14 @@ impl ScratchThread {
     /// - Number of custom-block arguments (when compiling)
     ///   matches number of arguments when running (failing to do so
     ///   may result in panics or undefined behaviour).
-    /// - `graphics` points to a valid, global instance
-    ///   of [`RunState`]
     /// - There hopefully aren't any compiler bugs
     ///   creating broken code
     pub unsafe fn tick(&mut self, scripts: &Scripts, graphics: &mut RunState) -> bool {
         const DONE: i64 = -1;
+
+        if self.jumped_point == DONE {
+            return true;
+        }
 
         // If the parent (current) thread paused while
         // running a child thread which also paused,
@@ -437,8 +443,9 @@ impl ScratchThread {
             let child_ended = thread.tick(scripts, graphics);
             if child_ended {
                 *self.child_thread = None;
+            } else {
+                return false;
             }
-            return child_ended;
         }
 
         let result = unsafe {
@@ -457,6 +464,7 @@ impl ScratchThread {
             )
         };
         self.jumped_point = result;
+
         result == DONE
     }
 }

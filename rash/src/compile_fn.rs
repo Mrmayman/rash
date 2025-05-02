@@ -17,13 +17,15 @@ use cranelift::{
 use target_lexicon::Triple;
 
 use crate::{
-    compiler::{Compiler, ScratchBlock, MEMORY},
+    compiler::{Compiler, ScratchBlock},
+    data_types::ScratchObject,
     scheduler::ScratchThread,
 };
 use rash_render::SpriteId;
 
 pub fn compile(
     script: &[ScratchBlock],
+    memory: &[ScratchObject],
     id: SpriteId,
     num_args: usize,
     is_screen_refresh: bool,
@@ -84,13 +86,11 @@ pub fn compile(
     let code_block = builder.create_block();
     builder.switch_to_block(code_block);
 
-    let lock = MEMORY.lock().unwrap();
-
     let mut compiler = Compiler::new(
         code_block,
         &mut builder,
         script,
-        &lock,
+        &memory,
         repeat_stack_ptr,
         script_ptr,
         graphics_ptr,
@@ -103,7 +103,7 @@ pub fn compile(
 
     compiler
         .cache
-        .init(&mut builder, &mut compiler.constants, &lock);
+        .init(&mut builder, &mut compiler.constants, &memory);
 
     compiler.break_points.push(code_block);
 
@@ -113,7 +113,7 @@ pub fn compile(
 
     compiler
         .cache
-        .save(&mut builder, &mut compiler.constants, &lock);
+        .save(&mut builder, &mut compiler.constants, &memory);
 
     let return_value = builder.ins().iconst(I64, -1);
     builder.ins().return_(&[return_value]);

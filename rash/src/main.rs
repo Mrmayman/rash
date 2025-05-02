@@ -6,7 +6,6 @@ use sb3::ProjectLoader;
 use scheduler::{CustomBlockId, ProjectBuilder, Scheduler, Script, SpriteBuilder};
 
 mod block_print;
-mod block_test;
 mod blocks;
 mod callbacks;
 mod compile_fn;
@@ -19,6 +18,7 @@ mod ins_shortcuts;
 mod sb3;
 mod scheduler;
 mod stack_cache;
+mod tests;
 
 /// Scratch has a special edge case for math with NaN.
 /// Any operation with NaN will be treated as
@@ -75,40 +75,51 @@ fn run_demo() {
     let mut builder = ProjectBuilder::new();
     compiler::print_func_addresses();
 
+    let memory = MEMORY.lock().unwrap();
+
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
-    sprite1.add_script(&Script::new_custom_block(
-        vec![ScratchBlock::ControlRepeat(
-            3.0.into(),
-            vec![
-                ScratchBlock::VarChange(Ptr(3), ScratchBlock::FunctionGetArg(0).into()),
-                ScratchBlock::ScreenRefresh,
-            ],
-        )],
-        1,
-        CustomBlockId(1),
-        true,
-    ));
-    sprite1.add_script(&Script::new_custom_block(
-        vec![
-            ScratchBlock::VarSet(Ptr(3), 0.5.into()),
-            ScratchBlock::ControlRepeat(
-                5.0.into(),
+    sprite1.add_script(
+        &Script::new_custom_block(
+            vec![ScratchBlock::ControlRepeat(
+                3.0.into(),
                 vec![
-                    ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
-                    // ScratchBlock::VarChange(Ptr(3), 1.0.into()),
+                    ScratchBlock::VarChange(Ptr(3), ScratchBlock::FunctionGetArg(0).into()),
                     ScratchBlock::ScreenRefresh,
                 ],
-            ),
-        ],
-        0,
-        CustomBlockId(0),
-        true,
-    ));
-    sprite1.add_script(&Script::new_green_flag(vec![
-        ScratchBlock::VarSet(Ptr(3), 0.5.into()),
-        ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
-        // ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
-    ]));
+            )],
+            1,
+            CustomBlockId(1),
+            true,
+        ),
+        &memory,
+    );
+    sprite1.add_script(
+        &Script::new_custom_block(
+            vec![
+                ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+                ScratchBlock::ControlRepeat(
+                    5.0.into(),
+                    vec![
+                        ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
+                        // ScratchBlock::VarChange(Ptr(3), 1.0.into()),
+                        ScratchBlock::ScreenRefresh,
+                    ],
+                ),
+            ],
+            0,
+            CustomBlockId(0),
+            true,
+        ),
+        &memory,
+    );
+    sprite1.add_script(
+        &Script::new_green_flag(vec![
+            ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+            // ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
+            ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
+        ]),
+        &memory,
+    );
     // sprite1.add_script(Script::new_green_flag(block_test::repeat_until()));
     // TODO: Skip screen refresh in some very specific loops.
     // sprite1.add_script(Script::new_green_flag(
