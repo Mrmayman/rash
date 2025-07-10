@@ -34,6 +34,9 @@ impl Display for RashError {
             RashErrorKind::InvalidWarpKind(val) => {
                 write!(f, "invalid value for self.mutation.warp: {val}")?;
             }
+            RashErrorKind::CurrentCustomBlockNotFound => {
+                write!(f, "could not get info of current custom block!\n")?;
+            }
         };
         for t in &self.trace {
             write!(f, "\n  at {}", t)?;
@@ -65,6 +68,7 @@ pub enum RashErrorKind {
     Serde(serde_json::Error),
     FieldNotFound(String),
     InvalidWarpKind(String),
+    CurrentCustomBlockNotFound,
 }
 
 pub trait Trace {

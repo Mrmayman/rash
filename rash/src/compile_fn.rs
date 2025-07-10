@@ -123,7 +123,7 @@ pub fn compile(
     builder.seal_all_blocks();
     builder.finalize();
 
-    println!("{}", func.display());
+    // println!("{}", func.display());
 
     compile_ir(func, &isa, id, compiler.is_screen_refresh)
 }

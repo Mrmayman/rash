@@ -7,7 +7,7 @@ use crate::{
     compiler::{ScratchBlock, MEMORY},
     data_types::ScratchObject,
     error::{ErrorConvert, ErrorConvertPath, RashError, RashErrorKind, Trace},
-    input_primitives::Ptr,
+    input_primitives::{Input, Ptr},
     scheduler::{CustomBlockId, ProjectBuilder, Scheduler, Script, SpriteBuilder},
 };
 use rash_render::{CostumeId, IntermediateCostume, IntermediateState, SpriteId};
@@ -24,6 +24,7 @@ pub struct ProjectLoader {
 #[derive(Debug, Clone)]
 pub struct CustomBlockDef {
     args: Vec<String>,
+    args_name_to_id: Option<HashMap<String, String>>,
     is_screen_refresh: bool,
     id: CustomBlockId,
 }
@@ -31,8 +32,11 @@ pub struct CustomBlockDef {
 pub struct CompileContext<'a> {
     sprite_json: json::Target,
     variable_map: &'a mut HashMap<String, Ptr>,
+
     custom_block_defs: HashMap<String, CustomBlockDef>,
     custom_block_num: &'a mut usize,
+
+    current_custom_block: Option<String>,
 }
 
 impl CompileContext<'_> {
@@ -57,13 +61,24 @@ impl CompileContext<'_> {
             "self(procedures_prototype).mutation",
         ))?;
 
-        if let Some(def) = self.custom_block_defs.get(&block_mutation.proccode) {
+        if let Some(def) = self.custom_block_defs.get_mut(&block_mutation.proccode) {
+            if def.args_name_to_id.is_none() {
+                let args: Vec<String> = serde_json::from_str(&block_mutation.argumentids)
+                    .to("serde_json::from_str(self.mutation)", FN_N)?;
+                if let Some(names) = &block_mutation.argumentnames {
+                    def.args_name_to_id = Some(build_argument_names(&args, names)?);
+                }
+            }
             Ok(def.clone())
         } else {
-            let args: Vec<String> = serde_json::from_str(&block_mutation.argumentids).to(
-                "serde_json::from_str(self(procedures_prototype).mutation)",
-                FN_N,
-            )?;
+            let args: Vec<String> = serde_json::from_str(&block_mutation.argumentids)
+                .to("serde_json::from_str(self.mutation)", FN_N)?;
+            let args_name_to_id = if let Some(names) = &block_mutation.argumentnames {
+                Some(build_argument_names(&args, names)?)
+            } else {
+                None
+            };
+
             let warp = if block_mutation.warp == "true" {
                 true
             } else if block_mutation.warp == "false" {
@@ -73,6 +88,7 @@ impl CompileContext<'_> {
             };
             let blockdef = CustomBlockDef {
                 args,
+                args_name_to_id,
                 is_screen_refresh: !warp,
                 id: CustomBlockId(*self.custom_block_num),
             };
@@ -88,9 +104,26 @@ impl CompileContext<'_> {
     }
 }
 
+fn build_argument_names(
+    args: &[String],
+    names: &String,
+) -> Result<HashMap<String, String>, RashError> {
+    const FN_N: &str = "build_argument_names";
+
+    let arg_names: Vec<String> =
+        serde_json::from_str(names).to("serde_json::from_str(self.mutation)", FN_N)?;
+    let collect = args
+        .iter()
+        .zip(arg_names.into_iter())
+        .map(|(a, b)| (b, a.clone()))
+        .collect();
+    Ok(collect)
+}
+
 impl ProjectLoader {
     pub fn new(file_path: &Path) -> Result<Self, RashError> {
         const FN_N: &str = "ProjectLoader::new";
+        println!("[info] Loading file from {file_path:?}");
         if !file_path.is_file() {
             return Err(RashError {
                 trace: vec![FN_N.to_owned()],
@@ -241,6 +274,7 @@ fn load_blocks(
         variable_map,
         custom_block_defs: HashMap::new(),
         custom_block_num,
+        current_custom_block: None,
     };
 
     for (_, hat_block) in sprite_json.get_hat_blocks() {
@@ -252,6 +286,31 @@ fn load_blocks(
         let mut blocks: Vec<ScratchBlock> = Vec::new();
 
         let mut id = hat_block.next.clone();
+
+        let custom_block = if hat_block.opcode == "procedures_definition" {
+            let details = hat_block.get_custom_block_prototype()?;
+            let details = sprite_json.blocks.get(details).unwrap();
+            let JsonBlock::Block { block: details } = details else {
+                eprintln!("[error] Array block encountered");
+                break;
+            };
+            let custom_block = ctx.get_custom_block(details).trace(FN_N)?;
+
+            let proccode = details
+                .mutation
+                .as_ref()
+                .ok_or(RashError::field_not_found(
+                    "self(procedures_prototype).mutation",
+                ))?
+                .proccode
+                .clone();
+            ctx.current_custom_block = Some(proccode);
+
+            Some(custom_block)
+        } else {
+            ctx.current_custom_block = None;
+            None
+        };
 
         while let Some(block_id) = id {
             let block = sprite_json.blocks.get(&block_id).unwrap();
@@ -274,17 +333,13 @@ fn load_blocks(
 
         match hat_block.opcode.as_str() {
             "event_whenflagclicked" => {
-                sprite.add_script(&Script::new_green_flag(blocks), memory);
+                let new_green_flag = Script::new_green_flag(blocks);
+                sprite.add_script(&new_green_flag, memory);
             }
             "procedures_definition" => {
-                let details = hat_block.get_custom_block_prototype()?;
-                let block = sprite_json.blocks.get(details).unwrap();
-                let JsonBlock::Block { block } = block else {
-                    eprintln!("[error] Array block encountered");
-                    break;
-                };
+                let custom_block = custom_block.unwrap();
 
-                let custom_block = ctx.get_custom_block(block).trace(FN_N)?;
+                println!("{custom_block:?}");
                 sprite.add_script(
                     &Script::new_custom_block(
                         blocks,
@@ -404,10 +459,85 @@ impl Block {
 
                 Ok(ScratchBlock::ControlRepeat(times, compiled_blocks))
             }
+            "procedures_call" => {
+                let block = ctx.get_custom_block(self)?;
+
+                let args: Result<Vec<Input>, RashError> = block
+                    .args
+                    .iter()
+                    .map(|n| {
+                        self.get_number_input(ctx, n)
+                            .trace("Block::compile.procedures_call")
+                    })
+                    .collect();
+                let args = args?;
+
+                Ok(if block.is_screen_refresh {
+                    ScratchBlock::FunctionCallScreenRefresh(block.id, args)
+                } else {
+                    ScratchBlock::FunctionCallNoScreenRefresh(block.id, args)
+                })
+            }
+            "argument_reporter_string_number" => self.c_argument_reporter(ctx),
             _ => {
                 println!("Unknown opcode: {}\n{self:#?}\n", self.opcode);
                 Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
             }
         }
+    }
+
+    fn c_argument_reporter(&self, ctx: &mut CompileContext<'_>) -> Result<ScratchBlock, RashError> {
+        let arg = self.fields.get("VALUE").ok_or(RashError::field_not_found(
+            "self(argument_reporter_string_number).fields.VALUE",
+        ))?;
+        match arg {
+            serde_json::Value::Array(values) => {
+                let arg_name = values
+                    .first()
+                    .ok_or(RashError::field_not_found(
+                        "self(argument_reporter_string_number).fields.VALUE[0]",
+                    ))?
+                    .as_str()
+                    .ok_or(RashError::field_not_found(
+                        "self(argument_reporter_string_number).fields.VALUE[0]: not string",
+                    ))?;
+
+                let current_custom_block = ctx
+                    .current_custom_block
+                    .as_ref()
+                    .ok_or(get_blockdef_error("current_custom_block"))?;
+                println!("{:?}", ctx.custom_block_defs);
+                let blockdef = ctx
+                    .custom_block_defs
+                    .get(current_custom_block)
+                    .ok_or(get_blockdef_error("blockdef"))?;
+                let name_to_id = blockdef
+                    .args_name_to_id
+                    .as_ref()
+                    .ok_or(get_blockdef_error("blockdef.name_to_id"))?;
+                let arg_id = name_to_id
+                    .get(arg_name)
+                    .ok_or(get_blockdef_error("blockdef.name_to_id.get"))?;
+
+                let position = blockdef
+                    .args
+                    .iter()
+                    .position(|n| n == arg_id)
+                    .ok_or(get_blockdef_error("blockdef.args"))?;
+
+                Ok(ScratchBlock::FunctionGetArg(position))
+            }
+            _ => todo!(),
+        }
+    }
+}
+
+fn get_blockdef_error(n: &'static str) -> RashError {
+    RashError {
+        trace: vec![format!(
+            "Block::compile.argument_reporter_string_number ({})",
+            n
+        )],
+        kind: RashErrorKind::CurrentCustomBlockNotFound,
     }
 }

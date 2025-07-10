@@ -35,10 +35,14 @@ pub enum ScratchObject {
 //     fn drop(&mut self) {
 //         let bytes = unsafe { std::mem::transmute::<&Self, &[i64; 4]>(&self) };
 //         println!(
-//             "Self bytes: {:X} {:X} {:X} {:X}",
+//             "Dropping self: {self:?} (bytes: {:X} {:X} {:X} {:X})",
 //             bytes[0] as i32 as i64, bytes[1], bytes[2], bytes[3]
 //         );
-//         println!("Dropping self: {self:?}");
+//         if let ScratchObject::String(s) = self {
+//             let mut n = String::new();
+//             std::mem::swap(&mut n, s);
+//             std::mem::forget(n);
+//         }
 //     }
 // }
 

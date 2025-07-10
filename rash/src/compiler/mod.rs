@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 use cranelift::prelude::{
     types::{F64, I64},
-    Block, FunctionBuilder, InstBuilder, Value,
+    Block, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
 };
 use lazy_static::lazy_static;
 use rash_render::{RunState, SpriteId};
@@ -559,7 +559,7 @@ impl<'a> Compiler<'a> {
                 self.call_custom_block(custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
-                return Some(ReturnValue::Object(self.args_list[*idx]))
+                return Some(ReturnValue::Object(self.custom_block_get_arg(builder, idx)));
             }
             ScratchBlock::MotionGoToXY(x, y) => {
                 let x = x.get_number(self, builder);
@@ -657,6 +657,35 @@ impl<'a> Compiler<'a> {
             }
         }
         None
+    }
+
+    fn custom_block_get_arg(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        idx: &usize,
+    ) -> [Value; 4] {
+        let [i1, i2, i3, i4] = self.args_list[*idx];
+        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+            StackSlotKind::ExplicitSlot,
+            4 * std::mem::size_of::<i64>() as u32,
+            0,
+        ));
+        let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
+
+        self.call_function(
+            builder,
+            callbacks::types::clone_obj as usize,
+            &[I64, I64, I64, I64, I64],
+            &[],
+            &[i1, i2, i3, i4, stack_ptr],
+        );
+
+        let i1 = builder.ins().stack_load(I64, stack_slot, 0);
+        let i2 = builder.ins().stack_load(I64, stack_slot, 8);
+        let i3 = builder.ins().stack_load(I64, stack_slot, 16);
+        let i4 = builder.ins().stack_load(I64, stack_slot, 24);
+        let obj = [i1, i2, i3, i4];
+        obj
     }
 
     pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {

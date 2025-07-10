@@ -145,3 +145,10 @@ pub unsafe extern "C" fn drop_obj(i1: *mut ScratchObject) {
         std::ptr::drop_in_place(i1);
     }
 }
+
+pub unsafe extern "C" fn clone_obj(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let new_obj = obj.clone();
+    std::mem::forget(obj);
+    unsafe { out.write(new_obj) };
+}
