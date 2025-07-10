@@ -13,11 +13,12 @@ compiled to machine code and executed directly, much like Java.
 
 # What's the progress?
 
-You can see the progress in implementing blocks at
-https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbXw9U/edit?usp=sharing
+You can see the progress in implementing blocks in this [Google Docs spreadsheet](https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbXw9U/edit?usp=sharing)
 
 ## Todo list:
-- [ ] Implement loading from SB3 files
+(WIP means Work-In-Progress)
+
+- [ ] Implement loading from SB3 files (WIP)
 - [ ] Implement Control operations
 - - [x] If
 - - [x] If-Else
@@ -45,14 +46,13 @@ https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbX
 - - [ ] E^, 10^
 - [ ] Implement Custom Blocks
 - - [x] Implement Custom Block Arguments
-- - [x] Implement Run-Without-Screen-Refresh Custom Blocks
-- - [ ] Implement Run-With-Screen-Refresh Custom Blocks
-- - [ ] Implement Run-With-Screen-Refresh called from
-       Run-Without-Screen-Refresh Custom Blocks
+- - [x] Implement Without-Screen-Refresh Custom Blocks
+- - [x] Implement Screen-Refresh Custom Blocks
+- - [x] Implement Screen-Refresh Custom Blocks called from Without-Screen-Refresh Custom Blocks
 - [x] Implement Variables
 - [ ] Implement Lists
 - [ ] Implement Broadcasts
-- [ ] Implement Cloning
+- [ ] Implement Clones
 - [x] Add Graphics
 - - [ ] Hide, Show blocks
 - - [x] Position blocks
@@ -67,28 +67,16 @@ https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbX
 - - [ ] Pen stamps
 - - [ ] Pen lines
 - - [ ] Variable monitors
+- - [ ] UI library
 - [ ] Add sound
 
 # Running
 
-Clone the repository:
-
-`git clone https://github.com/Mrmayman/rash.git`
-
-Change directory:
-
-`cd rash`
-
-Install the Rust language if you haven't already.
-Run the project:
-
-`cargo run --release`
-
-To run the test suite, do:
-
-`cargo test`
-
-Note: It can't load SB3 files now, the code is hardcoded (more info in `src/main.rs`).
+- Install the Rust language if you haven't already.
+- Clone the repository: `git clone https://github.com/Mrmayman/rash.git`
+- Change directory: `cd rash`
+- Compile and run Rash: `cargo run --release -- path/to/file.sb3`
+- To run the test suite, do: `cargo test`
 
 # Contributing
 
