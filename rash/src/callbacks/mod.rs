@@ -40,7 +40,7 @@ pub extern "C" fn op_round(value: f64) -> f64 {
     }
 }
 
-pub extern "C" fn op_str_contains(
+pub unsafe extern "C" fn op_str_contains(
     string: *mut String,
     string_is_const: i64,
     substring: *mut String,
@@ -65,7 +65,12 @@ pub extern "C" fn op_str_contains(
     contains as i64
 }
 
-pub extern "C" fn op_str_letter(string: *mut String, is_const: i64, index: f64, out: *mut String) {
+pub unsafe extern "C" fn op_str_letter(
+    string: *mut String,
+    is_const: i64,
+    index: f64,
+    out: *mut String,
+) {
     let letter = get_char_at_index(index, string);
 
     if is_const == 0 {
@@ -87,6 +92,7 @@ pub extern "C" fn op_str_letter(string: *mut String, is_const: i64, index: f64, 
     }
 }
 
+/// Callback from JIT code to get character at index of a string.
 fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
     if index < 1.0 {
         return None;
@@ -106,17 +112,16 @@ fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
         // which represents an unknown character.
         .map(|n| {
             char::from_u32(*n as u32).unwrap_or({
-                // '\u{FFFD}'
-
-                // WARNING: Highly unsafe, could cause crashes.
+                // Either '\u{FFFD}'
+                // Or this (idk which one)
+                char::from_u32(*n as u32).unwrap()
                 // TODO: Find a better way to handle this.
-                unsafe { std::mem::transmute::<u32, char>(*n as u32) }
             })
         })
 }
 
 /// Callback from JIT code to join two strings
-pub extern "C" fn op_str_join(
+pub unsafe extern "C" fn op_str_join(
     a: *mut String,
     b: *mut String,
     out: *mut String,
@@ -152,7 +157,7 @@ pub extern "C" fn op_str_join(
 }
 
 /// Callback from JIT code to get the length of a string
-pub extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
+pub unsafe extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
     let string = unsafe { &*s };
     // Scratch stores Strings in UTF-16 (unlike rust).
     // For example, skull emoji ("💀") is 4 chars in rust,
@@ -178,7 +183,7 @@ pub extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
 ///   MEMORY array beforehand by the compiler).
 /// * `dest` - The pointer to the destination memory location.
 ///   (not a pointer to `ScratchObject` for simplicity sake)
-pub extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut ScratchObject) {
+pub unsafe extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut ScratchObject) {
     // TODO: This is pointless, eliminate it.
     let obj = unsafe { (*ptr).clone() };
     unsafe { dest.write(obj) };
@@ -202,7 +207,7 @@ pub extern "C" fn op_random(a: f64, b: f64, is_decimal: i64) -> f64 {
     }
 }
 
-pub extern "C" fn dbg_log(msg: *mut ScratchObject, is_const: i64) {
+pub unsafe extern "C" fn dbg_log(msg: *mut ScratchObject, is_const: i64) {
     let msg_val = unsafe { (*msg).clone() };
     println!("[info] {msg_val:?}");
     if is_const == 0 {

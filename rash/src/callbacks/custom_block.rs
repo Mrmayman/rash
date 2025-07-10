@@ -11,7 +11,7 @@ pub enum PauseStatus {
     Paused = 1,
 }
 
-pub extern "C" fn call_no_screen_refresh(
+pub unsafe extern "C" fn call_no_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,
     scripts: *const Scripts,
@@ -37,7 +37,7 @@ pub extern "C" fn call_no_screen_refresh(
     while !unsafe { script.tick(scripts, &mut *graphics) } {}
 }
 
-pub extern "C" fn call_screen_refresh(
+pub unsafe extern "C" fn call_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,
     scripts: *const Scripts,
