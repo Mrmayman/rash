@@ -12,7 +12,7 @@ use crate::{
     compiler::ScratchBlock,
     constant_set::ConstantMap,
     data_types::{ScratchObject, ID_BOOL, ID_NUMBER, ID_STRING},
-    input_primitives::Ptr,
+    input_primitives::{Input, Ptr},
 };
 
 /// A local cache of accessed variables.
@@ -183,7 +183,12 @@ impl StackCache {
     }
 
     pub fn get_ptr(&self, ptr: Ptr, builder: &mut FunctionBuilder<'_>) -> Value {
-        let mem_ptr = *self.variable_offsets.get(&ptr).unwrap() as i32;
+        let Some(mem_ptr) = self.variable_offsets.get(&ptr).map(|n| *n as i32) else {
+            panic!(
+                "Stack Cache: Variable {ptr:?} not found!\nOffsets: {:?}",
+                self.variable_offsets
+            )
+        };
         builder.ins().stack_addr(I64, self.slot, mem_ptr)
     }
 
@@ -233,60 +238,89 @@ impl StackCache {
 
 pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
     match block {
-        ScratchBlock::VarChange(ptr, _)
-        | ScratchBlock::VarRead(ptr)
-        | ScratchBlock::VarSet(ptr, _) => {
+        ScratchBlock::VarChange(ptr, n) | ScratchBlock::VarSet(ptr, n) => {
             vars.insert(*ptr);
-        }
-        ScratchBlock::ControlRepeatUntil(_, vec)
-        | ScratchBlock::ControlRepeat(_, vec)
-        | ScratchBlock::ControlIf(_, vec) => {
-            for block in vec {
+            if let Input::Block(block) = n {
                 accesses_var(block, vars);
             }
         }
-        ScratchBlock::ControlIfElse(_, vec, vec1) => {
+        ScratchBlock::VarRead(ptr) => {
+            vars.insert(*ptr);
+        }
+        ScratchBlock::ControlRepeatUntil(n, vec)
+        | ScratchBlock::ControlRepeat(n, vec)
+        | ScratchBlock::ControlIf(n, vec) => {
+            for block in vec {
+                accesses_var(block, vars);
+            }
+            if let Input::Block(block) = n {
+                accesses_var(block, vars);
+            }
+        }
+        ScratchBlock::ControlIfElse(n, vec, vec1) => {
             for block in vec {
                 accesses_var(block, vars);
             }
             for block in vec1 {
                 accesses_var(block, vars);
             }
+            if let Input::Block(block) = n {
+                accesses_var(block, vars);
+            }
         }
-        ScratchBlock::OpAdd(_, _)
-        | ScratchBlock::OpSub(_, _)
-        | ScratchBlock::OpMul(_, _)
-        | ScratchBlock::OpDiv(_, _)
-        | ScratchBlock::OpStrJoin(_, _)
-        | ScratchBlock::OpMod(_, _)
-        | ScratchBlock::OpStrLen(_)
-        | ScratchBlock::OpCmpGreater(_, _)
-        | ScratchBlock::OpCmpLesser(_, _)
-        | ScratchBlock::OpBAnd(_, _)
-        | ScratchBlock::OpBNot(_)
-        | ScratchBlock::OpBOr(_, _)
-        | ScratchBlock::OpMFloor(_)
-        | ScratchBlock::OpStrLetterOf(_, _)
-        | ScratchBlock::OpStrContains(_, _)
-        | ScratchBlock::OpRound(_)
-        | ScratchBlock::OpMAbs(_)
-        | ScratchBlock::OpMSqrt(_)
-        | ScratchBlock::OpMSin(_)
-        | ScratchBlock::OpMCos(_)
-        | ScratchBlock::OpMTan(_)
-        | ScratchBlock::ScreenRefresh
+        ScratchBlock::OpAdd(a, b)
+        | ScratchBlock::OpSub(a, b)
+        | ScratchBlock::OpMul(a, b)
+        | ScratchBlock::OpDiv(a, b)
+        | ScratchBlock::OpStrJoin(a, b)
+        | ScratchBlock::OpMod(a, b)
+        | ScratchBlock::OpCmpGreater(a, b)
+        | ScratchBlock::OpCmpLesser(a, b)
+        | ScratchBlock::OpBAnd(a, b)
+        | ScratchBlock::OpBOr(a, b)
+        | ScratchBlock::MotionGoToXY(a, b)
+        | ScratchBlock::OpRandom(a, b)
+        | ScratchBlock::OpStrLetterOf(a, b)
+        | ScratchBlock::OpStrContains(a, b) => {
+            if let Input::Block(block) = a {
+                accesses_var(block, vars);
+            }
+            if let Input::Block(block) = b {
+                accesses_var(block, vars);
+            }
+        }
+        ScratchBlock::FunctionCallNoScreenRefresh(_, n)
+        | ScratchBlock::FunctionCallScreenRefresh(_, n) => {
+            for input in n {
+                if let Input::Block(block) = input {
+                    accesses_var(block, vars);
+                }
+            }
+        }
+
+        ScratchBlock::MotionChangeX(n)
+        | ScratchBlock::MotionChangeY(n)
+        | ScratchBlock::MotionSetX(n)
+        | ScratchBlock::MotionSetY(n)
+        | ScratchBlock::Log(n)
+        | ScratchBlock::OpMFloor(n)
+        | ScratchBlock::OpBNot(n)
+        | ScratchBlock::OpStrLen(n)
+        | ScratchBlock::OpRound(n)
+        | ScratchBlock::OpMAbs(n)
+        | ScratchBlock::OpMSqrt(n)
+        | ScratchBlock::OpMSin(n)
+        | ScratchBlock::OpMCos(n)
+        | ScratchBlock::OpMTan(n) => {
+            if let Input::Block(block) = n {
+                accesses_var(block, vars);
+            }
+        }
+
+        ScratchBlock::ScreenRefresh
         | ScratchBlock::ControlStopThisScript
-        | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
-        | ScratchBlock::FunctionCallScreenRefresh(_, _)
         | ScratchBlock::FunctionGetArg(_)
-        | ScratchBlock::MotionGoToXY(_, _)
-        | ScratchBlock::MotionChangeX(_)
-        | ScratchBlock::MotionChangeY(_)
-        | ScratchBlock::MotionSetX(_)
-        | ScratchBlock::MotionSetY(_)
         | ScratchBlock::MotionGetX
-        | ScratchBlock::MotionGetY
-        | ScratchBlock::Log(_)
-        | ScratchBlock::OpRandom(_, _) => {}
+        | ScratchBlock::MotionGetY => {}
     }
 }
