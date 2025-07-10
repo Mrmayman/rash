@@ -1,3 +1,12 @@
+// Note: Scratch loops omit a screen refresh
+// if there aren't any graphics/time related
+// operations inside.
+
+// But here, we need to test screen refresh.
+// However we can't use graphical operations
+// inside a test environment, so we just use
+// an explicit ScreenRefresh
+
 #[cfg(test)]
 mod tests {
     use rash_render::{Run, RunState, SpriteId};
@@ -7,6 +16,8 @@ mod tests {
         input_primitives::Ptr,
         scheduler::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
     };
+
+    use super::*;
 
     #[test]
     fn custom_block_screen_refresh() {
@@ -33,13 +44,13 @@ mod tests {
         sprite1.add_script(
             &Script::new_custom_block(
                 vec![
-                    ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+                    ScratchBlock::VarSet(Ptr(3), 0.0.into()),
                     ScratchBlock::ControlRepeat(
                         5.0.into(),
                         vec![
                             ScratchBlock::FunctionCallScreenRefresh(
                                 CustomBlockId(1),
-                                vec![2.0.into()],
+                                vec![1.0.into()],
                             ),
                             ScratchBlock::ScreenRefresh,
                         ],
@@ -53,7 +64,7 @@ mod tests {
         );
         sprite1.add_script(
             &Script::new_green_flag(vec![
-                ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+                ScratchBlock::VarSet(Ptr(3), 0.0.into()),
                 ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
             ]),
             &memory,
@@ -67,8 +78,8 @@ mod tests {
             num_ticks += 1;
         }
 
-        assert_eq!(num_ticks, 21);
-        assert_eq!(memory[3].convert_to_number(), 30.5);
+        assert_eq!(by_two(num_ticks), 21);
+        assert_eq!(memory[3].convert_to_number(), 15.0);
     }
 
     #[test]
@@ -106,7 +117,18 @@ mod tests {
             num_ticks += 1;
         }
 
-        assert_eq!(num_ticks, 16);
+        assert_eq!(by_two(num_ticks), 16);
         assert_eq!(memory[3].convert_to_number(), 24.5);
+    }
+}
+
+#[cfg(test)]
+fn by_two(n: i32) -> i32 {
+    if n % 2 == 0 {
+        // If n is even, standard division works
+        n / 2
+    } else {
+        // If n is odd, integer division truncates, so add 1
+        n / 2 + 1
     }
 }

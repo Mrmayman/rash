@@ -22,6 +22,7 @@ use crate::compiler::VarType;
 /// There are a few methods to convert between the different types,
 /// that accurately mirror the behaviour of the Scratch programming language.
 #[repr(C)]
+#[derive(PartialEq)]
 pub enum ScratchObject {
     Number(f64),
     String(String),

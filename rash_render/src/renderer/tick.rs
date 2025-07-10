@@ -93,11 +93,7 @@ impl InnerRenderer<'_> {
         sprite_order: &[SpriteId],
         costumes: &HashMap<CostumeId, Costume>,
     ) {
-        let _delta = self.last_time.elapsed().as_secs_f64() * 60.0;
-        // This tells winit that we want another frame after this one
         self.window.request_redraw();
-
-        // Write to the storage buffer
 
         self.queue.write_buffer(
             &self.sprites_buffer,
@@ -111,16 +107,23 @@ impl InnerRenderer<'_> {
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => self.resize(self.size),
             // The system is out of memory, we should probably quit
             Err(wgpu::SurfaceError::OutOfMemory) => {
-                log::error!("OutOfMemory");
+                eprintln!("[error] Graphics: Out Of Memory");
                 control_flow.exit();
             }
-
             // This happens when the a frame takes too long to present
             Err(wgpu::SurfaceError::Timeout) => {
-                log::warn!("Surface timeout")
+                eprintln!("[error] Graphics: Surface timeout")
             }
         }
 
+        let frametime = self.last_time.elapsed().as_secs_f64();
         self.last_time = Instant::now();
+
+        let target_frametime = 1.0 / 30.0;
+        if frametime < target_frametime {
+            std::thread::sleep(std::time::Duration::from_secs_f64(
+                target_frametime - frametime,
+            ));
+        }
     }
 }

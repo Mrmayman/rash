@@ -113,7 +113,7 @@ impl ScratchBlock {
             ScratchBlock::FunctionGetArg(idx) => {
                 format!("get_arg({idx})")
             }
-            ScratchBlock::ScreenRefresh => "break".to_owned(),
+            ScratchBlock::ScreenRefresh => "yield".to_owned(),
             ScratchBlock::MotionGoToXY(input, input1) => {
                 func_call_inner("motion.go_to_xy", &[input, input1])
             }

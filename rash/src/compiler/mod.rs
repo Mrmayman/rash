@@ -24,7 +24,7 @@ lazy_static! {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ScratchBlock {
     /// Sets a variable to a value.
     VarSet(Ptr, Input),
@@ -78,9 +78,9 @@ pub enum ScratchBlock {
     /// screen refresh allows a script to pause and
     /// resume.
     ///
-    /// Note: if you use this inside a repeat loop,
-    /// make sure to use
-    /// [`ScratchBlock::ControlRepeatScreenRefresh`]
+    /// Note: don't insert this explicitly in a repeat
+    /// loop as screen refreshes are auto-inserted in
+    /// loops matching Scratch behaviour.
     ScreenRefresh,
     MotionGoToXY(Input, Input),
     MotionChangeX(Input),
@@ -272,7 +272,7 @@ impl ScratchBlock {
         }
     }
 
-    pub fn could_refresh_screen(&self) -> bool {
+    pub fn could_trigger_refresh(&self, include_calls: bool) -> bool {
         match self {
             ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
@@ -303,25 +303,32 @@ impl ScratchBlock {
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::Log(_)
-            | ScratchBlock::MotionGoToXY(_, _)
-            | ScratchBlock::MotionChangeX(_)
-            | ScratchBlock::MotionChangeY(_)
-            | ScratchBlock::MotionSetX(_)
-            | ScratchBlock::MotionSetY(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
             ScratchBlock::ControlIf(_, scratch_blocks)
             | ScratchBlock::ControlRepeatUntil(_, scratch_blocks)
-            | ScratchBlock::ControlRepeat(_, scratch_blocks) => {
-                scratch_blocks.iter().any(|n| n.could_refresh_screen())
-            }
+            | ScratchBlock::ControlRepeat(_, scratch_blocks) => scratch_blocks
+                .iter()
+                .any(|n| n.could_trigger_refresh(include_calls)),
             ScratchBlock::ControlIfElse(_, scratch_blocks, scratch_blocks1) => {
-                scratch_blocks.iter().any(|n| n.could_refresh_screen())
-                    || scratch_blocks1.iter().any(|n| n.could_refresh_screen())
+                scratch_blocks
+                    .iter()
+                    .any(|n| n.could_trigger_refresh(include_calls))
+                    || scratch_blocks1
+                        .iter()
+                        .any(|n| n.could_trigger_refresh(include_calls))
             }
 
-            ScratchBlock::ScreenRefresh | ScratchBlock::FunctionCallScreenRefresh(_, _) => true,
+            ScratchBlock::ScreenRefresh | ScratchBlock::FunctionCallScreenRefresh(_, _) => {
+                include_calls
+            }
+
+            ScratchBlock::MotionGoToXY(_, _)
+            | ScratchBlock::MotionChangeX(_)
+            | ScratchBlock::MotionChangeY(_)
+            | ScratchBlock::MotionSetX(_)
+            | ScratchBlock::MotionSetY(_) => true,
         }
     }
 }
@@ -476,7 +483,7 @@ impl<'a> Compiler<'a> {
                     builder,
                     input,
                     vec,
-                    vec.iter().any(|n| n.could_refresh_screen()),
+                    vec.iter().any(|n| n.could_trigger_refresh(true)),
                 );
             }
             ScratchBlock::VarChange(ptr, input) => {
@@ -657,18 +664,21 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        self.break_counter += 1;
-        self.cache.save(builder, &mut self.constants, self.memory);
-        let break_counter = self.constants.get_int(self.break_counter as i64, builder);
+        // TODO: Hacky workaround for too-fast timing
+        for _ in 0..2 {
+            self.break_counter += 1;
+            self.cache.save(builder, &mut self.constants, self.memory);
+            let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
-        builder.ins().return_(&[break_counter]);
-        self.constants.clear();
+            builder.ins().return_(&[break_counter]);
+            self.constants.clear();
 
-        self.code_block = builder.create_block();
-        self.break_points.push(self.code_block);
-        builder.switch_to_block(self.code_block);
+            self.code_block = builder.create_block();
+            self.break_points.push(self.code_block);
+            builder.switch_to_block(self.code_block);
 
-        self.cache.init(builder, &mut self.constants, self.memory);
+            self.cache.init(builder, &mut self.constants, self.memory);
+        }
     }
 }
 

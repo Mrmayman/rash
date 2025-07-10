@@ -31,6 +31,9 @@ impl Display for RashError {
             RashErrorKind::FieldNotFound(field) => {
                 write!(f, "field not found: {field}")?;
             }
+            RashErrorKind::InvalidWarpKind(val) => {
+                write!(f, "invalid value for self.mutation.warp: {val}")?;
+            }
         };
         for t in &self.trace {
             write!(f, "\n  at {}", t)?;
@@ -46,6 +49,13 @@ impl RashError {
             kind: RashErrorKind::FieldNotFound(field.to_owned()),
         }
     }
+
+    pub fn invalid_warp_kind(field: &str) -> Self {
+        RashError {
+            trace: vec![],
+            kind: RashErrorKind::InvalidWarpKind(field.to_owned()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -54,6 +64,7 @@ pub enum RashErrorKind {
     ZipExtract(ZipExtractError),
     Serde(serde_json::Error),
     FieldNotFound(String),
+    InvalidWarpKind(String),
 }
 
 pub trait Trace {

@@ -7,9 +7,11 @@
 //! contain a JSON file called `project.json`,
 //! as well as the costumes and sounds.
 
+#![allow(unused)]
+
 use std::{collections::BTreeMap, fmt::Debug};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 #[allow(unused)]
@@ -32,18 +34,18 @@ pub mod json_id {
 /// located in the root of the `.sb3` file.
 ///
 /// It contains the information and code of a project.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct JsonStruct {
     /// A list of targets (Scratch sprites).
     pub targets: Vec<Target>,
     /// A list of variable monitors (the boxes showing the values).
     pub monitors: Vec<Monitor>,
-    pub extensions: Vec<Value>,
-    pub meta: Value,
+    // pub extensions: Vec<Value>,
+    // pub meta: Value,
 }
 
 /// # A Scratch sprite.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
 pub struct Target {
     pub isStage: bool,
@@ -88,7 +90,7 @@ impl Target {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
 pub struct Block {
     pub opcode: String,
@@ -98,23 +100,54 @@ pub struct Block {
     pub fields: BTreeMap<String, Value>,
     pub shadow: bool,
     pub topLevel: bool,
+
+    pub mutation: Option<BlockMutation>,
+
     // Only for hat blocks.
     pub x: Option<f64>,
     pub y: Option<f64>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
-#[serde(untagged)]
+pub struct BlockMutation {
+    pub tagName: String,
+    pub children: Vec<Value>,
+    pub proccode: String,
+    pub argumentids: String,
+    pub argumentnames: Option<String>,
+    pub argumentdefaults: Option<String>,
+    pub warp: String,
+}
+
+#[derive(Debug, Clone)]
 pub enum JsonBlock {
-    Block {
-        #[serde(flatten)]
-        block: Block,
-    },
+    Block { block: Block },
     Array(Vec<Value>),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+impl<'de> Deserialize<'de> for JsonBlock {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        if value.is_array() {
+            let array = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            Ok(JsonBlock::Array(array))
+        } else if value.is_object() {
+            let block = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            Ok(JsonBlock::Block { block })
+        } else {
+            Err(serde::de::Error::custom(
+                "JsonBlock: Could not determine type of Block, invalid JSON structure",
+            ))
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
 pub struct TargetCostume {
     pub name: String,
@@ -125,7 +158,7 @@ pub struct TargetCostume {
     pub rotationCenterY: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct Monitor {
     pub id: String,
@@ -144,13 +177,13 @@ pub struct Monitor {
     pub isDiscrete: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct MonitorParams {
     VARIABLE: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Meta {
     pub semver: String,
     pub vm: String,

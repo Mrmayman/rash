@@ -1,22 +1,19 @@
-use std::collections::{BTreeMap, HashMap};
-
 use crate::{
     compiler::ScratchBlock,
     data_types::{number_to_string, string_to_number},
     error::{RashError, Trace},
-    input_primitives::{Input, Ptr},
+    input_primitives::Input,
 };
 
 use super::{
     json::{json_id, Block, JsonBlock},
-    variable_map_get,
+    CompileContext,
 };
 
 impl Block {
     pub fn compile_substack(
         &self,
-        variable_map: &mut HashMap<String, Ptr>,
-        blocks: &BTreeMap<String, JsonBlock>,
+        ctx: &mut CompileContext,
         substack_name: &str,
     ) -> Result<Vec<ScratchBlock>, RashError> {
         let substack = self
@@ -29,28 +26,25 @@ impl Block {
             .ok_or(RashError::field_not_found(
                 "self.inputs.{substack_name}: not array",
             ))?;
-        let child_block_id = substack
+        let Some(child_block_id) = substack
             .get(1)
             .ok_or(RashError::field_not_found(&format!(
                 "self.inputs.{substack_name}[1]"
             )))?
             .as_str()
-            .ok_or(RashError::field_not_found(&format!(
-                "self.inputs.{substack_name}[1]: not string"
-            )))?;
+        else {
+            return Ok(Vec::new());
+        };
+
         let mut compiled_blocks = Vec::new();
         let mut id = Some(child_block_id.to_owned());
         while let Some(block_id) = id {
-            let block = blocks.get(&block_id).unwrap();
+            let block = ctx.get_block(&block_id).unwrap().clone();
             let JsonBlock::Block { block } = block else {
                 eprintln!("Array block encountered");
                 break;
             };
-            compiled_blocks.push(
-                block
-                    .compile(variable_map, blocks)
-                    .trace("Block::compile_substack()")?,
-            );
+            compiled_blocks.push(block.compile(ctx).trace("Block::compile_substack()")?);
             id = block.next.clone();
         }
         Ok(compiled_blocks)
@@ -73,8 +67,7 @@ impl Block {
 
     pub fn get_boolean_input(
         &self,
-        blocks: &BTreeMap<String, JsonBlock>,
-        variable_map: &mut HashMap<String, Ptr>,
+        ctx: &mut CompileContext,
         name: &str,
     ) -> Result<Input, RashError> {
         let Some(input) = self.inputs.get(name) else {
@@ -88,11 +81,10 @@ impl Block {
                 "self.inputs.{name}[1]"
             )))? {
             serde_json::Value::Null => false.into(),
-            serde_json::Value::String(n) => match blocks.get(n).unwrap() {
-                JsonBlock::Block { block } => block
-                    .compile(variable_map, blocks)
-                    .trace("Block::get_boolean_input")?
-                    .into(),
+            serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
+                JsonBlock::Block { block } => {
+                    block.compile(ctx).trace("Block::get_boolean_input")?.into()
+                }
                 JsonBlock::Array(_) => todo!(),
             },
             serde_json::Value::Array(vec) => {
@@ -121,7 +113,7 @@ impl Block {
                     json_id::STRING => vec.get(1).unwrap().as_str().unwrap().into(),
                     json_id::VARIABLE => {
                         let id = vec.get(2).unwrap().as_str().unwrap();
-                        let ptr = variable_map_get(variable_map, id);
+                        let ptr = ctx.get_var(id);
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
@@ -139,8 +131,7 @@ impl Block {
 
     pub fn get_number_input(
         &self,
-        blocks: &BTreeMap<String, JsonBlock>,
-        variable_map: &mut HashMap<String, Ptr>,
+        ctx: &mut CompileContext,
         name: &str,
     ) -> Result<Input, RashError> {
         let input = match self
@@ -154,11 +145,10 @@ impl Block {
                 "self.inputs.{name}[1]"
             )))? {
             serde_json::Value::Null => false.into(),
-            serde_json::Value::String(n) => match blocks.get(n).unwrap() {
-                JsonBlock::Block { block } => block
-                    .compile(variable_map, blocks)
-                    .trace("Block::get_number_input")?
-                    .into(),
+            serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
+                JsonBlock::Block { block } => {
+                    block.compile(ctx).trace("Block::get_number_input")?.into()
+                }
                 JsonBlock::Array(_) => todo!(),
             },
             serde_json::Value::Array(vec) => {
@@ -187,7 +177,7 @@ impl Block {
                     json_id::STRING => vec.get(1).unwrap().as_str().unwrap().into(),
                     json_id::VARIABLE => {
                         let id = vec.get(2).unwrap().as_str().unwrap();
-                        let ptr = variable_map_get(variable_map, id);
+                        let ptr = ctx.get_var(id);
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
@@ -205,8 +195,7 @@ impl Block {
 
     pub fn get_string_input(
         &self,
-        blocks: &BTreeMap<String, JsonBlock>,
-        variable_map: &mut HashMap<String, Ptr>,
+        ctx: &mut CompileContext,
         name: &str,
     ) -> Result<Input, RashError> {
         let input = match self
@@ -219,11 +208,10 @@ impl Block {
             .ok_or(RashError::field_not_found(&format!(
                 "self.inputs.{name}[1]"
             )))? {
-            serde_json::Value::String(n) => match blocks.get(n).unwrap() {
-                JsonBlock::Block { block } => block
-                    .compile(variable_map, blocks)
-                    .trace("Block::get_string_input")?
-                    .into(),
+            serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
+                JsonBlock::Block { block } => {
+                    block.compile(ctx).trace("Block::get_string_input")?.into()
+                }
                 JsonBlock::Array(_) => todo!(),
             },
             serde_json::Value::Array(vec) => {
@@ -254,7 +242,7 @@ impl Block {
                     json_id::STRING => vec.get(1).unwrap().as_str().unwrap().into(),
                     json_id::VARIABLE => {
                         let id = vec.get(2).unwrap().as_str().unwrap();
-                        let ptr = variable_map_get(variable_map, id);
+                        let ptr = ctx.get_var(id);
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
@@ -268,5 +256,26 @@ impl Block {
         };
 
         Ok(input)
+    }
+
+    pub fn get_custom_block_prototype(&self) -> Result<&str, RashError> {
+        Ok(self
+            .inputs
+            .get("custom_block")
+            .ok_or(RashError::field_not_found(
+                "self(procedures_definition).inputs.custom_block",
+            ))?
+            .as_array()
+            .ok_or(RashError::field_not_found(
+                "self(procedures_definition).inputs.custom_block: not array",
+            ))?
+            .get(1)
+            .ok_or(RashError::field_not_found(
+                "self(procedures_definition).inputs.custom_block[1]",
+            ))?
+            .as_str()
+            .ok_or(RashError::field_not_found(
+                "self(procedures_definition).inputs.custom_block[1]: not string",
+            ))?)
     }
 }

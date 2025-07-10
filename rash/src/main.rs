@@ -52,12 +52,18 @@ fn main() {
         std::process::exit(0);
     }
 
-    let loader = ProjectLoader::new(&std::path::PathBuf::from(value)).unwrap();
+    let loader = match ProjectLoader::new(&std::path::PathBuf::from(value)) {
+        Ok(n) => n,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
+    };
     let scheduler = match loader.build() {
         Ok(n) => n,
         Err(err) => {
-            println!("{err}");
-            return;
+            eprintln!("{err}");
+            std::process::exit(1);
         }
     };
 
@@ -82,10 +88,10 @@ fn run_demo() {
         &Script::new_custom_block(
             vec![ScratchBlock::ControlRepeat(
                 3.0.into(),
-                vec![
-                    ScratchBlock::VarChange(Ptr(3), ScratchBlock::FunctionGetArg(0).into()),
-                    ScratchBlock::ScreenRefresh,
-                ],
+                vec![ScratchBlock::VarChange(
+                    Ptr(3),
+                    ScratchBlock::FunctionGetArg(0).into(),
+                )],
             )],
             1,
             CustomBlockId(1),
@@ -99,11 +105,10 @@ fn run_demo() {
                 ScratchBlock::VarSet(Ptr(3), 0.5.into()),
                 ScratchBlock::ControlRepeat(
                     5.0.into(),
-                    vec![
-                        ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
-                        // ScratchBlock::VarChange(Ptr(3), 1.0.into()),
-                        ScratchBlock::ScreenRefresh,
-                    ],
+                    vec![ScratchBlock::FunctionCallScreenRefresh(
+                        CustomBlockId(1),
+                        vec![1.0.into()],
+                    )],
                 ),
             ],
             0,

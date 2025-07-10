@@ -88,6 +88,11 @@ impl Compiler<'_> {
         for block in vec {
             self.compile_block(block, builder);
         }
+        if vec.iter().any(|n| n.could_trigger_refresh(false))
+            && !vec.ends_with(&[ScratchBlock::ScreenRefresh])
+        {
+            self.screen_refresh(builder);
+        }
         self.repeat_stack -= 1;
         if is_screen_refresh {
             number = self.call_stack_pop(builder);
@@ -266,7 +271,6 @@ impl Compiler<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         input: &Input,
-
         body: &Vec<ScratchBlock>,
     ) {
         let loop_block = builder.create_block();
@@ -293,9 +297,16 @@ impl Compiler<'_> {
         let current_block = self.code_block;
         self.code_block = body_block;
         self.repeat_stack += 1;
+
         for block in body {
             self.compile_block(block, builder);
         }
+        if body.iter().any(|n| n.could_trigger_refresh(false))
+            && !body.ends_with(&[ScratchBlock::ScreenRefresh])
+        {
+            self.screen_refresh(builder);
+        }
+
         self.repeat_stack -= 1;
         self.code_block = current_block;
         self.variable_type_data = common_entries(&self.variable_type_data, &old_types);

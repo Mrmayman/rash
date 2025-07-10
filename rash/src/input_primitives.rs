@@ -55,7 +55,7 @@ impl Ptr {
 ///     )
 /// );
 /// ```
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Input {
     Obj(ScratchObject),
     Block(Box<ScratchBlock>),
