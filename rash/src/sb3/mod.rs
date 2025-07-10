@@ -406,6 +406,18 @@ impl Block {
 
                 Ok(ScratchBlock::MotionGoToXY(x, y))
             }
+            "motion_setx" => {
+                let n = self
+                    .get_number_input(ctx, "X")
+                    .trace("Block::compile.motion_setx")?;
+                Ok(ScratchBlock::MotionSetX(n))
+            }
+            "motion_sety" => {
+                let n = self
+                    .get_number_input(ctx, "Y")
+                    .trace("Block::compile.motion_sety")?;
+                Ok(ScratchBlock::MotionSetY(n))
+            }
             "motion_changexby" => {
                 let val = self
                     .get_number_input(ctx, "DX")
@@ -458,6 +470,16 @@ impl Block {
                     .trace("Block::compile.control_repeat")?;
 
                 Ok(ScratchBlock::ControlRepeat(times, compiled_blocks))
+            }
+            "control_repeat_until" => {
+                let condition = self
+                    .get_boolean_input(ctx, "CONDITION")
+                    .trace("Block::compile.control_repeat_until")?;
+                let compiled_blocks = self
+                    .compile_substack(ctx, "SUBSTACK")
+                    .trace("Block::compile.control_repeat")?;
+
+                Ok(ScratchBlock::ControlRepeatUntil(condition, compiled_blocks))
             }
             "procedures_call" => {
                 let block = ctx.get_custom_block(self)?;
