@@ -23,11 +23,10 @@ pub extern "C" fn op_cos(value: f64) -> f64 {
 }
 
 pub extern "C" fn op_tan(value: f64) -> f64 {
-    if (value != 0.0) && (value % 90.0 == 0.0) {
-        f64::INFINITY.copysign(value)
-    } else {
-        let value = value.to_radians();
-        value.tan()
+    match (value + 90.0) % 360.0 {
+        0.0 => f64::NEG_INFINITY,
+        180.0 | -180.0 => f64::INFINITY,
+        _ => value.to_radians().tan(),
     }
 }
 

@@ -985,10 +985,14 @@ mod tests {
             ScratchBlock::OpMTan(60.0.into()).into(),
             ScratchBlock::OpMTan(90.0.into()).into(),
             ScratchBlock::OpMTan(100.0.into()).into(),
+            ScratchBlock::OpMTan(180.0.into()).into(),
+            ScratchBlock::OpMTan(270.0.into()).into(),
             ScratchBlock::OpMTan((-30.0).into()).into(),
             ScratchBlock::OpMTan((-60.0).into()).into(),
             ScratchBlock::OpMTan((-90.0).into()).into(),
             ScratchBlock::OpMTan((-100.0).into()).into(),
+            ScratchBlock::OpMTan((-180.0).into()).into(),
+            ScratchBlock::OpMTan((-270.0).into()).into(),
         ]));
 
         // SIN
@@ -1028,12 +1032,18 @@ mod tests {
         assert!(memory[21].convert_to_number().is_infinite());
         assert!(memory[21].convert_to_number().is_sign_positive());
         assert!(memory[22].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
+        assert!(memory[23].convert_to_number().abs() < f64::EPSILON);
+        assert!(memory[24].convert_to_number().is_infinite());
+        assert!(memory[24].convert_to_number().is_sign_negative());
 
-        assert!((memory[23].convert_to_number() + 0.5773502692).abs() < 46722.0 * f64::EPSILON);
-        assert!((memory[24].convert_to_number() + 1.7320508076).abs() < 140168.0 * f64::EPSILON);
-        assert!(memory[25].convert_to_number().is_infinite());
-        assert!(memory[25].convert_to_number().is_sign_negative());
-        assert!(memory[26].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
+        assert!((memory[25].convert_to_number() + 0.5773502692).abs() < 46722.0 * f64::EPSILON);
+        assert!((memory[26].convert_to_number() + 1.7320508076).abs() < 140168.0 * f64::EPSILON);
+        assert!(memory[27].convert_to_number().is_infinite());
+        assert!(memory[27].convert_to_number().is_sign_negative());
+        assert!(memory[28].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
+        assert!(memory[29].convert_to_number() < f64::EPSILON);
+        assert!(memory[30].convert_to_number().is_infinite());
+        assert!(memory[30].convert_to_number().is_sign_positive());
     }
 
     #[test]
