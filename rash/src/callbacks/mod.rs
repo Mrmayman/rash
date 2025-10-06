@@ -13,13 +13,11 @@ pub mod repeat_stack;
 pub mod types;
 
 pub extern "C" fn op_sin(value: f64) -> f64 {
-    let value = value.to_radians();
-    value.sin()
+    value.to_radians().sin()
 }
 
 pub extern "C" fn op_cos(value: f64) -> f64 {
-    let value = value.to_radians();
-    value.cos()
+    value.to_radians().cos()
 }
 
 pub extern "C" fn op_tan(value: f64) -> f64 {
@@ -72,7 +70,7 @@ pub unsafe extern "C" fn op_str_letter(
 ) {
     let letter = get_char_at_index(index, string);
 
-    if is_const == 0 {
+    let string = if is_const == 0 {
         let mut string = unsafe { string.read() };
 
         // Reuse the input string, since it's gonna get dropped anyway.
@@ -80,18 +78,16 @@ pub unsafe extern "C" fn op_str_letter(
         if let Some(letter) = letter {
             string.push(letter);
         }
-        unsafe {
-            out.write(string);
-        }
+        string
     } else {
-        let letter = letter.map(String::from).unwrap_or_default();
-        unsafe {
-            out.write(letter);
-        }
+        letter.map(String::from).unwrap_or_default()
+    };
+    unsafe {
+        out.write(string);
     }
 }
 
-/// Callback from JIT code to get character at index of a string.
+/// Get character at index of a string, respecting UTF-16 behaviour
 fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
     if index < 1.0 {
         return None;
@@ -99,24 +95,15 @@ fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
 
     let index = index as usize - 1;
     let string = unsafe { &*string };
+
     // Scratch encodes strings in UTF-16, so we have to convert it.
     // This HAS to be done for a fully correct implementation.
+    string
+        .encode_utf16()
+        .nth(index)
+        .map(|n| char::from_u32(n as u32).unwrap_or('\u{FFFD}'))
     // For example, the emoji "💀" is 4 "chars" in rust string,
     // but 2 chars in UTF-16 Scratch string.
-    let string_utf16 = string.encode_utf16().collect::<Vec<u16>>();
-    string_utf16
-        .get(index)
-        // Convert the UTF-16 to a char.
-        // If failed, use the unicode replacement character
-        // which represents an unknown character.
-        .map(|n| {
-            char::from_u32(*n as u32).unwrap_or({
-                // Either '\u{FFFD}'
-                // Or this (idk which one)
-                char::from_u32(*n as u32).unwrap()
-                // TODO: Find a better way to handle this.
-            })
-        })
 }
 
 /// Callback from JIT code to join two strings
