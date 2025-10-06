@@ -57,13 +57,26 @@ impl CompileContext<'_> {
     fn get_custom_block(&mut self, block: &Block) -> Result<CustomBlockDef, RashError> {
         const FN_N: &str = "CompileContext::get_custom_block";
 
-        let block_mutation = block.mutation.as_ref().ok_or(RashError::field_not_found(
-            "self(procedures_prototype).mutation",
-        ))?;
+        let block_mutation = block
+            .mutation
+            .as_ref()
+            .ok_or(RashError::field_not_found("self.mutation"))
+            .trace(FN_N)?;
 
-        if let Some(def) = self.custom_block_defs.get_mut(&block_mutation.proccode) {
+        let proccode = block_mutation
+            .proccode
+            .as_ref()
+            .ok_or(RashError::field_not_found("self.mutation.proccode"))
+            .trace(FN_N)?;
+        let argumentids = block_mutation
+            .argumentids
+            .as_ref()
+            .ok_or(RashError::field_not_found("self.mutation.argumentids"))
+            .trace(FN_N)?;
+
+        if let Some(def) = self.custom_block_defs.get_mut(proccode) {
             if def.args_name_to_id.is_none() {
-                let args: Vec<String> = serde_json::from_str(&block_mutation.argumentids)
+                let args: Vec<String> = serde_json::from_str(argumentids)
                     .to("serde_json::from_str(self.mutation)", FN_N)?;
                 if let Some(names) = &block_mutation.argumentnames {
                     def.args_name_to_id = Some(build_argument_names(&args, names)?);
@@ -71,7 +84,7 @@ impl CompileContext<'_> {
             }
             Ok(def.clone())
         } else {
-            let args: Vec<String> = serde_json::from_str(&block_mutation.argumentids)
+            let args: Vec<String> = serde_json::from_str(argumentids)
                 .to("serde_json::from_str(self.mutation)", FN_N)?;
             let args_name_to_id = if let Some(names) = &block_mutation.argumentnames {
                 Some(build_argument_names(&args, names)?)
@@ -79,12 +92,17 @@ impl CompileContext<'_> {
                 None
             };
 
-            let warp = if block_mutation.warp == "true" {
+            let warp = block_mutation
+                .warp
+                .as_ref()
+                .ok_or(RashError::field_not_found("self.mutation.warp"))
+                .trace(FN_N)?;
+            let warp = if warp == "true" {
                 true
-            } else if block_mutation.warp == "false" {
+            } else if warp == "false" {
                 false
             } else {
-                return Err(RashError::invalid_warp_kind(&block_mutation.warp));
+                return Err(RashError::invalid_warp_kind(warp));
             };
             let blockdef = CustomBlockDef {
                 args,
@@ -93,13 +111,8 @@ impl CompileContext<'_> {
                 id: CustomBlockId(*self.custom_block_num),
             };
             *self.custom_block_num += 1;
-            self.custom_block_defs
-                .insert(block_mutation.proccode.clone(), blockdef);
-            Ok(self
-                .custom_block_defs
-                .get(&block_mutation.proccode)
-                .unwrap()
-                .clone())
+            self.custom_block_defs.insert(proccode.clone(), blockdef);
+            Ok(self.custom_block_defs.get(proccode).unwrap().clone())
         }
     }
 }
@@ -304,7 +317,7 @@ fn load_blocks(
                 ))?
                 .proccode
                 .clone();
-            ctx.current_custom_block = Some(proccode);
+            ctx.current_custom_block = proccode;
 
             Some(custom_block)
         } else {

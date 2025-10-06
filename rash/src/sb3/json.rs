@@ -113,11 +113,11 @@ pub struct Block {
 pub struct BlockMutation {
     pub tagName: String,
     pub children: Vec<Value>,
-    pub proccode: String,
-    pub argumentids: String,
+    pub proccode: Option<String>,
+    pub argumentids: Option<String>,
     pub argumentnames: Option<String>,
     pub argumentdefaults: Option<String>,
-    pub warp: String,
+    pub warp: Option<String>,
 }
 
 #[derive(Debug, Clone)]
