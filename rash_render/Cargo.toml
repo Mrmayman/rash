@@ -7,7 +7,7 @@ edition = "2021"
 winit = "0.29"
 env_logger = "0.10"
 log = "0.4"
-wgpu = "22"
+wgpu = "28"
 bytemuck = { version = "1.20.0", features = ["derive"] }
 image = "0.25"
 anyhow = { version = "1", features = ["backtrace"] }

@@ -201,25 +201,25 @@ pub unsafe extern "C" fn dbg_log(msg: *mut ScratchObject, is_const: i64) {
     }
 }
 
-pub unsafe extern "C" fn op_gt(a: *mut ScratchObject, b: *mut ScratchObject) -> bool {
-    let val = {
-        let a = unsafe { &*a };
-        let b = unsafe { &*b };
+// pub unsafe extern "C" fn op_gt(a: *mut ScratchObject, b: *mut ScratchObject) -> bool {
+//     let val = {
+//         let a = unsafe { &*a };
+//         let b = unsafe { &*b };
 
-        match (a, b) {
-            (ScratchObject::Number(_), ScratchObject::Number(_)) => todo!(),
-            (ScratchObject::Number(_), ScratchObject::String(_)) => todo!(),
-            (ScratchObject::Number(_), ScratchObject::Bool(_)) => todo!(),
-            (ScratchObject::String(_), ScratchObject::Number(_)) => todo!(),
-            (ScratchObject::String(_), ScratchObject::String(_)) => todo!(),
-            (ScratchObject::String(_), ScratchObject::Bool(_)) => todo!(),
-            (ScratchObject::Bool(b), ScratchObject::Number(n)) => (if *b { 1.0 } else { 0.0 }) > *n,
-            (ScratchObject::Bool(true), n @ ScratchObject::String(ns)) => {
-                !(ns == "true" || (if *b { 1.0 } else { 0.0 }) > n.convert_to_number())
-            }
-            (ScratchObject::Bool(true), ScratchObject::Bool(false)) => true,
-            (ScratchObject::Bool(_), _) => false,
-        }
-    };
-    todo!()
-}
+//         match (a, b) {
+//             (ScratchObject::Number(_), ScratchObject::Number(_)) => todo!(),
+//             (ScratchObject::Number(_), ScratchObject::String(_)) => todo!(),
+//             (ScratchObject::Number(_), ScratchObject::Bool(_)) => todo!(),
+//             (ScratchObject::String(_), ScratchObject::Number(_)) => todo!(),
+//             (ScratchObject::String(_), ScratchObject::String(_)) => todo!(),
+//             (ScratchObject::String(_), ScratchObject::Bool(_)) => todo!(),
+//             (ScratchObject::Bool(b), ScratchObject::Number(n)) => (if *b { 1.0 } else { 0.0 }) > *n,
+//             (ScratchObject::Bool(true), n @ ScratchObject::String(ns)) => {
+//                 !(ns == "true" || (if *b { 1.0 } else { 0.0 }) > n.convert_to_number())
+//             }
+//             (ScratchObject::Bool(true), ScratchObject::Bool(false)) => true,
+//             (ScratchObject::Bool(_), _) => false,
+//         }
+//     };
+//     todo!()
+// }

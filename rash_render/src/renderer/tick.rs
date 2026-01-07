@@ -62,10 +62,9 @@ impl InnerRenderer<'_> {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
+                ..Default::default()
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
@@ -111,8 +110,8 @@ impl InnerRenderer<'_> {
                 control_flow.exit();
             }
             // This happens when the a frame takes too long to present
-            Err(wgpu::SurfaceError::Timeout) => {
-                eprintln!("[error] Graphics: Surface timeout")
+            Err(err) => {
+                eprintln!("[error] {err}")
             }
         }
 
