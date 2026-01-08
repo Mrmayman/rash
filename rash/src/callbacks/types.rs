@@ -118,10 +118,10 @@ pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut
 }
 
 /// Converts an f64 to a String `ScratchObject`.
-pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut ScratchObject) {
+pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut String) {
     let obj = ScratchObject::Number(i1);
     let string = obj.convert_to_string();
-    unsafe { out.write(ScratchObject::String(string)) }
+    unsafe { out.write(string) }
 }
 
 /// Converts a boolean to a String `ScratchObject`.

@@ -65,13 +65,7 @@ impl Clone for ScratchObject {
 impl std::fmt::Debug for ScratchObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Number(n) => write!(
-                f,
-                "{}{}{}",
-                "(".green(),
-                n.to_string().bright_green().bold(),
-                ")".green()
-            ),
+            Self::Number(n) => write!(f, "{}", n.to_string().bright_green().bold()),
             Self::String(s) => write!(
                 f,
                 "{}{}{}",
