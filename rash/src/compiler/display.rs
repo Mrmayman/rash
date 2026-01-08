@@ -155,5 +155,5 @@ fn func_call_inner(name: &str, inputs: &[&Input]) -> String {
 }
 
 fn op_inner(name: &str, a: &Input, b: &Input) -> String {
-    format!("{} {name} {}", a.format(0), b.format(0))
+    format!("({} {name} {})", a.format(0), b.format(0))
 }

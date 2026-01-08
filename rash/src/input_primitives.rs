@@ -65,7 +65,7 @@ impl Input {
     pub fn format(&self, indent: usize) -> String {
         match self {
             Input::Obj(scratch_object) => format!("{scratch_object:?}"),
-            Input::Block(scratch_block) => format!("({})", scratch_block.format(indent)),
+            Input::Block(scratch_block) => format!("{}", scratch_block.format(indent)),
         }
     }
 }
