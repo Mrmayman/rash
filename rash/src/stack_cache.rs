@@ -325,6 +325,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         ScratchBlock::ScreenRefresh
         | ScratchBlock::ControlStopThisScript
         | ScratchBlock::FunctionGetArg(_)
+        | ScratchBlock::ControlDaysSince2000
         | ScratchBlock::MotionGetX
         | ScratchBlock::MotionGetY => {}
     }

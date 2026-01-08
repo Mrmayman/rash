@@ -1,8 +1,11 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use cranelift::prelude::{
-    types::{F64, I64},
-    Block, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+use cranelift::{
+    codegen::ir::SigRef,
+    prelude::{
+        types::{F64, I64},
+        Block, FunctionBuilder, InstBuilder, Signature, StackSlotData, StackSlotKind, Value,
+    },
 };
 use lazy_static::lazy_static;
 use rash_render::{RunState, SpriteId};
@@ -90,6 +93,7 @@ pub enum ScratchBlock {
     MotionSetY(Input),
     MotionGetX,
     MotionGetY,
+    ControlDaysSince2000,
 
     Log(Input),
 }
@@ -138,6 +142,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
+            | ScratchBlock::ControlDaysSince2000
             | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VarTypeChecked::String)
@@ -264,6 +269,7 @@ impl ScratchBlock {
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::FunctionCallScreenRefresh(_, _)
             | ScratchBlock::Log(_)
+            | ScratchBlock::ControlDaysSince2000
             | ScratchBlock::ControlForever(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
@@ -305,6 +311,7 @@ impl ScratchBlock {
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::Log(_)
+            | ScratchBlock::ControlDaysSince2000
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
@@ -650,6 +657,17 @@ impl<'a> Compiler<'a> {
                     &[self.graphics_ptr, id],
                 );
 
+                let val = builder.inst_results(inst)[0];
+                return Some(ReturnValue::Num(val));
+            }
+            ScratchBlock::ControlDaysSince2000 => {
+                let inst = self.call_function(
+                    builder,
+                    callbacks::op_days_since_2000 as usize,
+                    &[],
+                    &[F64],
+                    &[],
+                );
                 let val = builder.inst_results(inst)[0];
                 return Some(ReturnValue::Num(val));
             }

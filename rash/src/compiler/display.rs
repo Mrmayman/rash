@@ -10,6 +10,7 @@ impl ScratchBlock {
             ScratchBlock::OpSub(input, input1) => op_inner("-", input, input1),
             ScratchBlock::OpMul(input, input1) => op_inner("*", input, input1),
             ScratchBlock::OpDiv(input, input1) => op_inner("/", input, input1),
+            ScratchBlock::ControlDaysSince2000 => func_call_inner("days_since_2000", &[]),
             ScratchBlock::OpRound(input) => func_call_inner("round", &[input]),
             ScratchBlock::OpStrJoin(input, input1) => func_call_inner("str.join", &[input, input1]),
             ScratchBlock::OpMod(input, input1) => op_inner("mod", input, input1),

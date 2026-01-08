@@ -500,6 +500,14 @@ impl Block {
                     .trace("Block::compile.control_forever")?;
                 Ok(ScratchBlock::ControlForever(blocks))
             }
+            "looks_say" => {
+                // TODO: implement this properly
+                let message = self
+                    .get_string_input(ctx, "MESSAGE")
+                    .trace("Block::compile.looks_say")?;
+                Ok(ScratchBlock::Log(message))
+            }
+            "sensing_dayssince2000" => Ok(ScratchBlock::ControlDaysSince2000),
             "procedures_call" => {
                 let block = ctx.get_custom_block(self)?;
 
