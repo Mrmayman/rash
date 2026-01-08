@@ -54,9 +54,17 @@ impl Compiler<'_> {
                         self.variable_type_data.insert(ptr, VarType::Bool);
                     }
                     ScratchObject::String(string) => {
-                        self.cache
-                            .store_string(ptr, builder, string, &mut self.constants);
-                        self.variable_type_data.insert(ptr, VarType::String);
+                        let num = obj.convert_to_number();
+                        if ScratchObject::Number(num).convert_to_string() == *string {
+                            // TODO: This is a very opinionated optimization
+                            // Fast for number-crunching but slow for string handling?
+                            self.cache.store_f64(ptr, builder, num, &mut self.constants);
+                            self.variable_type_data.insert(ptr, VarType::Number);
+                        } else {
+                            self.cache
+                                .store_string(ptr, builder, string, &mut self.constants);
+                            self.variable_type_data.insert(ptr, VarType::String);
+                        }
                     }
                 }
             }
