@@ -1,7 +1,7 @@
 # rash
 A Scratch JIT compiler written in rust using [cranelift](https://cranelift.dev/).
 
-# Hmm... What?
+# What?
 
 Scratch is a visual programming language aimed at children,
 and people push it to its limits (with projects like path tracers,
@@ -9,65 +9,64 @@ and people push it to its limits (with projects like path tracers,
 running into performance bottlenecks.
 
 Rash aims to run scratch code with a JIT compiler, where the code is
-compiled to machine code and executed directly, much like Java.
+compiled to machine code and executed directly, much like Java, C#, JavaScript, etc.
 
 # What's the progress?
 
 You can see the progress in implementing blocks in this [Google Docs spreadsheet](https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbXw9U/edit?usp=sharing)
 
 ## Todo list:
+
 (WIP means Work-In-Progress)
 
 - [ ] Implement loading from SB3 files (WIP)
 - [ ] Implement Control operations
-- - [x] If
-- - [x] If-Else
-- - [x] Repeat
-- - [x] Repeat Until
-- - [ ] Forever
-- - [ ] Wait
-- - [ ] Wait Until
-- - [x] Stop this script
-- - [ ] Stop all
-- - [ ] Stop other scripts in sprite
-- [ ] Implement Math Operations
-- - [x] Arithmetic
-- - [x] And, Or, Not
-- - [x] Greater Than, Less Than
-- - [ ] Equals
-- - [x] Join, Contains, Length
-- - [x] Mod, Round, Abs
-- - [x] Floor
-- - [ ] Ceiling
-- - [x] Sqrt
-- - [x] Sin, Cos, Tan
-- - [ ] ASin, ACos, ATan
-- - [ ] Ln, Log
-- - [ ] E^, 10^
-- [ ] Implement Custom Blocks
-- - [x] Implement Custom Block Arguments
-- - [x] Implement Without-Screen-Refresh Custom Blocks
-- - [x] Implement Screen-Refresh Custom Blocks
-- - [x] Implement Screen-Refresh Custom Blocks called from Without-Screen-Refresh Custom Blocks
-- [x] Implement Variables
-- [ ] Implement Lists
-- [ ] Implement Broadcasts
-- [ ] Implement Clones
+  - [x] If, If-Else
+  - [x] Repeat, Repeat Until, Forever
+  - [ ] Wait
+  - [ ] Wait Until
+  - [x] Stop this script
+  - [ ] Stop all
+  - [ ] Stop other scripts in sprite
+- [ ] Math Operations
+  - [x] Add, subtract, multiply, divide
+  - [x] && || !
+  - [ ] < > (incomplete)
+  - [ ] ==
+  - [x] String: Join, Contains, Length
+  - [x] Mod, Round, Abs
+  - [x] Floor
+  - [ ] Ceiling
+  - [x] Sqrt
+  - [x] Sin, Cos, Tan
+  - [ ] ASin, ACos, ATan
+  - [ ] Ln, Log
+  - [ ] E^, 10^
+- [ ] Other blocks
+  - [x] Days since 2000
+  - [ ] Timer, reset timer
+  - [ ] Keyboard/mouse input
+- [ ] Core features
+  - [x] Custom Blocks
+  - [x] Variables
+  - [ ] Lists
+  - [ ] Broadcasts
+  - [ ] Clones
 - [x] Add Graphics
-- - [ ] Hide, Show blocks
-- - [x] Position blocks
-- - [ ] Rotation blocks
-- - [ ] Size block
-- - [x] Render sprites & stage
-- - [ ] Render text
-- - [ ] Render speech and thought bubbles
-- - [ ] Sprite costumes and backdrops
-- - [ ] Sprite graphical effects (Ghost, Fisheye, etc)
-- - [ ] Pen canvas and clear operation
-- - [ ] Pen stamps
-- - [ ] Pen lines
-- - [ ] Variable monitors
-- - [ ] UI library
+  - [ ] Hide, Show blocks
+  - [x] Position blocks
+  - [ ] Rotation blocks
+  - [ ] Size block
+  - [x] Render sprites & stage
+  - [ ] Render text
+  - [ ] Render speech and thought bubbles
+  - [ ] Sprite costumes and backdrops
+  - [ ] Sprite graphical effects (Ghost, Fisheye, etc)
+  - [ ] Pen canvas and clear operation
+  - [ ] Pen stamps
+  - [ ] Pen lines
+  - [ ] Variable monitors
+  - [ ] UI library
 - [ ] Add sound
 
 # Running
@@ -86,9 +85,9 @@ Feel free to submit any changes you make as a pull request, I'll be happy to rev
 
 Pi calculation:
 
-- Scratch: `2803 ms`
-- Turbowarp: `30 ms`
-- Rash: `6.3 ms`
+- Scratch: `621 ms`
+- Turbowarp: `13 ms`
+- Rash: `7 ms`
 
 # Quirks
 
