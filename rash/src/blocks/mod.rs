@@ -20,16 +20,21 @@ impl Compiler<'_> {
         arguments: &[Value],
     ) -> Inst {
         let func = self.constants.get_int(func as i64, builder);
-        let sig = builder.import_signature({
-            let mut sig = Signature::new(CallConv::SystemV);
-            for param in params {
-                sig.params.push(AbiParam::new(*param));
-            }
-            for ret in returns {
-                sig.returns.push(AbiParam::new(*ret));
-            }
-            sig
-        });
+        let mut sig = Signature::new(CallConv::SystemV);
+        for param in params {
+            sig.params.push(AbiParam::new(*param));
+        }
+        for ret in returns {
+            sig.returns.push(AbiParam::new(*ret));
+        }
+
+        let sig = if let Some(sigref) = self.func_signatures.get(&sig) {
+            *sigref
+        } else {
+            let r = builder.import_signature(sig.clone());
+            self.func_signatures.insert(sig.clone(), r);
+            r
+        };
         builder.ins().call_indirect(sig, func, arguments)
     }
 }

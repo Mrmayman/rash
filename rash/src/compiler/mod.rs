@@ -347,6 +347,7 @@ pub struct Compiler<'compiler> {
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
+    pub func_signatures: HashMap<Signature, SigRef>,
 
     /// Storing how many loops inside we are right now
     /// while compiling the current code.
@@ -431,6 +432,7 @@ impl<'a> Compiler<'a> {
             code_block: block,
             cache: StackCache::new(builder, code),
             break_points: Vec::new(),
+            func_signatures: HashMap::new(),
             break_counter: 0,
             repeat_stack: 0,
             memory,
