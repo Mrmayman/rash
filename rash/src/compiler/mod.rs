@@ -68,6 +68,7 @@ pub enum ScratchBlock {
     ControlRepeat(Input, Vec<ScratchBlock>),
     /// Repeats until a condition is true.
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
+    ControlForever(Vec<ScratchBlock>),
     ControlStopThisScript,
     FunctionCallNoScreenRefresh(CustomBlockId, Vec<Input>),
     FunctionCallScreenRefresh(CustomBlockId, Vec<Input>),
@@ -152,6 +153,7 @@ impl ScratchBlock {
             | ScratchBlock::ControlIf(_, _)
             | ScratchBlock::ControlIfElse(_, _, _)
             | ScratchBlock::ControlRepeat(_, _)
+            | ScratchBlock::ControlForever(_)
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
@@ -262,6 +264,7 @@ impl ScratchBlock {
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::FunctionCallScreenRefresh(_, _)
             | ScratchBlock::Log(_)
+            | ScratchBlock::ControlForever(_)
             | ScratchBlock::OpCmpLesser(_, _) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
@@ -272,7 +275,7 @@ impl ScratchBlock {
         }
     }
 
-    pub fn could_trigger_refresh(&self, include_calls: bool) -> bool {
+    pub fn could_trigger_refresh(&self) -> bool {
         match self {
             ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
@@ -300,31 +303,26 @@ impl ScratchBlock {
             | ScratchBlock::OpStrLetterOf(_, _)
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::ControlStopThisScript
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::Log(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
-            ScratchBlock::ControlIf(_, scratch_blocks)
-            | ScratchBlock::ControlRepeatUntil(_, scratch_blocks)
-            | ScratchBlock::ControlRepeat(_, scratch_blocks) => scratch_blocks
-                .iter()
-                .any(|n| n.could_trigger_refresh(include_calls)),
-            ScratchBlock::ControlIfElse(_, scratch_blocks, scratch_blocks1) => {
-                scratch_blocks
-                    .iter()
-                    .any(|n| n.could_trigger_refresh(include_calls))
-                    || scratch_blocks1
-                        .iter()
-                        .any(|n| n.could_trigger_refresh(include_calls))
+            ScratchBlock::ControlIf(_, blocks)
+            | ScratchBlock::ControlRepeatUntil(_, blocks)
+            | ScratchBlock::ControlForever(blocks)
+            | ScratchBlock::ControlRepeat(_, blocks) => {
+                blocks.iter().any(|n| n.could_trigger_refresh())
+            }
+            ScratchBlock::ControlIfElse(_, blocks_then, blocks_else) => {
+                blocks_then.iter().any(|n| n.could_trigger_refresh())
+                    || blocks_else.iter().any(|n| n.could_trigger_refresh())
             }
 
-            ScratchBlock::ScreenRefresh | ScratchBlock::FunctionCallScreenRefresh(_, _) => {
-                include_calls
-            }
-
-            ScratchBlock::MotionGoToXY(_, _)
+            ScratchBlock::ScreenRefresh
+            | ScratchBlock::FunctionCallScreenRefresh(_, _)
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::MotionChangeX(_)
             | ScratchBlock::MotionChangeY(_)
             | ScratchBlock::MotionSetX(_)
@@ -479,12 +477,10 @@ impl<'a> Compiler<'a> {
             }
             ScratchBlock::Log(msg) => self.dbg_log(msg, builder),
             ScratchBlock::ControlRepeat(input, vec) => {
-                self.control_repeat(
-                    builder,
-                    input,
-                    vec,
-                    vec.iter().any(|n| n.could_trigger_refresh(true)),
-                );
+                self.control_repeat(builder, input, vec);
+            }
+            ScratchBlock::ControlForever(vec) => {
+                self.control_forever(builder, vec);
             }
             ScratchBlock::VarChange(ptr, input) => {
                 self.var_change(input, builder, *ptr);

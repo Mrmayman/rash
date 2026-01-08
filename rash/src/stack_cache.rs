@@ -247,6 +247,11 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         ScratchBlock::VarRead(ptr) => {
             vars.insert(*ptr);
         }
+        ScratchBlock::ControlForever(vec) => {
+            for block in vec {
+                accesses_var(block, vars);
+            }
+        }
         ScratchBlock::ControlRepeatUntil(n, vec)
         | ScratchBlock::ControlRepeat(n, vec)
         | ScratchBlock::ControlIf(n, vec) => {

@@ -478,21 +478,27 @@ impl Block {
                     .get_number_input(ctx, "TIMES")
                     .trace("Block::compile.control_repeat")?;
 
-                let compiled_blocks = self
+                let blocks = self
                     .compile_substack(ctx, "SUBSTACK")
                     .trace("Block::compile.control_repeat")?;
 
-                Ok(ScratchBlock::ControlRepeat(times, compiled_blocks))
+                Ok(ScratchBlock::ControlRepeat(times, blocks))
             }
             "control_repeat_until" => {
                 let condition = self
                     .get_boolean_input(ctx, "CONDITION")
                     .trace("Block::compile.control_repeat_until")?;
-                let compiled_blocks = self
+                let blocks = self
                     .compile_substack(ctx, "SUBSTACK")
                     .trace("Block::compile.control_repeat")?;
 
-                Ok(ScratchBlock::ControlRepeatUntil(condition, compiled_blocks))
+                Ok(ScratchBlock::ControlRepeatUntil(condition, blocks))
+            }
+            "control_forever" => {
+                let blocks = self
+                    .compile_substack(ctx, "SUBSTACK")
+                    .trace("Block::compile.control_forever")?;
+                Ok(ScratchBlock::ControlForever(blocks))
             }
             "procedures_call" => {
                 let block = ctx.get_custom_block(self)?;

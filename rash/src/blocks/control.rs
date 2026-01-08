@@ -26,8 +26,7 @@ impl Compiler<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         input: &Input,
-        vec: &Vec<ScratchBlock>,
-        is_screen_refresh: bool,
+        vec: &[ScratchBlock],
     ) {
         // Basically,
         //
@@ -37,6 +36,7 @@ impl Compiler<'_> {
         //
         // The different parts will be annotated
 
+        let is_screen_refresh = vec.iter().any(|n| n.could_trigger_refresh());
         let number = input.get_number_int(self, builder);
 
         let loop_block = builder.create_block();
@@ -88,9 +88,7 @@ impl Compiler<'_> {
         for block in vec {
             self.compile_block(block, builder);
         }
-        if vec.iter().any(|n| n.could_trigger_refresh(false))
-            && !vec.ends_with(&[ScratchBlock::ScreenRefresh])
-        {
+        if is_screen_refresh && !vec.ends_with(&[ScratchBlock::ScreenRefresh]) {
             self.screen_refresh(builder);
         }
         self.repeat_stack -= 1;
@@ -102,6 +100,41 @@ impl Compiler<'_> {
         self.code_block = temp_block;
         self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
         builder.ins().jump(loop_block, &[incremented, number]);
+        // // builder.seal_block(body_block);
+        // builder.seal_block(loop_block);
+
+        builder.switch_to_block(end_block);
+        self.constants.clear();
+        self.code_block = end_block;
+    }
+
+    pub fn control_forever(&mut self, builder: &mut FunctionBuilder<'_>, vec: &[ScratchBlock]) {
+        let loop_block = builder.create_block();
+        let end_block = builder.create_block();
+        builder.ins().jump(loop_block, &[]);
+        builder.switch_to_block(loop_block);
+
+        let mut inside_types = self.variable_type_data.clone();
+        self.update_type_data_for_block(&mut inside_types, vec);
+        let mut inside_types = common_entries(&inside_types, &self.variable_type_data);
+        std::mem::swap(&mut inside_types, &mut self.variable_type_data);
+        // inside_types = old types
+        // self._ = narrowed
+
+        self.constants.clear();
+        for block in vec {
+            self.compile_block(block, builder);
+        }
+        if vec.iter().any(|n| n.could_trigger_refresh())
+            && !vec.ends_with(&[ScratchBlock::ScreenRefresh])
+        {
+            self.screen_refresh(builder);
+        }
+
+        std::mem::swap(&mut inside_types, &mut self.variable_type_data);
+        self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
+
+        builder.ins().jump(loop_block, &[]);
         // // builder.seal_block(body_block);
         // builder.seal_block(loop_block);
 
@@ -165,7 +198,7 @@ impl Compiler<'_> {
         &mut self,
         input: &Input,
         builder: &mut FunctionBuilder<'_>,
-        then: &Vec<ScratchBlock>,
+        then: &[ScratchBlock],
     ) {
         let input = input.get_bool(self, builder);
         let inside_block = builder.create_block();
@@ -214,8 +247,8 @@ impl Compiler<'_> {
         input: &Input,
         builder: &mut FunctionBuilder<'_>,
 
-        then_blocks: &Vec<ScratchBlock>,
-        else_blocks: &Vec<ScratchBlock>,
+        then_blocks: &[ScratchBlock],
+        else_blocks: &[ScratchBlock],
     ) {
         let input = input.get_bool(self, builder);
         let inside_block = builder.create_block();
@@ -271,7 +304,7 @@ impl Compiler<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         input: &Input,
-        body: &Vec<ScratchBlock>,
+        body: &[ScratchBlock],
     ) {
         let loop_block = builder.create_block();
         let body_block = builder.create_block();
@@ -301,7 +334,7 @@ impl Compiler<'_> {
         for block in body {
             self.compile_block(block, builder);
         }
-        if body.iter().any(|n| n.could_trigger_refresh(false))
+        if body.iter().any(|n| n.could_trigger_refresh())
             && !body.ends_with(&[ScratchBlock::ScreenRefresh])
         {
             self.screen_refresh(builder);

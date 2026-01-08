@@ -72,6 +72,17 @@ impl ScratchBlock {
 
                 out
             }
+            ScratchBlock::ControlForever(vec) => {
+                let mut out = "forever {\n".to_owned();
+                for block in vec {
+                    out.push_str(&block.format(indent + 1));
+                    out.push('\n');
+                }
+                out.push_str(&" ".repeat(indent * 4));
+                out.push('}');
+
+                out
+            }
             ScratchBlock::ControlRepeatUntil(input, vec) => {
                 let mut out = format!("repeat until {} {{\n", input.format(0));
                 for block in vec {
