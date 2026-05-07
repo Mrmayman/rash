@@ -7,10 +7,10 @@ use crate::{
     compiler::{ScratchBlock, MEMORY},
     data_types::ScratchObject,
     error::{ErrorConvert, ErrorConvertPath, RashError, RashErrorKind, Trace},
+    graphics::{CostumeData, CostumeHash, CostumeId, SpriteId, SpriteLoadData},
     input_primitives::{Input, Ptr},
-    scheduler::{CustomBlockId, ProjectBuilder, Scheduler, Script, SpriteBuilder},
+    runtime::{CustomBlockId, ProjectBuilder, Runtime, Script, SpriteBuilder},
 };
-use rash_render::{CostumeId, IntermediateCostume, IntermediateState, SpriteId};
 
 mod blocks;
 mod get_utils;
@@ -167,7 +167,7 @@ impl ProjectLoader {
         Ok(Self { dir, json })
     }
 
-    pub fn build(self) -> Result<Scheduler, RashError> {
+    pub fn build(self) -> Result<Runtime, RashError> {
         const FN_N: &str = "ProjectLoader::build";
 
         let memory = MEMORY.lock().unwrap();
@@ -205,7 +205,7 @@ impl ProjectLoader {
                 .get(&(id, sprite_json.currentCostume as usize))
                 .unwrap();
             let costume = *costume_hashes.get(costume).unwrap();
-            let state = IntermediateState {
+            let state = SpriteLoadData {
                 x: sprite_json.x.unwrap_or_default(),
                 y: sprite_json.y.unwrap_or_default(),
                 size: sprite_json.size.unwrap_or(100.0),
@@ -234,12 +234,12 @@ impl ProjectLoader {
     fn load_costumes(
         &self,
         sprite_json: &json::Target,
-        costume_names: &mut HashMap<(SpriteId, String), String>,
-        costume_numbers: &mut HashMap<(SpriteId, usize), String>,
+        costume_names: &mut HashMap<(SpriteId, String), CostumeHash>,
+        costume_numbers: &mut HashMap<(SpriteId, usize), CostumeHash>,
         id: SpriteId,
-        costume_hashes: &mut HashMap<String, CostumeId>,
+        costume_hashes: &mut HashMap<CostumeHash, CostumeId>,
         costume_id: &mut CostumeId,
-        costume_ids: &mut HashMap<CostumeId, IntermediateCostume>,
+        costume_ids: &mut HashMap<CostumeId, CostumeData>,
     ) -> Result<(), RashError> {
         const FN_N: &str = "ProjectLoader::load_costumes";
 
@@ -250,7 +250,7 @@ impl ProjectLoader {
 
             let is_svg = costume.md5ext.ends_with(".svg");
 
-            let intermediate = IntermediateCostume {
+            let intermediate = CostumeData {
                 bytes,
                 name: costume.name.clone(),
                 hash: costume.assetId.clone(),
@@ -259,13 +259,14 @@ impl ProjectLoader {
                 is_svg,
             };
 
-            costume_names.insert((id, costume.name.clone()), costume.assetId.clone());
-            costume_numbers.insert((id, i), costume.assetId.clone());
+            let hash = CostumeHash::new(&costume.assetId);
+            costume_names.insert((id, costume.name.clone()), hash.clone());
+            costume_numbers.insert((id, i), hash.clone());
 
-            if costume_hashes.contains_key(&costume.assetId) {
+            if costume_hashes.contains_key(&hash) {
                 continue;
             }
-            costume_hashes.insert(costume.assetId.clone(), *costume_id);
+            costume_hashes.insert(hash, *costume_id);
             costume_ids.insert(*costume_id, intermediate);
             costume_id.0 += 1;
         }

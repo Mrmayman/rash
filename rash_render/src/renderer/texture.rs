@@ -1,14 +1,5 @@
 use image::{GenericImageView, ImageError};
-
-#[derive(Clone)]
-pub struct IntermediateCostume {
-    pub bytes: Vec<u8>,
-    pub name: String,
-    pub hash: String,
-    pub rotation_center_x: f64,
-    pub rotation_center_y: f64,
-    pub is_svg: bool,
-}
+use rash_vm::CostumeData;
 
 #[allow(unused)]
 pub struct Costume {
@@ -25,7 +16,7 @@ pub struct Costume {
 
 impl Costume {
     pub fn from_bytes(
-        costume: &IntermediateCostume,
+        costume: &CostumeData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         sampler: &wgpu::Sampler,
@@ -38,7 +29,7 @@ impl Costume {
     }
 
     pub fn from_image(
-        costume: &IntermediateCostume,
+        costume: &CostumeData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,

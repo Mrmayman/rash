@@ -8,14 +8,14 @@ use cranelift::{
     },
 };
 use lazy_static::lazy_static;
-use rash_render::{RunState, SpriteId};
 
 use crate::{
     callbacks,
     constant_set::ConstantMap,
     data_types::ScratchObject,
+    graphics::{RunState, SpriteId},
     input_primitives::{Input, Ptr, ReturnValue},
-    scheduler::CustomBlockId,
+    runtime::CustomBlockId,
     stack_cache::StackCache,
 };
 

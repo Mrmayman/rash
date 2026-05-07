@@ -1,8 +1,7 @@
-use rash_render::RunState;
-
 use crate::{
     data_types::ScratchObject,
-    scheduler::{CustomBlockId, ScratchThread, Scripts},
+    graphics::RunState,
+    runtime::{CustomBlockId, ScratchThread, Scripts},
 };
 
 #[repr(i64)]

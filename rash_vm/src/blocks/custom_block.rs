@@ -4,7 +4,7 @@ use cranelift::prelude::{
 
 use crate::{
     callbacks, compiler::Compiler, data_types::ScratchObject, input_primitives::Input,
-    scheduler::CustomBlockId,
+    runtime::CustomBlockId,
 };
 
 impl Compiler<'_> {

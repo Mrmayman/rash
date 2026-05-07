@@ -13,12 +13,12 @@ use cranelift::{
         AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature,
     },
 };
-use rash_render::SpriteId;
 use target_lexicon::Triple;
 
 use crate::{
     compiler::{Compiler, ScratchBlock, MEMORY},
     data_types::ScratchObject,
+    graphics::SpriteId,
 };
 
 fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {

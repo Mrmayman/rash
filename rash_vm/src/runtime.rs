@@ -1,9 +1,13 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use memmap2::Mmap;
-use rash_render::{CostumeId, IntermediateCostume, IntermediateState, Run, RunState, SpriteId};
 
-use crate::{compile_fn::compile, compiler::ScratchBlock, data_types::ScratchObject};
+use crate::{
+    compile_fn::compile,
+    compiler::ScratchBlock,
+    data_types::ScratchObject,
+    graphics::{CostumeData, CostumeHash, CostumeId, RunState, SpriteId, SpriteLoadData},
+};
 
 /// The signature of the JIT-compiled function that
 /// runs Scratch code.
@@ -219,100 +223,78 @@ impl SpriteBuilder {
 }
 
 pub struct ProjectBuilder {
-    scheduler: Scheduler,
+    runtime: Runtime,
 }
 
 impl ProjectBuilder {
     pub fn new() -> Self {
         Self {
-            scheduler: Scheduler {
+            runtime: Runtime {
                 sprite_order: Vec::new(),
                 threads: Vec::new(),
                 scripts: Scripts::default(),
                 costume_names: HashMap::new(),
                 costume_numbers: HashMap::new(),
                 costume_hashes: HashMap::new(),
-                costume_intermediate: HashMap::new(),
-                temp_init_state: HashMap::new(),
+                costume_data: HashMap::new(),
+                sprite_load_info: HashMap::new(),
             },
         }
     }
 
     pub fn finish_sprite(&mut self, sprite: SpriteBuilder) {
         // TODO: Implement proper sprite ordering
-        self.scheduler.sprite_order.push(sprite.id);
+        self.runtime.sprite_order.push(sprite.id);
 
-        self.scheduler.scripts.push(sprite.scripts);
+        self.runtime.scripts.push(sprite.scripts);
     }
 
     pub fn set_costume(
         &mut self,
-        costume_names: HashMap<(SpriteId, String), String>,
-        costume_numbers: HashMap<(SpriteId, usize), String>,
-        costume_hashes: HashMap<String, CostumeId>,
-        costume_intermediate: HashMap<CostumeId, IntermediateCostume>,
+        costume_names: HashMap<(SpriteId, String), CostumeHash>,
+        costume_numbers: HashMap<(SpriteId, usize), CostumeHash>,
+        costume_hashes: HashMap<CostumeHash, CostumeId>,
+        costume_intermediate: HashMap<CostumeId, CostumeData>,
     ) {
-        self.scheduler.costume_names = costume_names;
-        self.scheduler.costume_numbers = costume_numbers;
-        self.scheduler.costume_hashes = costume_hashes;
-        self.scheduler.costume_intermediate = costume_intermediate;
+        self.runtime.costume_names = costume_names;
+        self.runtime.costume_numbers = costume_numbers;
+        self.runtime.costume_hashes = costume_hashes;
+        self.runtime.costume_data = costume_intermediate;
     }
 
-    pub fn finish(mut self) -> Scheduler {
-        self.scheduler.init();
-        self.scheduler
+    pub fn finish(mut self) -> Runtime {
+        self.runtime.init();
+        self.runtime
     }
 
-    pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, rash_render::IntermediateState>) {
-        self.scheduler.temp_init_state = state_map;
+    pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
+        self.runtime.sprite_load_info = state_map;
     }
 }
 
-pub struct Scheduler {
+pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
     pub threads: Vec<ScratchThread>,
     pub scripts: Scripts,
-    pub costume_names: HashMap<(SpriteId, String), String>,
-    pub costume_numbers: HashMap<(SpriteId, usize), String>,
-    pub costume_hashes: HashMap<String, CostumeId>,
-    pub costume_intermediate: HashMap<CostumeId, IntermediateCostume>,
-    pub temp_init_state: HashMap<SpriteId, IntermediateState>,
+
+    pub costume_names: HashMap<(SpriteId, String), CostumeHash>,
+    pub costume_numbers: HashMap<(SpriteId, usize), CostumeHash>,
+    pub costume_hashes: HashMap<CostumeHash, CostumeId>,
+    pub costume_data: HashMap<CostumeId, CostumeData>,
+
+    pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
 }
 
-impl Run for Scheduler {
-    /// WARNING: Although it doesn't seem like this,
-    /// this function uses an internally-stored mutable reference
-    /// of the `memory: &[ScratchObject]` from earlier.
-    fn update(&mut self, state: &mut RunState) -> bool {
-        self.sort();
-        self.run_threads(state)
-    }
-
-    fn get_num_sprites(&self) -> usize {
-        self.sprite_order.len()
-    }
-
-    fn get_sprite_order(&self) -> Vec<SpriteId> {
-        self.sprite_order.clone()
-    }
-
-    fn get_costumes(&self) -> HashMap<CostumeId, IntermediateCostume> {
-        self.costume_intermediate.clone()
-    }
-
-    fn get_state(&self) -> HashMap<SpriteId, rash_render::IntermediateState> {
-        self.temp_init_state.clone()
-    }
-}
-
-impl Scheduler {
+impl Runtime {
     pub fn init(&mut self) {
         let mut green_flags = Vec::new();
         std::mem::swap(&mut self.scripts.green_flags, &mut green_flags);
         self.threads.extend(green_flags);
     }
 
-    fn run_threads(&mut self, graphics: &mut RunState) -> bool {
+    pub fn update(&mut self, graphics: &mut RunState) -> bool {
+        self.sort();
+
         let mut ended_threads = Vec::new();
 
         for (i, thread) in self.threads.iter_mut().enumerate() {

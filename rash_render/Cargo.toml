@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+rash_vm.path = "../rash_vm"
+
 winit = "0.29"
 env_logger = "0.10"
 log = "0.4"

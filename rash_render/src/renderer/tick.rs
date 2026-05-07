@@ -1,15 +1,14 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use crate::{CostumeId, SpriteId};
+use rash_vm::{GraphicsState, SpriteId};
+
+use crate::CostumeId;
 
 use super::texture::Costume;
 use super::to_bytes;
 
-use super::{
-    buffers::{GlobalBuffer, GraphicsState},
-    InnerRenderer,
-};
+use super::{buffers::GlobalBuffer, InnerRenderer};
 
 impl InnerRenderer<'_> {
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -32,7 +31,7 @@ impl InnerRenderer<'_> {
         );
     }
 
-    pub fn render(
+    fn render_inner(
         &mut self,
         sprite_order: &[SpriteId],
         graphics: &[GraphicsState],
@@ -70,7 +69,7 @@ impl InnerRenderer<'_> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
             for i in sprite_order {
-                let costume_id = graphics.get(i.0 as usize).unwrap().costume;
+                let costume_id = graphics.get(i.0 as usize).unwrap().current_costume;
                 let costume = costume.get(&costume_id).unwrap();
                 render_pass.set_bind_group(1, &costume.bind_group, &[]);
                 let i = i.0 as u32 * 6;
@@ -85,7 +84,7 @@ impl InnerRenderer<'_> {
         Ok(())
     }
 
-    pub fn tick(
+    pub fn render(
         &mut self,
         control_flow: &winit::event_loop::EventLoopWindowTarget<()>,
         graphics: &[GraphicsState],
@@ -100,7 +99,7 @@ impl InnerRenderer<'_> {
             to_bytes(graphics, std::mem::size_of_val(graphics)),
         );
 
-        match self.render(sprite_order, graphics, costumes) {
+        match self.render_inner(sprite_order, graphics, costumes) {
             Ok(_) => {}
             // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => self.resize(self.size),

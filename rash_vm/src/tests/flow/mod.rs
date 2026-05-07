@@ -9,12 +9,11 @@
 
 #[cfg(test)]
 mod tests {
-    use rash_render::{Run, RunState, SpriteId};
-
     use crate::{
         compiler::{ScratchBlock, MEMORY},
+        graphics::{RunState, SpriteId},
         input_primitives::Ptr,
-        scheduler::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
+        runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
     };
 
     use super::*;
@@ -70,11 +69,11 @@ mod tests {
             &memory,
         );
         builder.finish_sprite(sprite1);
-        let mut scheduler = builder.finish();
+        let mut runtime = builder.finish();
 
         let mut num_ticks = 1;
         let mut graphics = RunState::default();
-        while !scheduler.update(&mut graphics) {
+        while !runtime.update(&mut graphics) {
             num_ticks += 1;
         }
 
@@ -109,11 +108,11 @@ mod tests {
             &memory,
         );
         builder.finish_sprite(sprite1);
-        let mut scheduler = builder.finish();
+        let mut runtime = builder.finish();
 
         let mut num_ticks = 1;
         let mut graphics = RunState::default();
-        while !scheduler.update(&mut graphics) {
+        while !runtime.update(&mut graphics) {
             num_ticks += 1;
         }
 

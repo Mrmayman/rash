@@ -1,42 +1,3 @@
-use compiler::{ScratchBlock, MEMORY};
-use data_types::ScratchObject;
-use input_primitives::{Ptr, STRINGS_TO_DROP};
-use rash_render::{Renderer, Run, RunState, SpriteId};
-use sb3::ProjectLoader;
-use scheduler::{CustomBlockId, ProjectBuilder, Scheduler, Script, SpriteBuilder};
-
-mod block_print;
-mod blocks;
-mod callbacks;
-mod compile_fn;
-mod compiler;
-mod constant_set;
-mod data_types;
-mod error;
-mod input_primitives;
-mod ins_shortcuts;
-mod sb3;
-mod scheduler;
-mod stack_cache;
-mod tests;
-
-/// Scratch has a special edge case for math with NaN.
-/// Any operation with NaN will be treated as
-/// an operation with 0.
-///
-/// For example, `NaN + 1` will be `0 + 1`.
-///
-/// This is a special case for Scratch, and is not
-/// a standard behavior for most programming languages.
-/// Enabling this check adds special behavior for NaN in the
-/// compiled code, making it more correct but slower.
-///
-/// # Performance
-/// Pi benchmark:
-/// - Without NaN check: `4.6 ms`
-/// - With NaN check: `6.5 ms`
-const ARITHMETIC_NAN_CHECK: bool = true;
-
 fn main() {
     assert_eq!(std::mem::size_of::<usize>(), 8);
 
@@ -67,9 +28,7 @@ fn main() {
         }
     };
 
-    // return;
-
-    pollster::block_on(run(scheduler));
+    // pollster::block_on(run(scheduler));
 
     // TODO: Skip screen refresh in some very specific loops.
 
@@ -141,11 +100,6 @@ fn run_demo() {
         // std::thread::sleep(std::time::Duration::from_millis(1000 / 30))
     }
     println!("Ticks: {num_ticks}");
-}
-
-async fn run(scheduler: Scheduler) {
-    let renderer = Renderer::new("Rash", Box::new(scheduler)).await.unwrap();
-    renderer.run();
 }
 
 fn print_memory() {

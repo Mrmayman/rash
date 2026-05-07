@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["rash", "rash_render"]
+members = ["rash_vm", "rash_render"]
 
 [profile.dev.package."*"]
 opt-level = 3

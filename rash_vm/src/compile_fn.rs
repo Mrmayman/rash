@@ -19,9 +19,9 @@ use target_lexicon::Triple;
 use crate::{
     compiler::{Compiler, ScratchBlock},
     data_types::ScratchObject,
-    scheduler::ScratchThread,
+    graphics::SpriteId,
+    runtime::ScratchThread,
 };
-use rash_render::SpriteId;
 
 pub fn compile(
     script: &[ScratchBlock],

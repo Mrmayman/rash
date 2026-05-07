@@ -1,18 +1,14 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use rash_vm::{CostumeId, GraphicsState};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
-
-use crate::CostumeId;
 
 use super::texture::Costume;
 use super::to_bytes;
 
-use super::{
-    buffers::{GlobalBuffer, GraphicsState},
-    InnerRenderer,
-};
+use super::{buffers::GlobalBuffer, InnerRenderer};
 
 impl InnerRenderer<'_> {
     pub async fn new(window: Arc<Window>, num_sprites: usize) -> Self {
@@ -169,7 +165,7 @@ impl InnerRenderer<'_> {
                 x: 36.0,
                 y: 28.0,
                 size: 100.0,
-                costume: CostumeId(0),
+                current_costume: CostumeId(0),
                 texture_width: 100.0,
                 texture_height: 100.0,
                 center_x: 0.0,
