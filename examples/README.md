@@ -6,7 +6,7 @@ Note: Currently the interpreter cannot load SB3 files, this was for the old vers
 
 - `mc1.sb3` is a basic tile-based scrolling minecraft 2d demo.
 
-- `mc23pre66.sb3` is the same project, after 2 years of development. It is a 2d Minecraft clone with complexity close to Paper Minecraft.
+- `mc23pre66.sb3` is the same project, after 2 years of development. It is a 2d Minecraft clone with complexity somewhat close to Paper Minecraft.
 
 - `pi calculator.sb3` is a benchmark for calculating pi.
 

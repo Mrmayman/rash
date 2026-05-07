@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rash_render.path = "../rash_render"
-rash_vm.path = "../rash_vm"
-svg_render.path = "../svg_render"
+rash_render.path = "../crates/rash_render"
+rash_vm.path = "../crates/rash_vm"
+svg_render.path = "../crates/svg_render"
 
 wgpu.workspace = true
 winit = "0.29.*"

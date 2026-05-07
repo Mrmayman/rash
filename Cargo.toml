@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["rash_vm", "rash_render", "rash", "svg_render"]
+members = ["rash", "crates/*"]
 
 [workspace.dependencies]
 wgpu = "28"
