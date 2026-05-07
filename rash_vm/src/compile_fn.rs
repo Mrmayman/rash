@@ -90,7 +90,7 @@ pub fn compile(
         code_block,
         &mut builder,
         script,
-        &memory,
+        memory,
         repeat_stack_ptr,
         script_ptr,
         graphics_ptr,
@@ -103,7 +103,7 @@ pub fn compile(
 
     compiler
         .cache
-        .init(&mut builder, &mut compiler.constants, &memory);
+        .init(&mut builder, &mut compiler.constants, memory);
 
     compiler.break_points.push(code_block);
 
@@ -113,7 +113,7 @@ pub fn compile(
 
     compiler
         .cache
-        .save(&mut builder, &mut compiler.constants, &memory);
+        .save(&mut builder, &mut compiler.constants, memory);
 
     let return_value = builder.ins().iconst(I64, -1);
     builder.ins().return_(&[return_value]);

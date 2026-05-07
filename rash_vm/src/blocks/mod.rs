@@ -14,7 +14,7 @@ impl Compiler<'_> {
     pub fn call_function(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        func: usize,
+        func: *const (),
         params: &[Type],
         returns: &[Type],
         arguments: &[Value],

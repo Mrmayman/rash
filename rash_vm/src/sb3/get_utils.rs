@@ -259,8 +259,7 @@ impl Block {
     }
 
     pub fn get_custom_block_prototype(&self) -> Result<&str, RashError> {
-        Ok(self
-            .inputs
+        self.inputs
             .get("custom_block")
             .ok_or(RashError::field_not_found(
                 "self(procedures_definition).inputs.custom_block",
@@ -276,6 +275,6 @@ impl Block {
             .as_str()
             .ok_or(RashError::field_not_found(
                 "self(procedures_definition).inputs.custom_block[1]: not string",
-            ))?)
+            ))
     }
 }

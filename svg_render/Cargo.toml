@@ -1,0 +1,14 @@
+[package]
+name = "svg_render"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde.workspace = true
+serde-xml-rs = "0.7"
+
+image.workspace = true
+usvg-text-layout = "0.29"
+usvg = "0.29"
+resvg = "0.29"
+tiny-skia = "0.8"

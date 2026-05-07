@@ -1,30 +1,36 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_vm::{GraphicsState, SpriteId};
+use rash_vm::{CostumeId, GraphicsState, SpriteId};
 
-use crate::CostumeId;
+use crate::WindowSize;
 
 use super::texture::Costume;
 use super::to_bytes;
 
-use super::{buffers::GlobalBuffer, InnerRenderer};
+use super::{buffers::GlobalBuffer, Renderer};
 
-impl InnerRenderer<'_> {
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+impl Renderer {
+    pub fn resize(
+        &mut self,
+        new_size: WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface: &wgpu::Surface,
+    ) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
+            self.window_size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config);
+            surface.configure(device, &self.config);
 
             self.global_state.resolution = [new_size.width as f32, new_size.height as f32];
-            self.update_global_state();
+            self.update_global_state(queue);
         }
     }
 
-    fn update_global_state(&mut self) {
-        self.queue.write_buffer(
+    fn update_global_state(&mut self, queue: &wgpu::Queue) {
+        queue.write_buffer(
             &self.global_buffer,
             0,
             to_bytes(&self.global_state, std::mem::size_of::<GlobalBuffer>()),
@@ -36,16 +42,17 @@ impl InnerRenderer<'_> {
         sprite_order: &[SpriteId],
         graphics: &[GraphicsState],
         costume: &HashMap<CostumeId, Costume>,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface: &wgpu::Surface,
     ) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
+        let output = surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -78,7 +85,7 @@ impl InnerRenderer<'_> {
         }
 
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())
@@ -86,27 +93,29 @@ impl InnerRenderer<'_> {
 
     pub fn render(
         &mut self,
-        control_flow: &winit::event_loop::EventLoopWindowTarget<()>,
         graphics: &[GraphicsState],
         sprite_order: &[SpriteId],
         costumes: &HashMap<CostumeId, Costume>,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface: &wgpu::Surface,
     ) {
-        self.window.request_redraw();
-
-        self.queue.write_buffer(
+        queue.write_buffer(
             &self.sprites_buffer,
             0,
             to_bytes(graphics, std::mem::size_of_val(graphics)),
         );
 
-        match self.render_inner(sprite_order, graphics, costumes) {
+        match self.render_inner(sprite_order, graphics, costumes, device, queue, surface) {
             Ok(_) => {}
             // Reconfigure the surface if it's lost or outdated
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => self.resize(self.size),
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                self.resize(self.window_size, device, queue, surface)
+            }
             // The system is out of memory, we should probably quit
             Err(wgpu::SurfaceError::OutOfMemory) => {
                 eprintln!("[error] Graphics: Out Of Memory");
-                control_flow.exit();
+                return;
             }
             // This happens when the a frame takes too long to present
             Err(err) => {

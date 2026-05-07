@@ -1,49 +1,24 @@
-use std::sync::Arc;
 use std::time::Instant;
 
 use rash_vm::{CostumeId, GraphicsState};
 use wgpu::util::DeviceExt;
-use winit::window::Window;
+
+use crate::WindowSize;
 
 use super::texture::Costume;
 use super::to_bytes;
 
-use super::{buffers::GlobalBuffer, InnerRenderer};
+use super::{buffers::GlobalBuffer, Renderer};
 
-impl InnerRenderer<'_> {
-    pub async fn new(window: Arc<Window>, num_sprites: usize) -> Self {
-        let size = window.inner_size();
-
-        // The instance is a handle to our GPU
-        // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            ..Default::default()
-        });
-
-        let window_2 = window.clone();
-        let surface = instance.create_surface(window_2).unwrap();
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::TEXTURE_BINDING_ARRAY,
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: Default::default(),
-                experimental_features: wgpu::ExperimentalFeatures::default(),
-                trace: wgpu::Trace::default(),
-            })
-            .await
-            .unwrap();
+impl Renderer {
+    pub async fn new(
+        window_size: WindowSize,
+        num_sprites: usize,
+        surface: &wgpu::Surface<'_>,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+    ) -> Self {
+        let WindowSize { width, height } = window_size;
 
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code here assumes an sRGB surface texture. Using a different
@@ -55,11 +30,12 @@ impl InnerRenderer<'_> {
             .find(|f| f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
-            width: size.width,
-            height: size.height,
+            width,
+            height,
             present_mode: if surface_caps
                 .present_modes
                 .contains(&wgpu::PresentMode::Fifo)
@@ -73,9 +49,9 @@ impl InnerRenderer<'_> {
             desired_maximum_frame_latency: 2,
         };
 
-        let common = include_str!("../shaders/common.wgsl");
-        let vert = common.to_owned() + include_str!("../shaders/vert.wgsl");
-        let frag = common.to_owned() + include_str!("../shaders/frag.wgsl");
+        let common = include_str!("shaders/common.wgsl");
+        let vert = common.to_owned() + include_str!("shaders/vert.wgsl");
+        let frag = common.to_owned() + include_str!("shaders/frag.wgsl");
 
         let vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Vertex Shader"),
@@ -114,7 +90,7 @@ impl InnerRenderer<'_> {
             ],
         });
 
-        let costume_bind_group_layout = Costume::get_bind_group_layout(&device);
+        let costume_bind_group_layout = Costume::get_bind_group_layout(device);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -184,7 +160,7 @@ impl InnerRenderer<'_> {
         });
 
         let global_state = GlobalBuffer {
-            resolution: [size.width as f32, size.height as f32],
+            resolution: [width as f32, height as f32],
         };
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Global Buffer"),
@@ -207,16 +183,12 @@ impl InnerRenderer<'_> {
             ],
         });
 
-        let sampler = Costume::create_sampler(&device);
+        let sampler = Costume::create_sampler(device);
 
         Self {
-            window,
-            surface,
-            device,
             render_pipeline,
-            queue,
             config,
-            size,
+            window_size,
             bind_group,
             sprites_buffer,
             global_state,

@@ -40,7 +40,7 @@ impl Compiler<'_> {
         if is_screen_refresh {
             let inst = self.call_function(
                 builder,
-                callbacks::custom_block::call_screen_refresh as usize,
+                callbacks::custom_block::call_screen_refresh as *const (),
                 &[I64, I64, I64, I64, I64, I64],
                 &[I64],
                 &[
@@ -78,7 +78,7 @@ impl Compiler<'_> {
         } else {
             self.call_function(
                 builder,
-                callbacks::custom_block::call_no_screen_refresh as usize,
+                callbacks::custom_block::call_no_screen_refresh as *const (),
                 &[I64, I64, I64, I64],
                 &[],
                 &[

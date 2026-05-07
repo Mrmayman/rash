@@ -18,3 +18,4 @@ pub use graphics::{
     CostumeData, CostumeId, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData,
 };
 pub use runtime::Runtime;
+pub use sb3::ProjectLoader;

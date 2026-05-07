@@ -287,6 +287,10 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn init(&mut self) {
+        // We currently only support 64-bit platforms
+        // (may change in the future if we add a Bytecode VM)
+        assert_eq!(std::mem::size_of::<usize>(), 8);
+
         let mut green_flags = Vec::new();
         std::mem::swap(&mut self.scripts.green_flags, &mut green_flags);
         self.threads.extend(green_flags);

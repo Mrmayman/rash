@@ -35,7 +35,7 @@ impl Display for RashError {
                 write!(f, "invalid value for self.mutation.warp: {val}")?;
             }
             RashErrorKind::CurrentCustomBlockNotFound => {
-                write!(f, "could not get info of current custom block!\n")?;
+                write!(f, "could not get info of current custom block!")?;
             }
         };
         for t in &self.trace {

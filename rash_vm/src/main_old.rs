@@ -1,11 +1,4 @@
 fn main() {
-    assert_eq!(std::mem::size_of::<usize>(), 8);
-
-    let Some(value) = std::env::args().nth(1) else {
-        eprintln!("Usage: rash /path/to/project.sb3");
-        return;
-    };
-
     if value == "demo" {
         run_demo();
         drop_strings();

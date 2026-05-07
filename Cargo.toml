@@ -1,6 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["rash_vm", "rash_render"]
+members = ["rash_vm", "rash_render", "rash", "svg_render"]
+
+[workspace.dependencies]
+wgpu = "28"
+serde = { version = "1", features = ["derive"] }
+image = "0.25"
+
+[profile.dev]
+opt-level = 3
 
 [profile.dev.package."*"]
 opt-level = 3

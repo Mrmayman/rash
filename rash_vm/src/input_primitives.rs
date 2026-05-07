@@ -81,7 +81,7 @@ impl Input {
     pub fn format(&self, indent: usize) -> String {
         match self {
             Input::Obj(scratch_object) => format!("{scratch_object:?}"),
-            Input::Block(scratch_block) => format!("{}", scratch_block.format(indent)),
+            Input::Block(scratch_block) => scratch_block.format(indent),
         }
     }
 }
@@ -326,7 +326,7 @@ impl ReturnValue {
             ReturnValue::Object(arr) => {
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number as usize,
+                    callbacks::types::to_number as *const (),
                     &[I64, I64, I64, I64],
                     &[F64],
                     &arr,
@@ -343,7 +343,7 @@ impl ReturnValue {
                 // Convert the object to number
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number as usize,
+                    callbacks::types::to_number as *const (),
                     &[I64, I64, I64, I64],
                     &[F64],
                     &[i1, i2, i3, i4],
@@ -360,7 +360,7 @@ impl ReturnValue {
 
                 compiler.call_function(
                     builder,
-                    callbacks::types::to_string_from_num as usize,
+                    callbacks::types::to_string_from_num as *const (),
                     &[F64, I64],
                     &[],
                     &[value, stack_ptr],
@@ -375,7 +375,7 @@ impl ReturnValue {
 
                 compiler.call_function(
                     builder,
-                    callbacks::types::to_string_from_bool as usize,
+                    callbacks::types::to_string_from_bool as *const (),
                     &[I64, I64],
                     &[],
                     &[value, stack_ptr],
@@ -414,7 +414,7 @@ impl ReturnValue {
             ReturnValue::Object([i1, i2, i3, i4]) => {
                 let ins = compiler.call_function(
                     builder,
-                    callbacks::types::to_bool as usize,
+                    callbacks::types::to_bool as *const (),
                     &[I64, I64, I64, I64],
                     &[I64],
                     &[*i1, *i2, *i3, *i4],
@@ -429,7 +429,7 @@ impl ReturnValue {
 
                 let ins = compiler.call_function(
                     builder,
-                    callbacks::types::to_bool as usize,
+                    callbacks::types::to_bool as *const (),
                     &[I64, I64, I64, I64],
                     &[I64],
                     &[i1, i2, i3, i4],
@@ -452,7 +452,7 @@ fn get_string_from_obj(
 
     compiler.call_function(
         builder,
-        callbacks::types::to_string as usize,
+        callbacks::types::to_string as *const (),
         &[I64, I64, I64, I64, I64],
         &[],
         &[i1, i2, i3, i4, stack_ptr],

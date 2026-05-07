@@ -23,7 +23,7 @@ impl Compiler<'_> {
 
                 self.call_function(
                     builder,
-                    callbacks::var_read as usize,
+                    callbacks::var_read as *const (),
                     &[I64, I64],
                     &[],
                     &[mem_ptr, output_stack_ptr],

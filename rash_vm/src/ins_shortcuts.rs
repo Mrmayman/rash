@@ -20,7 +20,7 @@ impl Compiler<'_> {
         let stack_addr = self.cache.get_ptr(ptr, builder);
         self.call_function(
             builder,
-            callbacks::types::drop_obj as usize,
+            callbacks::types::drop_obj as *const (),
             &[I64],
             &[],
             &[stack_addr],
@@ -44,7 +44,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::types::to_number_with_decimal_check as usize,
+            callbacks::types::to_number_with_decimal_check as *const (),
             &[I64, I64, I64, I64, I64],
             &[],
             &[i1, i2, i3, i4, stack_ptr],

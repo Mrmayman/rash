@@ -13,21 +13,39 @@ use crate::{
 impl Compiler<'_> {
     pub fn op_m_tan(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op_tan as usize, &[F64], &[F64], &[num]);
+        let inst = self.call_function(
+            builder,
+            callbacks::op_tan as *const (),
+            &[F64],
+            &[F64],
+            &[num],
+        );
         let result = builder.inst_results(inst)[0];
         result
     }
 
     pub fn op_m_cos(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op_cos as usize, &[F64], &[F64], &[num]);
+        let inst = self.call_function(
+            builder,
+            callbacks::op_cos as *const (),
+            &[F64],
+            &[F64],
+            &[num],
+        );
         let result = builder.inst_results(inst)[0];
         result
     }
 
     pub fn op_m_sin(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op_sin as usize, &[F64], &[F64], &[num]);
+        let inst = self.call_function(
+            builder,
+            callbacks::op_sin as *const (),
+            &[F64],
+            &[F64],
+            &[num],
+        );
         let result = builder.inst_results(inst)[0];
         result
     }
@@ -130,7 +148,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::op_str_join as usize,
+            callbacks::op_str_join as *const (),
             &[I64, I64, I64, I64, I64],
             &[],
             &[a, b, stack_ptr, a_is_const, b_is_const],
@@ -151,7 +169,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::dbg_log as usize,
+            callbacks::dbg_log as *const (),
             &[I64, I64],
             &[],
             &[a, a_is_const],
@@ -176,7 +194,7 @@ impl Compiler<'_> {
 
     /// Calls the rust [`f64::floor`] function.
     fn floor_call(&mut self, n: Value, builder: &mut FunctionBuilder<'_>) -> Value {
-        let ins = self.call_function(builder, f64::floor as usize, &[F64], &[F64], &[n]);
+        let ins = self.call_function(builder, f64::floor as *const (), &[F64], &[F64], &[n]);
         builder.inst_results(ins)[0]
     }
 
@@ -186,7 +204,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op_str_len as usize,
+            callbacks::op_str_len as *const (),
             &[I64, I64],
             &[I64],
             &[input, is_const],
@@ -209,7 +227,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op_random as usize,
+            callbacks::op_random as *const (),
             &[F64, F64, I64],
             &[F64],
             &[a, b, is_decimal],
@@ -243,7 +261,7 @@ impl Compiler<'_> {
         let is_const = self.constants.get_int(i64::from(is_const), builder);
         self.call_function(
             builder,
-            callbacks::op_str_letter as usize,
+            callbacks::op_str_letter as *const (),
             &[I64, I64, F64, I64],
             &[],
             &[string, is_const, letter, stack_ptr],
@@ -270,7 +288,7 @@ impl Compiler<'_> {
 
         let ins = self.call_function(
             builder,
-            callbacks::op_str_contains as usize,
+            callbacks::op_str_contains as *const (),
             &[I64, I64, I64, I64],
             &[I64],
             &[string, string_is_const, pattern, pattern_is_const],
@@ -283,7 +301,7 @@ impl Compiler<'_> {
         let num = num.get_number(self, builder);
         let inst = self.call_function(
             builder,
-            callbacks::op_round as usize,
+            callbacks::op_round as *const (),
             &[F64],
             &[F64],
             &[num],

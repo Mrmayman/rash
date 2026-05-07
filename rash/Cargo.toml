@@ -1,0 +1,15 @@
+[package]
+name = "rash"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rash_render.path = "../rash_render"
+rash_vm.path = "../rash_vm"
+svg_render.path = "../svg_render"
+
+wgpu.workspace = true
+winit = "0.29.*"
+anyhow = { version = "1", features = ["backtrace"] }
+pollster = "0.4.*"
+rfd = "0.17.2"

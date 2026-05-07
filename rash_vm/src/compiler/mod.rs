@@ -574,7 +574,7 @@ impl<'a> Compiler<'a> {
 
                 self.call_function(
                     builder,
-                    RunState::c_go_to as usize,
+                    RunState::c_go_to as *const (),
                     &[I64, I64, F64, F64],
                     &[],
                     &[self.graphics_ptr, id, x, y],
@@ -587,7 +587,7 @@ impl<'a> Compiler<'a> {
 
                 self.call_function(
                     builder,
-                    RunState::c_change_x as usize,
+                    RunState::c_change_x as *const (),
                     &[I64, I64, F64],
                     &[],
                     &[self.graphics_ptr, id, x],
@@ -600,7 +600,7 @@ impl<'a> Compiler<'a> {
 
                 self.call_function(
                     builder,
-                    RunState::c_change_y as usize,
+                    RunState::c_change_y as *const (),
                     &[I64, I64, F64],
                     &[],
                     &[self.graphics_ptr, id, y],
@@ -613,7 +613,7 @@ impl<'a> Compiler<'a> {
 
                 self.call_function(
                     builder,
-                    RunState::c_set_x as usize,
+                    RunState::c_set_x as *const (),
                     &[I64, I64, F64],
                     &[],
                     &[self.graphics_ptr, id, x],
@@ -626,7 +626,7 @@ impl<'a> Compiler<'a> {
 
                 self.call_function(
                     builder,
-                    RunState::c_set_y as usize,
+                    RunState::c_set_y as *const (),
                     &[I64, I64, F64],
                     &[],
                     &[self.graphics_ptr, id, y],
@@ -637,7 +637,7 @@ impl<'a> Compiler<'a> {
 
                 let inst = self.call_function(
                     builder,
-                    RunState::c_get_x as usize,
+                    RunState::c_get_x as *const (),
                     &[I64, I64],
                     &[F64],
                     &[self.graphics_ptr, id],
@@ -651,7 +651,7 @@ impl<'a> Compiler<'a> {
 
                 let inst = self.call_function(
                     builder,
-                    RunState::c_get_y as usize,
+                    RunState::c_get_y as *const (),
                     &[I64, I64],
                     &[F64],
                     &[self.graphics_ptr, id],
@@ -663,7 +663,7 @@ impl<'a> Compiler<'a> {
             ScratchBlock::ControlDaysSince2000 => {
                 let inst = self.call_function(
                     builder,
-                    callbacks::op_days_since_2000 as usize,
+                    callbacks::op_days_since_2000 as *const (),
                     &[],
                     &[F64],
                     &[],
@@ -690,7 +690,7 @@ impl<'a> Compiler<'a> {
 
         self.call_function(
             builder,
-            callbacks::types::clone_obj as usize,
+            callbacks::types::clone_obj as *const (),
             &[I64, I64, I64, I64, I64],
             &[],
             &[i1, i2, i3, i4, stack_ptr],
@@ -700,8 +700,7 @@ impl<'a> Compiler<'a> {
         let i2 = builder.ins().stack_load(I64, stack_slot, 8);
         let i3 = builder.ins().stack_load(I64, stack_slot, 16);
         let i4 = builder.ins().stack_load(I64, stack_slot, 24);
-        let obj = [i1, i2, i3, i4];
-        obj
+        [i1, i2, i3, i4]
     }
 
     pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -729,43 +728,58 @@ impl<'a> Compiler<'a> {
 
 #[allow(unused)]
 pub fn print_func_addresses() {
-    println!("var_read: {:X}", callbacks::var_read as usize);
-    println!("op_str_join: {:X}", callbacks::op_str_join as usize);
+    println!("var_read: {:X}", callbacks::var_read as *const () as usize);
+    println!(
+        "op_str_join: {:X}",
+        callbacks::op_str_join as *const () as usize
+    );
 
-    println!("f64::floor: {:X}", f64::floor as usize);
+    println!("f64::floor: {:X}", f64::floor as *const () as usize);
 
     println!(
         "to_string_from_num: {:X}",
-        callbacks::types::to_string_from_num as usize
+        callbacks::types::to_string_from_num as *const () as usize
     );
-    println!("to_string: {:X}", callbacks::types::to_string as usize);
+    println!(
+        "to_string: {:X}",
+        callbacks::types::to_string as *const () as usize
+    );
     println!(
         "to_string_from_bool: {:X}",
-        callbacks::types::to_string_from_bool as usize
+        callbacks::types::to_string_from_bool as *const () as usize
     );
-    println!("to_number: {:X}", callbacks::types::to_number as usize);
+    println!(
+        "to_number: {:X}",
+        callbacks::types::to_number as *const () as usize
+    );
     println!(
         "to_number_with_decimal_check: {:X}",
-        callbacks::types::to_number_with_decimal_check as usize
+        callbacks::types::to_number_with_decimal_check as *const () as usize
     );
-    println!("drop_obj: {:X}", callbacks::types::drop_obj as usize);
-    println!("to_bool: {:X}", callbacks::types::to_bool as usize);
+    println!(
+        "drop_obj: {:X}",
+        callbacks::types::drop_obj as *const () as usize
+    );
+    println!(
+        "to_bool: {:X}",
+        callbacks::types::to_bool as *const () as usize
+    );
 
     println!(
         "custom_block(): {:X}",
-        callbacks::custom_block::call_no_screen_refresh as usize
+        callbacks::custom_block::call_no_screen_refresh as *const () as usize
     );
     println!(
         "custom_block.await: {:X}",
-        callbacks::custom_block::call_screen_refresh as usize
+        callbacks::custom_block::call_screen_refresh as *const () as usize
     );
 
     println!(
         "stack_pop: {:X}",
-        callbacks::repeat_stack::stack_pop as usize
+        callbacks::repeat_stack::stack_pop as *const () as usize
     );
     println!(
         "stack_push: {:X}",
-        callbacks::repeat_stack::stack_push as usize
+        callbacks::repeat_stack::stack_push as *const () as usize
     );
 }

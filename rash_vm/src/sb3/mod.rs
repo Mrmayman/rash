@@ -119,7 +119,7 @@ impl CompileContext<'_> {
 
 fn build_argument_names(
     args: &[String],
-    names: &String,
+    names: &str,
 ) -> Result<HashMap<String, String>, RashError> {
     const FN_N: &str = "build_argument_names";
 
@@ -127,7 +127,7 @@ fn build_argument_names(
         serde_json::from_str(names).to("serde_json::from_str(self.mutation)", FN_N)?;
     let collect = args
         .iter()
-        .zip(arg_names.into_iter())
+        .zip(arg_names)
         .map(|(a, b)| (b, a.clone()))
         .collect();
     Ok(collect)
