@@ -1,18 +1,15 @@
-use crate::{
-    compiler::ScratchBlock,
-    error::{RashError, Trace},
-    sb3::{json::Block, CompileContext},
-};
+use crate::{CompileContext, Res, json::Block};
+use rash_vm::{ScratchBlock, error::Trace};
 
 impl Block {
-    pub fn c_op_not(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_not(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let bool = self
             .get_boolean_input(ctx, "OPERAND")
             .trace("Block::compile.operator_not.OPERAND")?;
         Ok(ScratchBlock::OpBNot(bool))
     }
 
-    pub fn c_op_and(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_and(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let bool1 = self
             .get_number_input(ctx, "OPERAND1")
             .trace("Block::compile.operator_and.OPERAND1")?;
@@ -22,28 +19,28 @@ impl Block {
         Ok(ScratchBlock::OpBAnd(bool1, bool2))
     }
 
-    pub fn c_op_greater(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_greater(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         const FN_N: &str = "Block::compile.operator_gt";
         let num1 = self.get_number_input(ctx, "OPERAND1").trace(FN_N)?;
         let num2 = self.get_number_input(ctx, "OPERAND2").trace(FN_N)?;
         Ok(ScratchBlock::OpCmpGreater(num1, num2))
     }
 
-    pub fn c_op_less(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_less(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         const FN_N: &str = "Block::compile.operator_lt";
         let num1 = self.get_number_input(ctx, "OPERAND1").trace(FN_N)?;
         let num2 = self.get_number_input(ctx, "OPERAND2").trace(FN_N)?;
         Ok(ScratchBlock::OpCmpLesser(num1, num2))
     }
 
-    pub fn c_op_round(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_round(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let num = self
             .get_number_input(ctx, "NUM")
             .trace("Block::compile.operator_round.NUM")?;
         Ok(ScratchBlock::OpRound(num))
     }
 
-    pub fn c_op_mod(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_mod(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let num1 = self
             .get_number_input(ctx, "NUM1")
             .trace("Block::compile.operator_mod.NUM1")?;
@@ -53,14 +50,14 @@ impl Block {
         Ok(ScratchBlock::OpMod(num1, num2))
     }
 
-    pub fn c_op_str_length(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_str_length(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let string = self
             .get_string_input(ctx, "STRING")
             .trace("Block::compile.operator_length.STRING")?;
         Ok(ScratchBlock::OpStrLen(string))
     }
 
-    pub fn c_op_str_contains(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_str_contains(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let string1 = self
             .get_string_input(ctx, "STRING1")
             .trace("Block::compile.operator_contains.STRING1")?;
@@ -70,7 +67,7 @@ impl Block {
         Ok(ScratchBlock::OpStrContains(string1, string2))
     }
 
-    pub fn c_op_str_letter_of(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_str_letter_of(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let string = self
             .get_string_input(ctx, "STRING")
             .trace("Block::compile.operator_letter_of.STRING")?;
@@ -80,7 +77,7 @@ impl Block {
         Ok(ScratchBlock::OpStrLetterOf(index, string))
     }
 
-    pub fn c_op_join(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_join(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let string1 = self
             .get_string_input(ctx, "STRING1")
             .trace("Block::compile.operator_join.STRING1")?;
@@ -90,7 +87,7 @@ impl Block {
         Ok(ScratchBlock::OpStrJoin(string1, string2))
     }
 
-    pub fn c_op_random(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_random(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let from = self
             .get_string_input(ctx, "FROM")
             .trace("Block::compile.operator_random.FROM")?;
@@ -100,7 +97,7 @@ impl Block {
         Ok(ScratchBlock::OpRandom(from, to))
     }
 
-    pub fn c_op_divide(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_divide(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let num1 = self
             .get_number_input(ctx, "NUM1")
             .trace("Block::compile.operator_divide.NUM1")?;
@@ -110,7 +107,7 @@ impl Block {
         Ok(ScratchBlock::OpDiv(num1, num2))
     }
 
-    pub fn c_op_multiply(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_multiply(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let num1 = self
             .get_number_input(ctx, "NUM1")
             .trace("Block::compile.operator_multiply.NUM1")?;
@@ -120,7 +117,7 @@ impl Block {
         Ok(ScratchBlock::OpMul(num1, num2))
     }
 
-    pub fn c_op_subtract(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_subtract(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let num1 = self
             .get_number_input(ctx, "NUM1")
             .trace("Block::compile.operator_subtract.NUM1")?;
@@ -130,7 +127,7 @@ impl Block {
         Ok(ScratchBlock::OpSub(num1, num2))
     }
 
-    pub fn c_op_add(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn c_op_add(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let num1 = self
             .get_number_input(ctx, "NUM1")
             .trace("Block::compile.operator_add.NUM1")?;

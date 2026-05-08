@@ -1,13 +1,14 @@
-use crate::{
-    compiler::ScratchBlock,
+use rash_vm::{
+    Input, ScratchBlock,
     data_types::{number_to_string, string_to_number},
     error::{RashError, Trace},
-    input_primitives::Input,
 };
 
+use crate::{Res, error::ErrExt};
+
 use super::{
-    json::{json_id, Block, JsonBlock},
     CompileContext,
+    json::{Block, JsonBlock, json_id},
 };
 
 impl Block {
@@ -15,7 +16,7 @@ impl Block {
         &self,
         ctx: &mut CompileContext,
         substack_name: &str,
-    ) -> Result<Vec<ScratchBlock>, RashError> {
+    ) -> Res<Vec<ScratchBlock>> {
         let substack = self
             .inputs
             .get(substack_name)
@@ -50,7 +51,7 @@ impl Block {
         Ok(compiled_blocks)
     }
 
-    pub fn get_variable_field(&self) -> Result<&str, RashError> {
+    pub fn get_variable_field(&self) -> Res<&str> {
         Ok(self
             .fields
             .get("VARIABLE")
@@ -65,11 +66,7 @@ impl Block {
             .unwrap())
     }
 
-    pub fn get_boolean_input(
-        &self,
-        ctx: &mut CompileContext,
-        name: &str,
-    ) -> Result<Input, RashError> {
+    pub fn get_boolean_input(&self, ctx: &mut CompileContext, name: &str) -> Res<Input> {
         let Some(input) = self.inputs.get(name) else {
             return Ok(false.into());
         };
@@ -106,7 +103,7 @@ impl Block {
                         None => {
                             return Err(RashError::field_not_found(&format!(
                                 "self.inputs.{name}[1][1]"
-                            )))
+                            )));
                         }
                         _ => panic!(),
                     },
@@ -129,11 +126,7 @@ impl Block {
         Ok(input)
     }
 
-    pub fn get_number_input(
-        &self,
-        ctx: &mut CompileContext,
-        name: &str,
-    ) -> Result<Input, RashError> {
+    pub fn get_number_input(&self, ctx: &mut CompileContext, name: &str) -> Res<Input> {
         let input = match self
             .inputs
             .get(name)
@@ -170,7 +163,7 @@ impl Block {
                         None => {
                             return Err(RashError::field_not_found(&format!(
                                 "self.inputs.{name}[1][1]"
-                            )))
+                            )));
                         }
                         _ => panic!(),
                     },
@@ -193,11 +186,7 @@ impl Block {
         Ok(input)
     }
 
-    pub fn get_string_input(
-        &self,
-        ctx: &mut CompileContext,
-        name: &str,
-    ) -> Result<Input, RashError> {
+    pub fn get_string_input(&self, ctx: &mut CompileContext, name: &str) -> Res<Input> {
         let input = match self
             .inputs
             .get(name)
@@ -235,7 +224,7 @@ impl Block {
                         None => {
                             return Err(RashError::field_not_found(&format!(
                                 "self.inputs.{name}[1][1]"
-                            )))
+                            )));
                         }
                         _ => panic!(),
                     },
@@ -258,7 +247,7 @@ impl Block {
         Ok(input)
     }
 
-    pub fn get_custom_block_prototype(&self) -> Result<&str, RashError> {
+    pub fn get_custom_block_prototype(&self) -> Res<&str> {
         self.inputs
             .get("custom_block")
             .ok_or(RashError::field_not_found(

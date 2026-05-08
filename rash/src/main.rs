@@ -1,10 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use rash_loader_sb3::ProjectLoader;
 use rash_render::{Costume, Renderer, WindowSize};
-use rash_vm::{
-    CostumeId, GraphicsState, ProjectLoader, RunState, Runtime, SpriteData, SpriteId,
-    SpriteLoadData,
-};
+use rash_vm::{CostumeId, GraphicsState, RunState, Runtime, SpriteData, SpriteId, SpriteLoadData};
 use svg_render::SvgRenderer;
 use winit::{
     event::{Event, WindowEvent},

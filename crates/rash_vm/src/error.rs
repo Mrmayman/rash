@@ -1,43 +1,14 @@
-use std::{
-    fmt::{Debug, Display},
-    path::{Path, PathBuf},
-};
-
-use zip_extract::ZipExtractError;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
-pub struct RashError {
+pub struct RashError<T> {
     pub trace: Vec<String>,
-    pub kind: RashErrorKind,
+    pub kind: T,
 }
 
-impl Display for RashError {
+impl<T: Display> Display for RashError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "rash error: ")?;
-        match &self.kind {
-            RashErrorKind::IoError(error, path_buf) => {
-                if let Some(path) = path_buf {
-                    write!(f, "io error: at {path:?}: {error}")?;
-                } else {
-                    write!(f, "io error: {error}")?;
-                }
-            }
-            RashErrorKind::ZipExtract(zip_extract_error) => {
-                write!(f, "zip extract error: {zip_extract_error}")?;
-            }
-            RashErrorKind::Serde(error) => {
-                write!(f, "json error: {error}")?;
-            }
-            RashErrorKind::FieldNotFound(field) => {
-                write!(f, "field not found: {field}")?;
-            }
-            RashErrorKind::InvalidWarpKind(val) => {
-                write!(f, "invalid value for self.mutation.warp: {val}")?;
-            }
-            RashErrorKind::CurrentCustomBlockNotFound => {
-                write!(f, "could not get info of current custom block!")?;
-            }
-        };
+        write!(f, "rash error: {}", self.kind)?;
         for t in &self.trace {
             write!(f, "\n  at {}", t)?;
         }
@@ -45,37 +16,11 @@ impl Display for RashError {
     }
 }
 
-impl RashError {
-    pub fn field_not_found(field: &str) -> Self {
-        RashError {
-            trace: vec![],
-            kind: RashErrorKind::FieldNotFound(field.to_owned()),
-        }
-    }
-
-    pub fn invalid_warp_kind(field: &str) -> Self {
-        RashError {
-            trace: vec![],
-            kind: RashErrorKind::InvalidWarpKind(field.to_owned()),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum RashErrorKind {
-    IoError(std::io::Error, Option<PathBuf>),
-    ZipExtract(ZipExtractError),
-    Serde(serde_json::Error),
-    FieldNotFound(String),
-    InvalidWarpKind(String),
-    CurrentCustomBlockNotFound,
-}
-
 pub trait Trace {
     fn trace(self, t: &str) -> Self;
 }
 
-impl<T> Trace for Result<T, RashError> {
+impl<T, E> Trace for Result<T, RashError<E>> {
     fn trace(mut self, t: &str) -> Self {
         if let Err(err) = &mut self {
             err.trace.push(t.to_owned());
@@ -84,42 +29,6 @@ impl<T> Trace for Result<T, RashError> {
     }
 }
 
-pub trait ErrorConvert<T> {
-    fn to(self, a: &str, b: &str) -> Result<T, RashError>;
-}
-
-#[macro_export]
-macro_rules! err_convert {
-    ($ty:ident, $variant:path) => {
-        impl<T> ErrorConvert<T> for Result<T, $ty> {
-            fn to(self, a: &str, b: &str) -> Result<T, RashError> {
-                self.map_err(|n| RashError {
-                    trace: vec![a.to_owned(), b.to_owned()],
-                    kind: $variant(n),
-                })
-            }
-        }
-    };
-}
-
-type IoErr = std::io::Error;
-fn io_err_cvt(n: std::io::Error) -> RashErrorKind {
-    RashErrorKind::IoError(n, None)
-}
-err_convert!(IoErr, io_err_cvt);
-err_convert!(ZipExtractError, RashErrorKind::ZipExtract);
-type SerdeErr = serde_json::Error;
-err_convert!(SerdeErr, RashErrorKind::Serde);
-
-pub trait ErrorConvertPath<T> {
-    fn to_p(self, path: &Path, a: &str, b: &str) -> Result<T, RashError>;
-}
-
-impl<T> ErrorConvertPath<T> for Result<T, std::io::Error> {
-    fn to_p(self, path: &Path, a: &str, b: &str) -> Result<T, RashError> {
-        self.map_err(|n| RashError {
-            trace: vec![a.to_owned(), b.to_owned()],
-            kind: RashErrorKind::IoError(n, Some(path.to_owned())),
-        })
-    }
+pub trait ErrorConvert<E, T> {
+    fn to(self, a: &str, b: &str) -> Result<T, RashError<E>>;
 }

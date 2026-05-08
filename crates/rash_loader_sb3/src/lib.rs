@@ -3,18 +3,22 @@ use std::{collections::HashMap, path::Path};
 use json::{Block, JsonBlock, JsonStruct};
 use tempfile::TempDir;
 
-use crate::{
-    compiler::{ScratchBlock, MEMORY},
+use rash_vm::{
+    Input, MEMORY, Ptr, ScratchBlock,
     data_types::ScratchObject,
-    error::{ErrorConvert, ErrorConvertPath, RashError, RashErrorKind, Trace},
+    error::{ErrorConvert, RashError, Trace},
     graphics::{CostumeData, CostumeHash, CostumeId, SpriteId, SpriteLoadData},
-    input_primitives::{Input, Ptr},
     runtime::{CustomBlockId, ProjectBuilder, Runtime, Script, SpriteBuilder},
 };
 
+use crate::error::{ErrExt, ErrorConvertPath};
+
 mod blocks;
+mod error;
 mod get_utils;
 pub mod json;
+
+pub type Res<T> = Result<T, error::Error>;
 
 pub struct ProjectLoader {
     dir: TempDir,
@@ -54,7 +58,7 @@ impl CompileContext<'_> {
         self.sprite_json.blocks.get(id)
     }
 
-    fn get_custom_block(&mut self, block: &Block) -> Result<CustomBlockDef, RashError> {
+    fn get_custom_block(&mut self, block: &Block) -> Res<CustomBlockDef> {
         const FN_N: &str = "CompileContext::get_custom_block";
 
         let block_mutation = block
@@ -117,10 +121,7 @@ impl CompileContext<'_> {
     }
 }
 
-fn build_argument_names(
-    args: &[String],
-    names: &str,
-) -> Result<HashMap<String, String>, RashError> {
+fn build_argument_names(args: &[String], names: &str) -> Res<HashMap<String, String>> {
     const FN_N: &str = "build_argument_names";
 
     let arg_names: Vec<String> =
@@ -134,18 +135,9 @@ fn build_argument_names(
 }
 
 impl ProjectLoader {
-    pub fn new(file_path: &Path) -> Result<Self, RashError> {
+    pub fn new(file_path: &Path) -> Res<Self> {
         const FN_N: &str = "ProjectLoader::new";
         println!("[info] Loading file from {file_path:?}");
-        if !file_path.is_file() {
-            return Err(RashError {
-                trace: vec![FN_N.to_owned()],
-                kind: RashErrorKind::IoError(
-                    std::io::Error::new(std::io::ErrorKind::NotFound, "File not found"),
-                    Some(file_path.to_owned()),
-                ),
-            });
-        }
 
         let dir = TempDir::new().to("TempDir::new", FN_N)?;
         let dir_path = dir.path();
@@ -167,7 +159,7 @@ impl ProjectLoader {
         Ok(Self { dir, json })
     }
 
-    pub fn build(self) -> Result<Runtime, RashError> {
+    pub fn build(self) -> Res<Runtime> {
         const FN_N: &str = "ProjectLoader::build";
 
         let memory = MEMORY.lock().unwrap();
@@ -240,7 +232,7 @@ impl ProjectLoader {
         costume_hashes: &mut HashMap<CostumeHash, CostumeId>,
         costume_id: &mut CostumeId,
         costume_ids: &mut HashMap<CostumeId, CostumeData>,
-    ) -> Result<(), RashError> {
+    ) -> Res<()> {
         const FN_N: &str = "ProjectLoader::load_costumes";
 
         for (i, costume) in sprite_json.costumes.iter().enumerate() {
@@ -280,7 +272,7 @@ fn load_blocks(
     custom_block_num: &mut usize,
     sprite: &mut SpriteBuilder,
     memory: &[ScratchObject],
-) -> Result<(), RashError> {
+) -> Res<()> {
     const FN_N: &str = "sb3::load_blocks";
 
     let mut ctx = CompileContext {
@@ -374,7 +366,7 @@ fn load_blocks(
 }
 
 impl Block {
-    pub fn compile(&self, ctx: &mut CompileContext) -> Result<ScratchBlock, RashError> {
+    pub fn compile(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         match self.opcode.as_str() {
             "data_setvariableto" => {
                 // self.fields.VARIABLE[1]
@@ -512,7 +504,7 @@ impl Block {
             "procedures_call" => {
                 let block = ctx.get_custom_block(self)?;
 
-                let args: Result<Vec<Input>, RashError> = block
+                let args: Res<Vec<Input>> = block
                     .args
                     .iter()
                     .map(|n| {
@@ -536,7 +528,7 @@ impl Block {
         }
     }
 
-    fn c_argument_reporter(&self, ctx: &mut CompileContext<'_>) -> Result<ScratchBlock, RashError> {
+    fn c_argument_reporter(&self, ctx: &mut CompileContext<'_>) -> Res<ScratchBlock> {
         let arg = self.fields.get("VALUE").ok_or(RashError::field_not_found(
             "self(argument_reporter_string_number).fields.VALUE",
         ))?;
@@ -555,39 +547,29 @@ impl Block {
                 let current_custom_block = ctx
                     .current_custom_block
                     .as_ref()
-                    .ok_or(get_blockdef_error("current_custom_block"))?;
+                    .ok_or(RashError::blockdef_not_found("current_custom_block"))?;
                 println!("{:?}", ctx.custom_block_defs);
                 let blockdef = ctx
                     .custom_block_defs
                     .get(current_custom_block)
-                    .ok_or(get_blockdef_error("blockdef"))?;
+                    .ok_or(RashError::blockdef_not_found("blockdef"))?;
                 let name_to_id = blockdef
                     .args_name_to_id
                     .as_ref()
-                    .ok_or(get_blockdef_error("blockdef.name_to_id"))?;
+                    .ok_or(RashError::blockdef_not_found("blockdef.name_to_id"))?;
                 let arg_id = name_to_id
                     .get(arg_name)
-                    .ok_or(get_blockdef_error("blockdef.name_to_id.get"))?;
+                    .ok_or(RashError::blockdef_not_found("blockdef.name_to_id.get"))?;
 
                 let position = blockdef
                     .args
                     .iter()
                     .position(|n| n == arg_id)
-                    .ok_or(get_blockdef_error("blockdef.args"))?;
+                    .ok_or(RashError::blockdef_not_found("blockdef.args"))?;
 
                 Ok(ScratchBlock::FunctionGetArg(position))
             }
             _ => todo!(),
         }
-    }
-}
-
-fn get_blockdef_error(n: &'static str) -> RashError {
-    RashError {
-        trace: vec![format!(
-            "Block::compile.argument_reporter_string_number ({})",
-            n
-        )],
-        kind: RashErrorKind::CurrentCustomBlockNotFound,
     }
 }

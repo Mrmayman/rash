@@ -123,7 +123,11 @@ impl From<ScratchBlock> for Input {
 }
 
 impl Input {
-    pub fn get_number(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub(crate) fn get_number(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
         let (mut num, could_be_nan) = match self {
             Input::Obj(scratch_object) => {
                 let o = scratch_object.convert_to_number();
@@ -144,7 +148,7 @@ impl Input {
         num
     }
 
-    pub fn get_number_int(
+    pub(crate) fn get_number_int(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
@@ -173,7 +177,7 @@ impl Input {
         num
     }
 
-    pub fn get_string(
+    pub(crate) fn get_string(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
@@ -213,7 +217,11 @@ impl Input {
         }
     }
 
-    pub fn get_bool(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub(crate) fn get_bool(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
                 let b = i64::from(scratch_object.convert_to_bool());
@@ -226,7 +234,7 @@ impl Input {
         }
     }
 
-    pub fn get_object(
+    pub(crate) fn get_object(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
@@ -274,7 +282,7 @@ impl Input {
         }
     }
 
-    pub fn get_number_with_decimal_check(
+    pub(crate) fn get_number_with_decimal_check(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
@@ -353,7 +361,11 @@ impl ReturnValue {
         }
     }
 
-    pub fn get_string(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub(crate) fn get_string(
+        self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
         match self {
             ReturnValue::Num(value) => {
                 let stack_ptr = Compiler::ins_create_string_stack_slot(builder);

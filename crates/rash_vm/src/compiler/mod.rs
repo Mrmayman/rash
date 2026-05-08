@@ -23,7 +23,7 @@ mod display;
 
 lazy_static! {
     pub static ref MEMORY: Mutex<Box<[ScratchObject]>> =
-        Mutex::new(vec![ScratchObject::Number(0.0); 1024].into_boxed_slice());
+        Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice());
 }
 
 #[allow(unused)]
@@ -345,7 +345,7 @@ pub enum VarType {
     String,
 }
 
-pub struct Compiler<'compiler> {
+pub(crate) struct Compiler<'compiler> {
     pub variable_type_data: HashMap<Ptr, VarType>,
     pub args_list: Vec<[Value; 4]>,
     pub constants: ConstantMap,
@@ -727,7 +727,7 @@ impl<'a> Compiler<'a> {
 }
 
 #[allow(unused)]
-pub fn print_func_addresses() {
+pub(crate) fn print_func_addresses() {
     println!("var_read: {:X}", callbacks::var_read as *const () as usize);
     println!(
         "op_str_join: {:X}",

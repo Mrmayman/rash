@@ -4,18 +4,18 @@ mod callbacks;
 mod compile_fn;
 mod compiler;
 mod constant_set;
-mod data_types;
-mod error;
-mod graphics;
+pub mod data_types;
+pub mod error;
+pub mod graphics;
 mod input_primitives;
 mod ins_shortcuts;
-mod runtime;
-mod sb3;
+pub mod runtime;
 mod stack_cache;
 mod tests;
 
+pub use compiler::{ScratchBlock, MEMORY};
 pub use graphics::{
     CostumeData, CostumeId, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData,
 };
+pub use input_primitives::{Input, Ptr};
 pub use runtime::Runtime;
-pub use sb3::ProjectLoader;
