@@ -99,6 +99,7 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::String("something".to_owned()).convert_to_number(), 0.0);
     /// assert_eq!(ScratchObject::Bool(true).convert_to_number(), 1.0);
     /// ```
+    #[inline]
     pub fn convert_to_number(&self) -> f64 {
         match self {
             ScratchObject::Number(number) => *number,
@@ -113,6 +114,7 @@ impl ScratchObject {
         }
     }
 
+    #[inline]
     pub fn convert_to_number_with_decimal_check(&self) -> (f64, bool) {
         let decimal = match self {
             ScratchObject::Number(n) => n.fract() != 0.0,
@@ -141,9 +143,10 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Bool(true).convert_to_bool(), true);
     /// assert_eq!(ScratchObject::Bool(false).convert_to_bool(), false);
     /// ```
+    #[inline]
     pub fn convert_to_bool(&self) -> bool {
         match self {
-            ScratchObject::Number(n) => *n != 0.0 && !n.is_nan(),
+            ScratchObject::Number(n) => !(*n == 0.0 && n.is_sign_positive()) && !n.is_nan(),
             ScratchObject::String(s) => s != "0" && s.to_lowercase() != "false" && !s.is_empty(),
             ScratchObject::Bool(b) => *b,
         }
@@ -164,6 +167,7 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Bool(true).convert_to_string(), "true");
     /// assert_eq!(ScratchObject::Bool(false).convert_to_string(), "false");
     /// ```
+    #[inline]
     pub fn convert_to_string(&self) -> String {
         match self {
             ScratchObject::Number(num) => number_to_string(*num),

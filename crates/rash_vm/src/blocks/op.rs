@@ -71,8 +71,8 @@ impl Compiler<'_> {
 
     pub fn op_b_not(&mut self, a: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_bool(self, builder);
-        let res = builder.ins().bnot(a);
-        res
+        let one = self.constants.get_int(1, builder);
+        builder.ins().isub(one, a)
     }
 
     pub fn op_b_and(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {

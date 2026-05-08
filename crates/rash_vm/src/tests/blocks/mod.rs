@@ -19,7 +19,7 @@ fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
 mod tests {
     use utils::run_code;
 
-    use crate::compiler::VarType;
+    use crate::{compiler::VarType, ScratchObject};
 
     use super::*;
 
@@ -68,6 +68,11 @@ mod tests {
                 Ptr(11),
                 ScratchBlock::OpStrContains("Hello World".into(), "Hi".into()).into(),
             ),
+            // real bug btw
+            ScratchBlock::VarSet(
+                Ptr(12),
+                ScratchBlock::OpStrJoin("".into(), true.into()).into(),
+            ),
         ]);
 
         assert_eq!(memory[4].get_type(), VarType::Number);
@@ -91,6 +96,7 @@ mod tests {
         assert!(memory[9].convert_to_bool());
         assert!(memory[10].convert_to_bool());
         assert!(!memory[11].convert_to_bool());
+        assert_eq!(memory[12].convert_to_string(), "true");
     }
 
     #[test]
@@ -726,53 +732,73 @@ mod tests {
 
     #[test]
     pub fn b_bool_ops() {
+        fn check_and(memory: &[ScratchObject], offset: usize) {
+            assert_eq!(memory[offset + 0].convert_to_number(), 1.0);
+            assert_eq!(memory[offset + 1].convert_to_number(), 0.0);
+            assert_eq!(memory[offset + 2].convert_to_number(), 0.0);
+            assert_eq!(memory[offset + 3].convert_to_number(), 0.0);
+        }
+
+        fn check_or(memory: &[ScratchObject], offset: usize) {
+            assert_eq!(memory[offset + 0].convert_to_number(), 1.0);
+            assert_eq!(memory[offset + 1].convert_to_number(), 1.0);
+            assert_eq!(memory[offset + 2].convert_to_number(), 1.0);
+            assert_eq!(memory[offset + 3].convert_to_number(), 0.0);
+        }
+
+        let set = |p, b: ScratchBlock| ScratchBlock::VarSet(Ptr(p), b.into());
+        // Testing multiple data types as this caused a real bug earlier
         let memory = run_code(&vec![
-            ScratchBlock::VarSet(
-                Ptr(0),
-                ScratchBlock::OpBAnd(true.into(), true.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpBAnd(true.into(), false.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpBAnd(false.into(), true.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(3),
-                ScratchBlock::OpBAnd(false.into(), false.into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpBOr(true.into(), true.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(5),
-                ScratchBlock::OpBOr(true.into(), false.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpBOr(false.into(), true.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpBOr(false.into(), false.into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpBNot(true.into()).into()),
-            ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpBNot(false.into()).into()),
-            ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpBNot(1.0.into()).into()),
-            ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpBNot(0.0.into()).into()),
+            // Bools
+            set(0, ScratchBlock::OpBAnd(true.into(), true.into())),
+            set(1, ScratchBlock::OpBAnd(true.into(), false.into())),
+            set(2, ScratchBlock::OpBAnd(false.into(), true.into())),
+            set(3, ScratchBlock::OpBAnd(false.into(), false.into())),
+            set(4, ScratchBlock::OpBOr(true.into(), true.into())),
+            set(5, ScratchBlock::OpBOr(true.into(), false.into())),
+            set(6, ScratchBlock::OpBOr(false.into(), true.into())),
+            set(7, ScratchBlock::OpBOr(false.into(), false.into())),
+            set(8, ScratchBlock::OpBNot(true.into())),
+            set(9, ScratchBlock::OpBNot(false.into())),
+            // Numbers
+            set(10, ScratchBlock::OpBNot(1.0.into())),
+            set(11, ScratchBlock::OpBNot(0.0.into())),
+            set(12, ScratchBlock::OpBAnd(1.0.into(), 1.0.into())),
+            set(13, ScratchBlock::OpBAnd(1.0.into(), 0.0.into())),
+            set(14, ScratchBlock::OpBAnd(0.0.into(), 1.0.into())),
+            set(15, ScratchBlock::OpBAnd(0.0.into(), 0.0.into())),
+            set(16, ScratchBlock::OpBOr(1.0.into(), 1.0.into())),
+            set(17, ScratchBlock::OpBOr(1.0.into(), 0.0.into())),
+            set(18, ScratchBlock::OpBOr(0.0.into(), 1.0.into())),
+            set(19, ScratchBlock::OpBOr(0.0.into(), 0.0.into())),
+            // Strings
+            set(20, ScratchBlock::OpBAnd("true".into(), "true".into())),
+            set(21, ScratchBlock::OpBAnd("true".into(), "false".into())),
+            set(22, ScratchBlock::OpBAnd("false".into(), "true".into())),
+            set(23, ScratchBlock::OpBAnd("false".into(), "false".into())),
+            set(24, ScratchBlock::OpBOr("true".into(), "true".into())),
+            set(25, ScratchBlock::OpBOr("true".into(), "false".into())),
+            set(26, ScratchBlock::OpBOr("false".into(), "true".into())),
+            set(27, ScratchBlock::OpBOr("false".into(), "false".into())),
+            set(28, ScratchBlock::OpBNot("true".into())),
+            set(29, ScratchBlock::OpBNot("false".into())),
         ]);
-        assert_eq!(memory[0].convert_to_number(), 1.0);
-        assert_eq!(memory[1].convert_to_number(), 0.0);
-        assert_eq!(memory[2].convert_to_number(), 0.0);
-        assert_eq!(memory[3].convert_to_number(), 0.0);
-        assert_eq!(memory[4].convert_to_number(), 1.0);
-        assert_eq!(memory[5].convert_to_number(), 1.0);
-        assert_eq!(memory[6].convert_to_number(), 1.0);
-        assert_eq!(memory[7].convert_to_number(), 0.0);
+
+        check_and(&memory, 0);
+        check_or(&memory, 4);
+
         assert_eq!(memory[8].convert_to_number(), 0.0);
         assert_eq!(memory[9].convert_to_number(), 1.0);
         assert_eq!(memory[10].convert_to_number(), 0.0);
         assert_eq!(memory[11].convert_to_number(), 1.0);
+
+        check_and(&memory, 12);
+        check_or(&memory, 16);
+        check_and(&memory, 20);
+        check_or(&memory, 24);
+
+        assert_eq!(memory[28].convert_to_number(), 0.0);
+        assert_eq!(memory[29].convert_to_number(), 1.0);
     }
 
     #[test]

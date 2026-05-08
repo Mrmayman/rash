@@ -393,7 +393,7 @@ impl Block {
             "operator_round" => self.c_op_round(ctx),
             "operator_gt" => self.c_op_greater(ctx),
             "operator_lt" => self.c_op_less(ctx),
-            "operator_and" => self.c_op_and(ctx),
+            "operator_and" => Ok(self.c_op_and(ctx)),
             "operator_not" => self.c_op_not(ctx),
             "data_changevariableby" => {
                 let variable = self.get_variable_field()?;

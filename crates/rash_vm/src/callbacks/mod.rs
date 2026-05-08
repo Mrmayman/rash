@@ -196,7 +196,7 @@ pub extern "C" fn op_random(a: f64, b: f64, is_decimal: i64) -> f64 {
 pub unsafe extern "C" fn dbg_log(msg: *mut String, is_const: i64) {
     let msg_val = unsafe { &mut *msg };
     if !msg_val.is_empty() {
-        println!("[info] {msg_val:?}");
+        println!("{} {msg_val:?}", "[say]".bright_black());
     }
     if is_const == 0 {
         unsafe { msg.drop_in_place() };

@@ -128,10 +128,10 @@ pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut String) {
 ///
 /// - If the boolean is true (1), the string will be "true".
 /// - If the boolean is false (0), the string will be "false".
-pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut ScratchObject) {
+pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut String) {
     let obj = ScratchObject::Bool(i1 != 0);
     let string = obj.convert_to_string();
-    unsafe { out.write(ScratchObject::String(string)) }
+    unsafe { out.write(string) }
 }
 
 /// Drops a `ScratchObject` in memory,

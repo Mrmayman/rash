@@ -9,14 +9,14 @@ impl Block {
         Ok(ScratchBlock::OpBNot(bool))
     }
 
-    pub fn c_op_and(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
+    pub fn c_op_and(&self, ctx: &mut CompileContext) -> ScratchBlock {
         let bool1 = self
             .get_number_input(ctx, "OPERAND1")
-            .trace("Block::compile.operator_and.OPERAND1")?;
+            .unwrap_or(false.into());
         let bool2 = self
             .get_number_input(ctx, "OPERAND2")
-            .trace("Block::compile.operator_and.OPERAND2")?;
-        Ok(ScratchBlock::OpBAnd(bool1, bool2))
+            .unwrap_or(false.into());
+        ScratchBlock::OpBAnd(bool1, bool2)
     }
 
     pub fn c_op_greater(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
