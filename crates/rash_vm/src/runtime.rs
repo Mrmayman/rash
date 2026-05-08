@@ -242,7 +242,7 @@ impl ProjectBuilder {
         }
     }
 
-    pub fn finish_sprite(&mut self, sprite: SpriteBuilder) {
+    pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
         // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
 
@@ -262,7 +262,7 @@ impl ProjectBuilder {
         self.runtime.costume_data = costume_intermediate;
     }
 
-    pub fn finish(mut self) -> Runtime {
+    pub fn build(mut self) -> Runtime {
         self.runtime.init();
         self.runtime
     }
@@ -296,13 +296,13 @@ impl Runtime {
         self.threads.extend(green_flags);
     }
 
-    pub fn update(&mut self, graphics: &mut RunState) -> bool {
+    pub fn update(&mut self, state: &mut RunState) -> bool {
         self.sort();
 
         let mut ended_threads = Vec::new();
 
         for (i, thread) in self.threads.iter_mut().enumerate() {
-            let has_ended = unsafe { thread.tick(&self.scripts, graphics) };
+            let has_ended = unsafe { thread.tick(&self.scripts, state) };
             if has_ended {
                 ended_threads.push(i);
             }

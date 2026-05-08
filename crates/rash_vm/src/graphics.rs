@@ -6,9 +6,10 @@ pub struct SpriteId(pub i64);
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
 pub struct CostumeId(pub i32);
 
+/// The global state of the VM at runtime.
 #[derive(Debug, Clone, Default)]
 pub struct RunState {
-    pub graphics: HashMap<SpriteId, SpriteData>,
+    pub sprites: HashMap<SpriteId, SpriteData>,
 }
 
 impl RunState {
@@ -22,7 +23,7 @@ impl RunState {
     }
 
     pub fn go_to(&mut self, id: SpriteId, x: f32, y: f32) {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.x = x;
         state.graphics.y = y;
     }
@@ -35,7 +36,7 @@ impl RunState {
     }
 
     pub fn set_x(&mut self, id: SpriteId, x: f32) {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.x = x;
     }
 
@@ -47,7 +48,7 @@ impl RunState {
     }
 
     pub fn set_y(&mut self, id: SpriteId, y: f32) {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.y = y;
     }
 
@@ -66,12 +67,12 @@ impl RunState {
     }
 
     pub fn get_x(&mut self, id: SpriteId) -> f32 {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.x
     }
 
     pub fn get_y(&mut self, id: SpriteId) -> f32 {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.y
     }
 
@@ -90,18 +91,18 @@ impl RunState {
     }
 
     pub fn change_x(&mut self, id: SpriteId, x: f32) {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.x += x;
     }
 
     pub fn change_y(&mut self, id: SpriteId, y: f32) {
-        let state = self.graphics.get_mut(&id).unwrap();
+        let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.y += y;
     }
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct GraphicsState {
     pub x: f32,
     pub y: f32,
@@ -113,6 +114,22 @@ pub struct GraphicsState {
     pub center_y: f32,
 }
 
+impl Default for GraphicsState {
+    fn default() -> Self {
+        Self {
+            x: 36.0,
+            y: 28.0,
+            size: 100.0,
+            current_costume: CostumeId(0),
+            texture_width: 100.0,
+            texture_height: 100.0,
+            center_x: 0.0,
+            center_y: 0.0,
+        }
+    }
+}
+
+/// The global state of each sprite at runtime.
 #[derive(Clone, Debug, Default)]
 pub struct SpriteData {
     pub graphics: GraphicsState,

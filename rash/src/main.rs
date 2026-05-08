@@ -60,7 +60,7 @@ fn main() {
 pub struct App {
     renderer: Renderer,
     costumes: HashMap<CostumeId, Costume>,
-    graphics: RunState,
+    state: RunState,
     vm: Runtime,
     window: Arc<Window>,
 
@@ -149,7 +149,7 @@ impl App {
             .collect();
         let costumes = costumes?;
 
-        let graphics = vm
+        let sprites = vm
             .sprite_load_info
             .iter()
             .map(|(id, sprite_info)| {
@@ -162,7 +162,7 @@ impl App {
         Ok(Self {
             renderer,
             window,
-            graphics: RunState { graphics },
+            state: RunState { sprites },
             costumes,
             vm,
             surface,
@@ -178,10 +178,10 @@ impl App {
                 window_id,
             } if window_id == self.window.id() => match event {
                 WindowEvent::RedrawRequested => {
-                    let _exited = self.vm.update(&mut self.graphics);
+                    let _exited = self.vm.update(&mut self.state);
 
                     let mut graphics_state: Vec<(&SpriteId, &SpriteData)> =
-                        self.graphics.graphics.iter().collect();
+                        self.state.sprites.iter().collect();
                     graphics_state.sort_by_key(|n| n.0);
 
                     let graphics_state: Vec<GraphicsState> = graphics_state

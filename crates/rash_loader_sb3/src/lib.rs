@@ -214,13 +214,13 @@ impl ProjectLoader {
                 &memory,
             )?;
 
-            builder.finish_sprite(sprite);
+            builder.add_sprite(sprite);
         }
 
         builder.set_costume(costume_names, costume_numbers, costume_hashes, costume_ids);
         builder.set_init_state(state_map);
 
-        Ok(builder.finish())
+        Ok(builder.build())
     }
 
     fn load_costumes(

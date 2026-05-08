@@ -68,8 +68,8 @@ mod tests {
             ]),
             &memory,
         );
-        builder.finish_sprite(sprite1);
-        let mut runtime = builder.finish();
+        builder.add_sprite(sprite1);
+        let mut runtime = builder.build();
 
         let mut num_ticks = 1;
         let mut graphics = RunState::default();
@@ -107,8 +107,8 @@ mod tests {
             ]),
             &memory,
         );
-        builder.finish_sprite(sprite1);
-        let mut runtime = builder.finish();
+        builder.add_sprite(sprite1);
+        let mut runtime = builder.build();
 
         let mut num_ticks = 1;
         let mut graphics = RunState::default();
