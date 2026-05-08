@@ -49,7 +49,9 @@ impl Compiler<'_> {
         // i = 0
         // Note: counter is the `i` here
         let counter = self.constants.get_int(0, builder);
-        builder.ins().jump(loop_block, &[counter, number]);
+        builder
+            .ins()
+            .jump(loop_block, &[counter.into(), number.into()]);
 
         builder.switch_to_block(loop_block);
         // (i < number)
@@ -63,7 +65,7 @@ impl Compiler<'_> {
         //      jump to end_block (break)
         builder
             .ins()
-            .brif(condition, body_block, &[counter], end_block, &[]);
+            .brif(condition, body_block, &[counter.into()], end_block, &[]);
 
         builder.switch_to_block(body_block);
         // i += 1
@@ -99,7 +101,9 @@ impl Compiler<'_> {
         std::mem::swap(&mut inside_types, &mut self.variable_type_data);
         self.code_block = temp_block;
         self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
-        builder.ins().jump(loop_block, &[incremented, number]);
+        builder
+            .ins()
+            .jump(loop_block, &[incremented.into(), number.into()]);
         // // builder.seal_block(body_block);
         // builder.seal_block(loop_block);
 

@@ -14,8 +14,9 @@ mod stack_cache;
 mod tests;
 
 pub use compiler::{ScratchBlock, MEMORY};
+pub use data_types::ScratchObject;
 pub use graphics::{
     CostumeData, CostumeId, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData,
 };
-pub use input_primitives::{Input, Ptr};
-pub use runtime::Runtime;
+pub use input_primitives::{Input, Ptr, STRINGS_TO_DROP};
+pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};

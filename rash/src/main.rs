@@ -2,7 +2,11 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use rash_loader_sb3::ProjectLoader;
 use rash_render::{Costume, Renderer, WindowSize};
-use rash_vm::{CostumeId, GraphicsState, RunState, Runtime, SpriteData, SpriteId, SpriteLoadData};
+use rash_vm::{
+    CostumeId, GraphicsState, MEMORY, ProjectBuilder, RunState, Runtime, STRINGS_TO_DROP,
+    ScratchBlock, ScratchObject, SpriteBuilder, SpriteData, SpriteId, SpriteLoadData,
+    runtime::Script,
+};
 use svg_render::SvgRenderer;
 use winit::{
     event::{Event, WindowEvent},
@@ -20,6 +24,10 @@ fn main() {
     let path = if let Some(arg) = std::env::args().nth(1) {
         if arg == "--help" {
             println!("{HELP_MSG}");
+            return;
+        } else if arg == "--demo" {
+            run_demo();
+            print_memory();
             return;
         } else {
             PathBuf::from(arg)
@@ -55,6 +63,8 @@ fn main() {
             _ => app.tick(event),
         })
         .unwrap();
+
+    drop_strings();
 }
 
 pub struct App {
@@ -232,5 +242,62 @@ fn graphics(sprite_info: &SpriteLoadData, costume_info: &Costume) -> GraphicsSta
         current_costume: sprite_info.costume,
         center_x: costume_info.rotation_center_x as f32,
         center_y: costume_info.rotation_center_y as f32,
+    }
+}
+
+fn run_demo() {
+    // TODO: All memory is a global variable
+    // I *will* refactor this in the future
+    let memory = MEMORY.lock().unwrap();
+
+    let mut sprite = SpriteBuilder::new(SpriteId(0));
+    let n = true.into();
+    sprite.add_script(
+        &Script::new_green_flag(vec![
+            ScratchBlock::Log("Hello World".into()),
+            ScratchBlock::Log(ScratchBlock::OpBNot(n).into()),
+        ]),
+        &memory,
+    );
+    let mut builder = ProjectBuilder::new();
+    builder.add_sprite(sprite);
+    let mut vm = builder.build();
+    let mut state = RunState {
+        // We won't do any graphics operations here
+        sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
+    };
+
+    while !vm.update(&mut state) {}
+}
+
+fn print_memory() {
+    let lock = rash_vm::MEMORY.lock().unwrap();
+
+    println!("MEMORY: {:X}", lock.as_ptr() as usize);
+
+    // Only print the changed values that aren't zero.
+    let print_until_idx = lock
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, n)| !matches!(**n, ScratchObject::Number(0.0)))
+        .map(|(i, _)| i);
+    if let Some(print_until_idx) = print_until_idx {
+        for (i, obj) in lock.iter().enumerate().take(print_until_idx + 1) {
+            println!("{i}: {obj:?}");
+        }
+    }
+    println!("...: {:?}", ScratchObject::Number(0.0));
+}
+
+fn drop_strings() {
+    let mut strings_buf = STRINGS_TO_DROP.lock().unwrap();
+    let s: &mut Vec<[i64; 3]> = strings_buf.as_mut();
+    let strings = std::mem::take(s);
+
+    for string in strings {
+        let _string: String = unsafe { std::mem::transmute(string) };
+        // println!("Dropping string {_string}");
+        // Drop string
     }
 }

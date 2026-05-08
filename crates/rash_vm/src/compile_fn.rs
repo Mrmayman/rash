@@ -4,7 +4,7 @@ use cranelift::{
     codegen::{
         self,
         control::ControlPlane,
-        ir::{Function, UserFuncName},
+        ir::{types::I8, Function, UserFuncName},
     },
     prelude::{
         isa::{self, CallConv, TargetIsa},
@@ -49,15 +49,15 @@ pub fn compile(
     builder.append_block_params_for_function_params(jmp2_block);
     builder.switch_to_block(jmp2_block);
 
-    let jump_id = builder.block_params(jmp2_block)[0];
+    let fn_args = builder.block_params(jmp2_block);
+    let jump_id = fn_args[0];
 
-    let repeat_stack_ptr = builder.block_params(jmp2_block)[1];
-    let args_ptr = builder.block_params(jmp2_block)[2];
-    let script_ptr = builder.block_params(jmp2_block)[3];
-    let graphics_ptr = builder.block_params(jmp2_block)[4];
+    let repeat_stack_ptr = fn_args[1];
+    let args_ptr = fn_args[2];
+    let script_ptr = fn_args[3];
+    let graphics_ptr = fn_args[4];
 
-    let is_called_as_refresh = builder.block_params(jmp2_block)[5];
-    let child_thread_ptr = builder.block_params(jmp2_block)[6];
+    let child_thread_ptr = fn_args[6];
 
     // For a function to be screen-refresh capable
     // (pausable), it must both inherently be screen refresh
@@ -66,9 +66,9 @@ pub fn compile(
     // If a pausable function is called by a non-pausable
     // function then it will run as non-pausable.
     let is_called_as_refresh = if is_screen_refresh {
-        is_called_as_refresh
+        fn_args[5]
     } else {
-        builder.ins().iconst(I64, 0)
+        builder.ins().iconst(I8, 0)
     };
 
     let mut args_list = Vec::new();
@@ -81,7 +81,7 @@ pub fn compile(
         args_list.push([i1, i2, i3, i4]);
     }
 
-    builder.ins().jump(jmp1_block, &[jump_id]);
+    builder.ins().jump(jmp1_block, &[jump_id.into()]);
 
     let code_block = builder.create_block();
     builder.switch_to_block(code_block);
@@ -155,7 +155,9 @@ fn prepare_screen_refresh_points(
         let cmp = builder.ins().icmp_imm(IntCC::Equal, param, i as i64);
         jmp1_block = builder.create_block();
         builder.append_block_param(jmp1_block, I64);
-        builder.ins().brif(cmp, *point, &[], jmp1_block, &[param]);
+        builder
+            .ins()
+            .brif(cmp, *point, &[], jmp1_block, &[param.into()]);
     }
 
     builder.switch_to_block(jmp1_block);
@@ -181,7 +183,7 @@ fn create_function(isa: &dyn TargetIsa) -> Function {
     sig.params.push(AbiParam::new(I64)); // Args pointer
     sig.params.push(AbiParam::new(I64)); // Scripts
     sig.params.push(AbiParam::new(I64)); // RunState
-    sig.params.push(AbiParam::new(I64)); // Is Screen Refresh?
+    sig.params.push(AbiParam::new(I8)); // Is Screen Refresh?
     sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)
     sig.returns.push(AbiParam::new(I64));
     Function::with_name_signature(UserFuncName::default(), sig)

@@ -9,112 +9,45 @@ use crate::{
     graphics::{CostumeData, CostumeHash, CostumeId, RunState, SpriteId, SpriteLoadData},
 };
 
-/// The signature of the JIT-compiled function that
-/// runs Scratch code.
-///
-/// # Arguments
-/// ## `i64`: Jump ID
-/// Some scratch functions can pause.
-/// In that case, it returns a number representing
-/// where it paused. You pass that number to it again
-/// to continue the function from that point.
-///
-/// Default: `0`
-///
-/// ## `*mut Vec<i64>`: The loop stack
-/// This represents what loop we're inside and how
-/// much progress out of how much is done inside that loop.
-/// Usually it's empty but if the function pauses inside
-/// a loop, it will have contents.
-///
-/// Can be `null` if the function doesn't pause.
-///
-/// For example:
-///
-/// ```no_run
-/// # fn repeat(_: usize) {}
-/// repeat(10) {
-///     repeat(15) {
-///         // stack =
-///         // 3, 10 <- (done (3 for example), out of)
-///         // 5, 15
-///     }
-///     // stack =
-///     // 3, 10 <- (done (3 for example), out of)
-///
-///     // We finished the inner `repeat 15` loop,
-///     // so now there's just 2 entries (1 loop)
-///     // left
-/// }
-/// ```
-///
-/// ## `*const ScratchObject`
-/// The arguments to the function if it is a custom block.
-///
-/// Can be `null` if there aren't any arguments
-/// (don't worry, the function will figure out for itself).
-///
-/// This is a pointer to the first item (easier to handle in machine code),
-/// the function will automatically offset and call the next items as necessary
-///
-/// ## `*const Scripts`: Ready-made Scripts for running
-/// A handle to the [`Scripts`]. This is used for "spawning"
-/// Custom Blocks to be called, ie. getting a handle to another JIT
-/// function to be called from a JIT function.
-///
-/// Can be `null` if you aren't calling other Custom Blocks (functions)
-/// from your Scratch code.
-///
-/// ## `*mut RunState`: Running (and graphics) state.
-/// Primarily used for managing the graphical state of the project.
-/// Sprite positioning, scaling, colors, costumes and so on.
-///
-/// Can be `null` if you aren't doing any graphics operations.
-///
-/// ## `i64`: Is Screen Refresh (Pausable)
-/// Yes (recommended default) if `1`, No (faster) if `0`.
-/// This is `i64` instead of `bool` for easy ABI handling in machine code.
-///
-/// If it is screen refresh, the function **is capable**
-/// of pausing and resuming from within like a coroutine.
-///
-/// More explanation above in the comment for first argument.
-///
-/// ## `*mut Option<ScratchThread>`: The "Child" function to be called
-///
-/// Must point to a valid `None` if not used. **Cannot be null!**.
-///
-/// Let's say we have a function `a` that calls function `b`.
-///
-/// ```no_run
-/// # fn repeat(_: usize) {}
-/// fn a() {
-///     b()
-/// }
-/// fn b() {
-///     repeat(5) {
-///         // do something
-///         yield; // screen refresh
-///     }
-/// }
-/// ```
-///
-/// If function `b` pauses (the screen refresh or `yield`), while
-/// called by function `a`, then function `a` stores the `b`
-/// [`ScratchThread`] inside this `Option` (which is `None` by default),
-/// then function `a` also pauses.
-///
-/// Later when the scheduler continues `a`, it will see the child thread `b`
-/// and resume from there.
-pub type ScratchFunction = unsafe extern "C" fn(
-    i64, // Jump ID
-    *mut Vec<i64>,
+#[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
+type JitFunction = unsafe extern "C" fn(
+    JumpId,
+    *mut Vec<LoopFrame>,
     *const ScratchObject,
     *const Scripts,
     *mut RunState,
-    i64, // Is screen refresh
+    bool, // Is screen refresh
     *mut Option<ScratchThread>,
-) -> i64;
+) -> JumpId;
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+struct JumpId(i64);
+
+impl JumpId {
+    const DONE: Self = Self(-1);
+
+    fn is_done(self) -> bool {
+        self == Self::DONE
+    }
+}
+
+impl Debug for JumpId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_done() {
+            write!(f, "JumpId(finished)")
+        } else {
+            f.debug_tuple("JumpId").field(&self.0).finish()
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct LoopFrame {
+    pub done: i64,
+    pub out_of: i64,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
@@ -274,12 +207,12 @@ impl ProjectBuilder {
 
 pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
-    pub threads: Vec<ScratchThread>,
-    pub scripts: Scripts,
+    threads: Vec<ScratchThread>,
+    scripts: Scripts,
 
-    pub costume_names: HashMap<(SpriteId, String), CostumeHash>,
-    pub costume_numbers: HashMap<(SpriteId, usize), CostumeHash>,
-    pub costume_hashes: HashMap<CostumeHash, CostumeId>,
+    costume_names: HashMap<(SpriteId, String), CostumeHash>,
+    costume_numbers: HashMap<(SpriteId, usize), CostumeHash>,
+    costume_hashes: HashMap<CostumeHash, CostumeId>,
     pub costume_data: HashMap<CostumeId, CostumeData>,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
@@ -343,21 +276,24 @@ pub struct ScratchThread {
     is_screen_refresh: bool,
     arguments: Vec<ScratchObject>,
 
-    stack_repeat: Vec<i64>,
-    jumped_point: i64,
+    stack_repeat: Vec<LoopFrame>,
+    jumped_point: JumpId,
     child_thread: Box<Option<ScratchThread>>,
 
     buffer: Arc<Mmap>,
-    func: ScratchFunction,
+    func: JitFunction,
 }
 
 impl Debug for ScratchThread {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "ScratchThread {{ {:?}, jumped_point: {} }}",
-            self.sprite_id, self.jumped_point
-        )
+        f.debug_struct("ScratchThread")
+            .field("sprite_id", &self.sprite_id)
+            .field("is_screen_refresh", &self.is_screen_refresh)
+            .field("arguments", &self.arguments)
+            .field("stack_repeat", &self.stack_repeat)
+            .field("jumped_point", &self.jumped_point)
+            .field("child_thread", &self.child_thread)
+            .finish_non_exhaustive()
     }
 }
 
@@ -369,7 +305,7 @@ impl ScratchThread {
             buffer: self.buffer.clone(),
             stack_repeat: Vec::new(),
             func: self.func,
-            jumped_point: 0,
+            jumped_point: JumpId::default(),
             sprite_id: self.sprite_id,
             is_screen_refresh,
             child_thread: Box::new(None),
@@ -389,13 +325,13 @@ impl ScratchThread {
         // Safety:
         // If the cranelift compiler is working properly (I hope!)
         // then this should be safe, as it is a valid function.
-        let func: ScratchFunction = unsafe { std::mem::transmute(buffer.as_ptr()) };
+        let func: JitFunction = unsafe { std::mem::transmute(buffer.as_ptr()) };
 
         Self {
             buffer: buffer.into(),
             stack_repeat: Vec::new(),
             func,
-            jumped_point: 0,
+            jumped_point: JumpId::default(),
             sprite_id,
             is_screen_refresh,
             child_thread: Box::new(None),
@@ -415,10 +351,8 @@ impl ScratchThread {
     ///   may result in panics or undefined behaviour).
     /// - There hopefully aren't any compiler bugs
     ///   creating broken code
-    pub unsafe fn tick(&mut self, scripts: &Scripts, graphics: &mut RunState) -> bool {
-        const DONE: i64 = -1;
-
-        if self.jumped_point == DONE {
+    pub unsafe fn tick(&mut self, scripts: &Scripts, state: &mut RunState) -> bool {
+        if self.jumped_point.is_done() {
             return true;
         }
 
@@ -426,7 +360,7 @@ impl ScratchThread {
         // running a child thread which also paused,
         // then tick the child thread instead until it ends,
         if let Some(thread) = &mut *self.child_thread {
-            let child_ended = thread.tick(scripts, graphics);
+            let child_ended = thread.tick(scripts, state);
             if child_ended {
                 *self.child_thread = None;
             } else {
@@ -438,19 +372,15 @@ impl ScratchThread {
             (self.func)(
                 self.jumped_point,
                 &mut self.stack_repeat,
-                if self.arguments.is_empty() {
-                    std::ptr::null()
-                } else {
-                    self.arguments.as_ptr()
-                },
+                self.arguments.as_ptr(),
                 scripts,
-                graphics,
-                self.is_screen_refresh as i64,
+                state,
+                self.is_screen_refresh,
                 &mut *self.child_thread,
             )
         };
         self.jumped_point = result;
 
-        result == DONE
+        result.is_done()
     }
 }

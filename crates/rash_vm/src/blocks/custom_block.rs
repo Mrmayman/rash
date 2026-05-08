@@ -1,5 +1,6 @@
-use cranelift::prelude::{
-    types::I64, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+use cranelift::{
+    codegen::ir::types::I8,
+    prelude::{types::I64, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value},
 };
 
 use crate::{
@@ -28,6 +29,7 @@ impl Compiler<'_> {
             kind: StackSlotKind::ExplicitSlot,
             size: (std::mem::size_of::<ScratchObject>() * args.len()) as u32,
             align_shift: 0,
+            key: None,
         });
         for [i1, i2, i3, i4] in args {
             builder.ins().stack_store(i1, stack_slot, 0);
@@ -41,7 +43,7 @@ impl Compiler<'_> {
             let inst = self.call_function(
                 builder,
                 callbacks::custom_block::call_screen_refresh as *const (),
-                &[I64, I64, I64, I64, I64, I64],
+                &[I64, I64, I64, I64, I64, I8],
                 &[I64],
                 &[
                     slot_ptr,

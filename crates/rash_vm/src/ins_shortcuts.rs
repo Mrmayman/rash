@@ -39,6 +39,7 @@ impl Compiler<'_> {
             kind: StackSlotKind::ExplicitSlot,
             size: 2 * std::mem::size_of::<i64>() as u32,
             align_shift: 0,
+            key: None,
         });
         let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 

@@ -42,7 +42,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     scripts: *const Scripts,
     graphics: *mut RunState,
     child_thread: *mut Option<ScratchThread>,
-    parent_is_screen_refresh: i64,
+    parent_is_screen_refresh: bool,
 ) -> PauseStatus {
     debug_assert!(!arg_buffer.is_null());
     debug_assert!(!scripts.is_null());
@@ -62,7 +62,7 @@ pub unsafe extern "C" fn call_screen_refresh(
         )
     };
 
-    let is_screen_refresh = parent_is_screen_refresh == 1 && script.is_screen_refresh;
+    let is_screen_refresh = parent_is_screen_refresh && script.is_screen_refresh;
 
     let args = unsafe { vec_from_raw(arg_buffer, script.num_args) };
     let mut script = script.thread.spawn(is_screen_refresh, args);

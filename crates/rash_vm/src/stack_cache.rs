@@ -61,6 +61,7 @@ impl StackCache {
             kind: StackSlotKind::ExplicitSlot,
             size: variable_offsets.len() as u32 * 4 * std::mem::size_of::<i64>() as u32,
             align_shift: 0,
+            key: None,
         });
         Self {
             slot,

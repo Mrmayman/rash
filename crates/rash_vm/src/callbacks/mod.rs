@@ -6,6 +6,7 @@
 use core::f64;
 
 use crate::data_types::ScratchObject;
+use colored::Colorize;
 use rand::Rng;
 
 pub mod custom_block;

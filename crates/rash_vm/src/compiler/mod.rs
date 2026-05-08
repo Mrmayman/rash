@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
 
 use cranelift::{
     codegen::ir::SigRef,
@@ -7,7 +10,6 @@ use cranelift::{
         Block, FunctionBuilder, InstBuilder, Signature, StackSlotData, StackSlotKind, Value,
     },
 };
-use lazy_static::lazy_static;
 
 use crate::{
     callbacks,
@@ -21,10 +23,8 @@ use crate::{
 
 mod display;
 
-lazy_static! {
-    pub static ref MEMORY: Mutex<Box<[ScratchObject]>> =
-        Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice());
-}
+pub static MEMORY: LazyLock<Mutex<Box<[ScratchObject]>>> =
+    LazyLock::new(|| Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice()));
 
 #[allow(unused)]
 #[derive(Debug, PartialEq)]
