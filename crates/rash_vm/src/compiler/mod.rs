@@ -362,7 +362,7 @@ pub(crate) struct Compiler<'compiler> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```txt
     /// # fn repeat(_: usize) {}
     /// repeat(10) {
     ///     repeat(15) {
@@ -378,36 +378,9 @@ pub(crate) struct Compiler<'compiler> {
     /// This is used with [`ScratchBlock::ControlRepeat`] and [`ScratchBlock::ControlRepeatUntil`]
     pub repeat_stack: usize,
 
-    /// A [`Value`] of `*mut Vec<i64>` representing the stack
+    /// A [`Value`] of `*mut Vec<LoopFrame>` representing the stack
     /// of loops. This is a **compile-time handle to a runtime
-    /// value**.
-    ///
-    /// For example:
-    ///
-    /// ```no_run
-    /// # fn repeat(_: usize) {}
-    /// repeat(10) {
-    ///     repeat(15) {
-    ///         // stack =
-    ///         // 3, 10 <- (done (3 for example), out of)
-    ///         // 5, 15
-    ///     }
-    ///     // stack =
-    ///     // 3, 10 <- (done (3 for example), out of)
-    ///
-    ///     // We finished the inner `repeat 15` loop,
-    ///     // so now there's just 2 entries (1 loop)
-    ///     // left
-    /// }
-    /// ```
-    ///
-    /// This is only used in Screen Refresh functions,
-    /// ie. functions that can pause. This is used to
-    /// store the state of the loop when the function
-    /// pauses, and later pop it back.
-    ///
-    /// If the function isn't Screen Refresh (can't pause),
-    /// this is never used.
+    /// value**. See `docs/JIT_SIGNATURE.md` for more info.
     pub loop_stack_ptr: Value,
     pub script_ptr: Value,
     pub graphics_ptr: Value,

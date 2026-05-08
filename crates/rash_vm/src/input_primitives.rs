@@ -63,12 +63,11 @@ impl Ptr {
 ///
 /// # Examples
 /// ```no_run
-/// ScratchBlock::SetVar(Ptr(0), Input::new_num(5.0));
-/// ScratchBlock::ChangeVar(
+/// # use rash_vm::{Input, Ptr, ScratchBlock};
+/// ScratchBlock::VarSet(Ptr(0), 5.0.into());
+/// ScratchBlock::VarChange(
 ///     Ptr(1),
-///     Input::new_block(
-///         ScratchBlock::Add(Input::new_num(5.0), Input::new_num(3.0))
-///     )
+///     ScratchBlock::OpAdd(5.0.into(), 3.0.into()).into()
 /// );
 /// ```
 #[derive(Debug, PartialEq)]

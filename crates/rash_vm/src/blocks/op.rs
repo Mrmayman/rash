@@ -20,8 +20,7 @@ impl Compiler<'_> {
             &[F64],
             &[num],
         );
-        let result = builder.inst_results(inst)[0];
-        result
+        builder.inst_results(inst)[0]
     }
 
     pub fn op_m_cos(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
@@ -33,8 +32,7 @@ impl Compiler<'_> {
             &[F64],
             &[num],
         );
-        let result = builder.inst_results(inst)[0];
-        result
+        builder.inst_results(inst)[0]
     }
 
     pub fn op_m_sin(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
@@ -46,27 +44,23 @@ impl Compiler<'_> {
             &[F64],
             &[num],
         );
-        let result = builder.inst_results(inst)[0];
-        result
+        builder.inst_results(inst)[0]
     }
 
     pub fn op_m_sqrt(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let sqrt = builder.ins().sqrt(num);
-        sqrt
+        builder.ins().sqrt(num)
     }
 
     pub fn op_m_abs(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let abs = builder.ins().fabs(num);
-        abs
+        builder.ins().fabs(num)
     }
 
     pub fn op_b_or(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_bool(self, builder);
         let b = b.get_bool(self, builder);
-        let res = builder.ins().bor(a, b);
-        res
+        builder.ins().bor(a, b)
     }
 
     pub fn op_b_not(&mut self, a: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
@@ -78,8 +72,7 @@ impl Compiler<'_> {
     pub fn op_b_and(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_bool(self, builder);
         let b = b.get_bool(self, builder);
-        let res = builder.ins().band(a, b);
-        res
+        builder.ins().band(a, b)
     }
 
     pub fn op_cmp_lt(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
@@ -188,8 +181,7 @@ impl Compiler<'_> {
         let floor_div = self.floor_call(div, builder);
 
         let decimal_part = builder.ins().fsub(div, floor_div);
-        let modulo = builder.ins().fmul(decimal_part, b);
-        modulo
+        builder.ins().fmul(decimal_part, b)
     }
 
     /// Calls the rust [`f64::floor`] function.

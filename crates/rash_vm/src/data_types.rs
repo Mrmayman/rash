@@ -51,7 +51,7 @@ pub const ID_STRING: i64 = 1;
 pub const ID_BOOL: i64 = 2;
 
 // I know #[derive(Clone)] does the same thing.
-// But this made it faster by 20 milliseconds
+// But this made it faster
 impl Clone for ScratchObject {
     fn clone(&self) -> Self {
         match *self {
@@ -90,8 +90,10 @@ impl ScratchObject {
 
     /// Gets a number from a `ScratchObject` using implicit convertion.
     /// Supports `0x` hexadecimal and `0b` binary literal strings.
+    ///
     /// # Examples
     /// ```
+    /// # use rash_vm::ScratchObject;
     /// assert_eq!(ScratchObject::Number(2.0).convert_to_number(), 2.0);
     /// assert_eq!(ScratchObject::String("5".to_owned()).convert_to_number(), 5.0);
     /// assert_eq!(ScratchObject::String("0x10".to_owned()).convert_to_number(), 16.0);
@@ -125,16 +127,25 @@ impl ScratchObject {
     }
 
     /// Gets a bool from a `ScratchObject` using implicit convertion.
+    ///
     /// # Rules
-    /// * All non zero and NaN numbers are truthy.
-    /// * All strings except for "false" and "0" are truthy.
+    /// - All non zero and NaN numbers are truthy.
+    /// - All strings except for "false" and "0" are truthy.
+    ///
     /// # Examples
     /// ```
+    /// # use rash_vm::ScratchObject;
     /// assert_eq!(ScratchObject::Number(1.0).convert_to_bool(), true);
-    /// assert_eq!(ScratchObject::Number(std::f64::NAN).convert_to_bool(), false);
+    /// assert_eq!(
+    ///     ScratchObject::Number(std::f64::NAN).convert_to_bool(),
+    ///     false
+    /// );
     /// assert_eq!(ScratchObject::Number(0.0).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::Number(-0.0).convert_to_bool(), true);
-    /// assert_eq!(ScratchObject::String("true".to_owned()).convert_to_bool(), true);
+    /// assert_eq!(
+    ///     ScratchObject::String("true".to_owned()).convert_to_bool(),
+    ///     true
+    /// );
     /// assert_eq!(ScratchObject::String("something".to_owned()).convert_to_bool(), true);
     /// assert_eq!(ScratchObject::String("false".to_owned()).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::String("0".to_owned()).convert_to_bool(), false);
@@ -146,7 +157,7 @@ impl ScratchObject {
     #[inline]
     pub fn convert_to_bool(&self) -> bool {
         match self {
-            ScratchObject::Number(n) => !(*n == 0.0 && n.is_sign_positive()) && !n.is_nan(),
+            ScratchObject::Number(n) => !(n.is_nan() || (*n == 0.0 && n.is_sign_positive())),
             ScratchObject::String(s) => s != "0" && s.to_lowercase() != "false" && !s.is_empty(),
             ScratchObject::Bool(b) => *b,
         }
@@ -154,12 +165,13 @@ impl ScratchObject {
 
     /// Converts a `ScratchObject` to a string.
     ///
-    /// Not to be confused with [`ScratchObject::to_string`]
+    /// Not to be confused with any `Display` implementations
     /// as that is for pretty-printing whereas this is for conversion
     /// in the actual interpreter.
     ///
     /// # Examples
     /// ```
+    /// # use rash_vm::ScratchObject;
     /// assert_eq!(ScratchObject::Number(0.0).convert_to_string(), "0");
     /// assert_eq!(ScratchObject::Number(6.9).convert_to_string(), "6.9");
     /// assert_eq!(ScratchObject::Number(2e22).convert_to_string(), "2e+22");

@@ -155,24 +155,14 @@ impl SpriteBuilder {
     }
 }
 
+#[derive(Default)]
 pub struct ProjectBuilder {
     runtime: Runtime,
 }
 
 impl ProjectBuilder {
     pub fn new() -> Self {
-        Self {
-            runtime: Runtime {
-                sprite_order: Vec::new(),
-                threads: Vec::new(),
-                scripts: Scripts::default(),
-                costume_names: HashMap::new(),
-                costume_numbers: HashMap::new(),
-                costume_hashes: HashMap::new(),
-                costume_data: HashMap::new(),
-                sprite_load_info: HashMap::new(),
-            },
-        }
+        Self::default()
     }
 
     pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
@@ -205,6 +195,7 @@ impl ProjectBuilder {
     }
 }
 
+#[derive(Default)]
 pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
     threads: Vec<ScratchThread>,

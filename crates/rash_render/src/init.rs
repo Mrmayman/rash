@@ -20,7 +20,7 @@ impl Renderer {
     ) -> Self {
         let WindowSize { width, height } = window_size;
 
-        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_caps = surface.get_capabilities(adapter);
         // Shader code here assumes an sRGB surface texture. Using a different
         // one will result in all the colors coming out darker. If you want to support non
         // sRGB surfaces, you'll need to account for that when drawing to the frame.
