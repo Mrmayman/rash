@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_vm::GraphicsState;
+use rash_vm::{GraphicsState, RunState, Runtime, SpriteData, SpriteLoadData};
+use svg_render::SvgRenderer;
 use wgpu::util::DeviceExt;
 
 use crate::WindowSize;
@@ -8,15 +10,16 @@ use crate::WindowSize;
 use super::texture::Costume;
 use super::to_bytes;
 
-use super::{buffers::GlobalBuffer, Renderer};
+use super::{Renderer, buffers::GlobalBuffer};
 
 impl Renderer {
     pub async fn new(
         window_size: WindowSize,
-        num_sprites: usize,
+        vm: &Runtime,
         surface: &wgpu::Surface<'_>,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> Self {
         let WindowSize { width, height } = window_size;
 
@@ -90,12 +93,12 @@ impl Renderer {
             ],
         });
 
-        let costume_bind_group_layout = Costume::get_bind_group_layout(device);
+        let costume_layout = Costume::get_bind_group_layout(device);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&bind_group_layout, &costume_bind_group_layout],
+                bind_group_layouts: &[&bind_group_layout, &costume_layout],
                 immediate_size: 0,
             });
 
@@ -136,14 +139,11 @@ impl Renderer {
             cache: None,
         });
 
-        let sprites_state = vec![GraphicsState::default(); num_sprites];
+        let sprites_state = vec![GraphicsState::default(); vm.sprite_load_info.len()];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),
-            contents: to_bytes(
-                sprites_state.as_slice(),
-                sprites_state.len() * std::mem::size_of::<GraphicsState>(),
-            ),
+            contents: to_bytes(sprites_state.as_slice()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -152,7 +152,7 @@ impl Renderer {
         };
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Global Buffer"),
-            contents: to_bytes(&global_state, std::mem::size_of::<GlobalBuffer>()),
+            contents: to_bytes(&[global_state]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -173,6 +173,54 @@ impl Renderer {
 
         let sampler = Costume::create_sampler(device);
 
+        let svg_renderer = SvgRenderer::new();
+
+        let costumes: Result<HashMap<_, _>, Box<dyn std::error::Error>> = vm
+            .costume_data
+            .iter()
+            .map(|(id, costume)| {
+                if costume.is_svg
+                    && let Ok(svg_text) = String::from_utf8(costume.bytes.clone())
+                {
+                    let img = svg_renderer.render(&svg_text)?;
+
+                    return Ok((
+                        *id,
+                        Costume::from_image(
+                            costume,
+                            &device,
+                            queue,
+                            &img,
+                            &sampler,
+                            &costume_layout,
+                        ),
+                    ));
+                }
+
+                Ok(
+                    Costume::from_bytes(costume, device, queue, &sampler, &costume_layout)
+                        .map(|n| (*id, n))?,
+                )
+            })
+            .collect();
+        let costumes = match costumes {
+            Ok(n) => n,
+            Err(err) => {
+                eprintln!("While loading costumes: {err}");
+                HashMap::new()
+            }
+        };
+
+        let sprites = vm
+            .sprite_load_info
+            .iter()
+            .map(|(id, sprite_info)| {
+                let costume = costumes.get(&sprite_info.costume).unwrap();
+                let graphics = graphics(sprite_info, costume);
+                (*id, SpriteData { graphics })
+            })
+            .collect();
+
         Self {
             render_pipeline,
             config,
@@ -181,9 +229,24 @@ impl Renderer {
             sprites_buffer,
             global_state,
             global_buffer,
-            sampler,
-            costume_layout: costume_bind_group_layout,
             last_time: Instant::now(),
+            costumes,
+            state: RunState { sprites },
         }
+    }
+}
+
+fn graphics(sprite_info: &SpriteLoadData, costume_info: &Costume) -> GraphicsState {
+    GraphicsState {
+        x: sprite_info.x as f32,
+        y: sprite_info.y as f32,
+        texture_width: costume_info.texture_width as f32,
+        texture_height: costume_info.texture_height as f32,
+        size: sprite_info.size as f32,
+        current_costume: sprite_info.costume,
+        center_x: costume_info.rotation_center_x as f32,
+        center_y: costume_info.rotation_center_y as f32,
+        shown: i32::from(sprite_info.shown),
+        padding: [0; _],
     }
 }

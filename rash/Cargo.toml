@@ -7,7 +7,6 @@ edition = "2024"
 rash_render.path = "../crates/rash_render"
 rash_vm.path = "../crates/rash_vm"
 rash_loader_sb3.path = "../crates/rash_loader_sb3"
-svg_render.path = "../crates/svg_render"
 
 wgpu.workspace = true
 winit = "0.29.*"

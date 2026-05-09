@@ -7,6 +7,7 @@ use crate::{
     compiler::ScratchBlock,
     data_types::ScratchObject,
     graphics::{CostumeData, CostumeHash, CostumeId, RunState, SpriteId, SpriteLoadData},
+    input_primitives::STRINGS_TO_DROP,
 };
 
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
@@ -374,5 +375,19 @@ impl ScratchThread {
         self.jumped_point = result;
 
         result.is_done()
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        let mut strings_buf = STRINGS_TO_DROP.lock().unwrap();
+        let s: &mut Vec<[i64; 3]> = strings_buf.as_mut();
+        let strings = std::mem::take(s);
+
+        for string in strings {
+            let _string: String = unsafe { std::mem::transmute(string) };
+            // println!("Dropping string {_string}");
+            // Drop string
+        }
     }
 }

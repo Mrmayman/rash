@@ -18,5 +18,5 @@ pub use data_types::ScratchObject;
 pub use graphics::{
     CostumeData, CostumeId, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData,
 };
-pub use input_primitives::{Input, Ptr, STRINGS_TO_DROP};
+pub use input_primitives::{Input, Ptr};
 pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};

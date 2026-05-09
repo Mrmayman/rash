@@ -1,6 +1,8 @@
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
-use crate::buffers::GlobalBuffer;
+use rash_vm::{CostumeId, RunState};
+
+use crate::{buffers::GlobalBuffer, texture::Costume};
 
 #[derive(Clone, Copy)]
 pub struct WindowSize {
@@ -15,22 +17,21 @@ mod init;
 mod texture;
 mod tick;
 
-pub use texture::Costume;
-
-fn to_bytes<T: ?Sized>(s: &T, size: usize) -> &[u8] {
-    let ptr = s as *const T as *const u8;
-    unsafe { std::slice::from_raw_parts(ptr, size) }
+fn to_bytes<T>(s: &[T]) -> &[u8] {
+    let ptr = s.as_ptr().cast();
+    unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of_val(s)) }
 }
 
 pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
-    window_size: WindowSize,
     render_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     sprites_buffer: wgpu::Buffer,
     global_buffer: wgpu::Buffer,
+
+    window_size: WindowSize,
     global_state: GlobalBuffer,
     last_time: Instant,
-    pub sampler: wgpu::Sampler,
-    pub costume_layout: wgpu::BindGroupLayout,
+    costumes: HashMap<CostumeId, Costume>,
+    pub state: RunState,
 }

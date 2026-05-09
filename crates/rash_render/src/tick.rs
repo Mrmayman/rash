@@ -1,14 +1,11 @@
-use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_vm::{CostumeId, GraphicsState, SpriteId};
+use rash_vm::{GraphicsState, SpriteId};
 
+use super::to_bytes;
 use crate::WindowSize;
 
-use super::texture::Costume;
-use super::to_bytes;
-
-use super::{buffers::GlobalBuffer, Renderer};
+use super::Renderer;
 
 impl Renderer {
     pub fn resize(
@@ -30,18 +27,13 @@ impl Renderer {
     }
 
     fn update_global_state(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(
-            &self.global_buffer,
-            0,
-            to_bytes(&self.global_state, std::mem::size_of::<GlobalBuffer>()),
-        );
+        queue.write_buffer(&self.global_buffer, 0, to_bytes(&[self.global_state]));
     }
 
     fn render_inner(
         &mut self,
         sprite_order: &[SpriteId],
         graphics: &[GraphicsState],
-        costume: &HashMap<CostumeId, Costume>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
@@ -82,7 +74,7 @@ impl Renderer {
                 }
 
                 let costume_id = state.current_costume;
-                let costume = costume.get(&costume_id).unwrap();
+                let costume = self.costumes.get(&costume_id).unwrap();
                 render_pass.set_bind_group(1, &costume.bind_group, &[]);
 
                 let i = i.0 as u32 * 6;
@@ -99,21 +91,19 @@ impl Renderer {
 
     pub fn render(
         &mut self,
-        graphics: &[GraphicsState],
         sprite_order: &[SpriteId],
-        costumes: &HashMap<CostumeId, Costume>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
     ) {
-        queue.write_buffer(
-            &self.sprites_buffer,
-            0,
-            to_bytes(graphics, std::mem::size_of_val(graphics)),
-        );
+        let mut graphics: Vec<(_, _)> = self.state.sprites.iter().collect();
+        graphics.sort_by_key(|n| n.0);
+        let graphics: Vec<GraphicsState> = graphics.into_iter().map(|n| n.1.graphics).collect();
 
-        match self.render_inner(sprite_order, graphics, costumes, device, queue, surface) {
-            Ok(_) => {}
+        queue.write_buffer(&self.sprites_buffer, 0, to_bytes(&graphics));
+
+        match self.render_inner(sprite_order, &graphics, device, queue, surface) {
+            Ok(()) => {}
             // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                 self.resize(self.window_size, device, queue, surface);
