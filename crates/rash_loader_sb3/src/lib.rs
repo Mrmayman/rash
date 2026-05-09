@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use json::{Block, JsonBlock, JsonStruct};
 use tempfile::TempDir;
@@ -371,7 +371,6 @@ impl Block {
             "data_setvariableto" => {
                 // self.fields.VARIABLE[1]
                 let variable_id = self.get_variable_field()?;
-
                 let variable_ptr = ctx.get_var(variable_id);
 
                 let value = self
@@ -391,10 +390,13 @@ impl Block {
             "operator_length" => self.c_op_str_length(ctx),
             "operator_mod" => self.c_op_mod(ctx),
             "operator_round" => self.c_op_round(ctx),
-            "operator_gt" => self.c_op_greater(ctx),
-            "operator_lt" => self.c_op_less(ctx),
+            "operator_gt" => self.c_op_cmp(ctx, Ordering::Greater),
+            "operator_lt" => self.c_op_cmp(ctx, Ordering::Less),
+            "operator_equals" => self.c_op_cmp(ctx, Ordering::Equal),
             "operator_and" => Ok(self.c_op_and(ctx)),
+            "operator_or" => Ok(self.c_op_or(ctx)),
             "operator_not" => self.c_op_not(ctx),
+            "operator_mathop" => self.c_op_mathop(ctx),
             "data_changevariableby" => {
                 let variable = self.get_variable_field()?;
                 let value = self

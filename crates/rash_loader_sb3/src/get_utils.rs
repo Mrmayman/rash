@@ -52,18 +52,24 @@ impl Block {
     }
 
     pub fn get_variable_field(&self) -> Res<&str> {
-        Ok(self
+        const F: &str = "Block::get_variable_field";
+        let variable_field = self
             .fields
             .get("VARIABLE")
             .ok_or(RashError::field_not_found("self.fields.VARIABLE"))
-            .trace("Block::get_variable_field")?
+            .trace(F)?;
+        let variable_array = variable_field
             .as_array()
-            .unwrap()
+            .ok_or(RashError::field_not_typed("self.fields.VARIABLE"))
+            .trace(F)?;
+        let first_elem = variable_array
             .get(1)
             .ok_or(RashError::field_not_found("self.fields.VARIABLE[1]"))
-            .trace("Block::get_variable_field")?
+            .trace(F)?;
+        first_elem
             .as_str()
-            .unwrap())
+            .ok_or(RashError::field_not_typed("self.fields.VARIABLE[1]"))
+            .trace(F)
     }
 
     pub fn get_boolean_input(&self, ctx: &mut CompileContext, name: &str) -> Res<Input> {
@@ -127,21 +133,25 @@ impl Block {
     }
 
     pub fn get_number_input(&self, ctx: &mut CompileContext, name: &str) -> Res<Input> {
+        const F: &str = "Block::get_number_input";
+
         let input = match self
             .inputs
             .get(name)
-            .ok_or(RashError::field_not_found(&format!("self.inputs.{name}")))?
+            .ok_or(RashError::field_not_found(&format!("self.inputs.{name}")))
+            .trace(F)?
             .as_array()
-            .unwrap()
+            .ok_or(RashError::field_not_typed(&format!("self.inputs.{name}")))
+            .trace(F)?
             .get(1)
             .ok_or(RashError::field_not_found(&format!(
                 "self.inputs.{name}[1]"
-            )))? {
+            )))
+            .trace(F)?
+        {
             serde_json::Value::Null => false.into(),
             serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
-                JsonBlock::Block { block } => {
-                    block.compile(ctx).trace("Block::get_number_input")?.into()
-                }
+                JsonBlock::Block { block } => block.compile(ctx).trace(F)?.into(),
                 JsonBlock::Array(_) => todo!(),
             },
             serde_json::Value::Array(vec) => {
@@ -149,7 +159,8 @@ impl Block {
                     .first()
                     .ok_or(RashError::field_not_found(&format!(
                         "self.inputs.{name}[1][0]"
-                    )))?
+                    )))
+                    .trace(F)?
                     .as_i64()
                     .unwrap();
                 match n {
@@ -163,7 +174,8 @@ impl Block {
                         None => {
                             return Err(RashError::field_not_found(&format!(
                                 "self.inputs.{name}[1][1]"
-                            )));
+                            )))
+                            .trace(F);
                         }
                         _ => panic!(),
                     },

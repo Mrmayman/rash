@@ -1,7 +1,47 @@
-use crate::{CompileContext, Res, json::Block};
-use rash_vm::{ScratchBlock, error::Trace};
+use std::cmp::Ordering;
+
+use crate::{CompileContext, Res, error::ErrExt, json::Block};
+use rash_vm::{
+    ScratchBlock,
+    error::{RashError, Trace},
+};
 
 impl Block {
+    pub fn c_op_mathop(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
+        const F: &str = "Block::c_op_mathop";
+
+        let num = self.get_number_input(ctx, "NUM").trace(F)?;
+
+        let operator = self
+            .fields
+            .get("OPERATOR")
+            .ok_or(RashError::field_not_found("self.fields.OPERATOR"))
+            .trace(F)?
+            .as_array()
+            .ok_or(RashError::field_not_typed("self.fields.OPERATOR"))
+            .trace(F)?
+            .get(0)
+            .ok_or(RashError::field_not_found("self.fields.OPERATOR[0]"))
+            .trace(F)?
+            .as_str()
+            .ok_or(RashError::field_not_typed("self.fields.OPERATOR[0]"))
+            .trace(F)?;
+
+        match operator {
+            "abs" => Ok(ScratchBlock::OpMAbs(num)),
+            "floor" => Ok(ScratchBlock::OpMFloor(num)),
+            // "ceiling" => Ok(ScratchBlock::OpMCeiling(num)),
+            "sqrt" => Ok(ScratchBlock::OpMSqrt(num)),
+            "sin" => Ok(ScratchBlock::OpMSin(num)),
+            "cos" => Ok(ScratchBlock::OpMCos(num)),
+            "tan" => Ok(ScratchBlock::OpMTan(num)),
+            _ => {
+                println!("Unknown operator (mathop): {operator}\n");
+                Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
+            }
+        }
+    }
+
     pub fn c_op_not(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         let bool = self
             .get_boolean_input(ctx, "OPERAND")
@@ -19,18 +59,21 @@ impl Block {
         ScratchBlock::OpBAnd(bool1, bool2)
     }
 
-    pub fn c_op_greater(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
-        const FN_N: &str = "Block::compile.operator_gt";
-        let num1 = self.get_number_input(ctx, "OPERAND1").trace(FN_N)?;
-        let num2 = self.get_number_input(ctx, "OPERAND2").trace(FN_N)?;
-        Ok(ScratchBlock::OpCmpGreater(num1, num2))
+    pub fn c_op_or(&self, ctx: &mut CompileContext) -> ScratchBlock {
+        let bool1 = self
+            .get_number_input(ctx, "OPERAND1")
+            .unwrap_or(false.into());
+        let bool2 = self
+            .get_number_input(ctx, "OPERAND2")
+            .unwrap_or(false.into());
+        ScratchBlock::OpBOr(bool1, bool2)
     }
 
-    pub fn c_op_less(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
-        const FN_N: &str = "Block::compile.operator_lt";
+    pub fn c_op_cmp(&self, ctx: &mut CompileContext, cmp: Ordering) -> Res<ScratchBlock> {
+        const FN_N: &str = "Block::compile.operator_(gt/lt/equals)";
         let num1 = self.get_number_input(ctx, "OPERAND1").trace(FN_N)?;
         let num2 = self.get_number_input(ctx, "OPERAND2").trace(FN_N)?;
-        Ok(ScratchBlock::OpCmpLesser(num1, num2))
+        Ok(ScratchBlock::OpCmp(num1, num2, cmp))
     }
 
     pub fn c_op_round(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
