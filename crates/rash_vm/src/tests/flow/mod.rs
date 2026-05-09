@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        compiler::{ScratchBlock, MEMORY},
+        compiler::{MEMORY, ScratchBlock},
         graphics::{RunState, SpriteId},
         input_primitives::Ptr,
         runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},

@@ -137,7 +137,7 @@ fn build_argument_names(args: &[String], names: &str) -> Res<HashMap<String, Str
 impl ProjectLoader {
     pub fn new(file_path: &Path) -> Res<Self> {
         const FN_N: &str = "ProjectLoader::new";
-        println!("[info] Loading file from {file_path:?}");
+        println!("[info] Loading file from {}", file_path.display());
 
         let dir = TempDir::new().to("TempDir::new", FN_N)?;
         let dir_path = dir.path();
@@ -241,7 +241,9 @@ impl ProjectLoader {
             let path = path.join(&costume.md5ext);
             let bytes = std::fs::read(&path).to_p(&path, "std::fs::read (costume)", FN_N)?;
 
-            let is_svg = costume.md5ext.ends_with(".svg");
+            let is_svg = std::path::Path::new(&costume.md5ext)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"));
 
             let intermediate = CostumeData {
                 bytes,

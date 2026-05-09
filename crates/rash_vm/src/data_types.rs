@@ -235,7 +235,7 @@ impl ScratchObject {
 
         match (a, b) {
             // fast cases
-            (ScratchObject::Number(a), ScratchObject::Number(b)) => return a.total_cmp(&b),
+            (ScratchObject::Number(a), ScratchObject::Number(b)) => return a.total_cmp(b),
             (ScratchObject::Number(a), ScratchObject::Bool(b)) => {
                 return a.total_cmp(&makebool(*b));
             }

@@ -91,7 +91,7 @@ impl Display for Sb3ErrorKind {
             }
             Sb3ErrorKind::IoError(error, path_buf) => {
                 if let Some(path) = path_buf {
-                    write!(f, "io error: at {path:?}: {error}")?;
+                    write!(f, "io error: at {}: {error}", path.display())?;
                 } else {
                     write!(f, "io error: {error}")?;
                 }

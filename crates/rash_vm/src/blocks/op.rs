@@ -149,7 +149,7 @@ impl Compiler<'_> {
         );
         let r = builder.inst_results(inst)[0];
         let out = builder.ins().icmp_imm(IntCC::Equal, r, comp as i64);
-        return builder.ins().uextend(I64, out);
+        builder.ins().uextend(I64, out)
     }
 
     pub fn op_add(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {

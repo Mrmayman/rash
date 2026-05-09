@@ -106,6 +106,8 @@ impl RunState {
         state.graphics.shown = shown as i32;
     }
 
+    /// # Safety
+    /// `this` must point to a valid instance of `RunState`
     pub unsafe extern "C" fn c_shown(this: *mut Self, id: SpriteId, shown: i64) {
         debug_assert!(!this.is_null());
         unsafe { &mut *this }.shown(id, shown == 1);

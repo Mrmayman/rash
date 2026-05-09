@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cranelift::prelude::{types::I64, FunctionBuilder, InstBuilder, Value};
+use cranelift::prelude::{FunctionBuilder, InstBuilder, Value, types::I64};
 use ordered_float::OrderedFloat;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]

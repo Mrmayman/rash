@@ -29,9 +29,8 @@ fn main() {
             run_demo();
             print_memory();
             return;
-        } else {
-            PathBuf::from(arg)
         }
+        PathBuf::from(arg)
     } else {
         let Some(p) = rfd::FileDialog::new()
             .add_filter("Scratch Project", &["sb3"])
@@ -43,7 +42,7 @@ fn main() {
         p
     };
 
-    print_function_addresses();
+    // rash_vm::print_function_addresses();
 
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
@@ -110,7 +109,7 @@ impl App {
                 required_features: wgpu::Features::TEXTURE_BINDING_ARRAY,
                 required_limits: wgpu::Limits::default(),
                 label: None,
-                memory_hints: Default::default(),
+                memory_hints: wgpu::MemoryHints::default(),
                 experimental_features: wgpu::ExperimentalFeatures::default(),
                 trace: wgpu::Trace::default(),
             })
@@ -219,7 +218,7 @@ impl App {
                     );
                 }
                 WindowEvent::Resized(s) => {
-                    self.resize(s);
+                    self.resize(*s);
                 }
                 _ => {}
             },
@@ -227,7 +226,7 @@ impl App {
         }
     }
 
-    fn resize(&mut self, s: &winit::dpi::PhysicalSize<u32>) {
+    fn resize(&mut self, s: winit::dpi::PhysicalSize<u32>) {
         self.renderer.resize(
             WindowSize {
                 width: s.width,
@@ -261,11 +260,10 @@ fn run_demo() {
     let memory = MEMORY.lock().unwrap();
 
     let mut sprite = SpriteBuilder::new(SpriteId(0));
-    let n = true.into();
     sprite.add_script(
         &Script::new_green_flag(vec![
             ScratchBlock::Log("Hello World".into()),
-            ScratchBlock::Log(ScratchBlock::OpBNot(n).into()),
+            ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
         ]),
         &memory,
     );

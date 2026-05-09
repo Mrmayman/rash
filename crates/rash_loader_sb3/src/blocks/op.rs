@@ -20,7 +20,7 @@ impl Block {
             .as_array()
             .ok_or(RashError::field_not_typed("self.fields.OPERATOR"))
             .trace(F)?
-            .get(0)
+            .first()
             .ok_or(RashError::field_not_found("self.fields.OPERATOR[0]"))
             .trace(F)?
             .as_str()

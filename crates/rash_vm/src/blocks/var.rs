@@ -1,9 +1,9 @@
-use cranelift::prelude::{types::I64, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind};
+use cranelift::prelude::{FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, types::I64};
 
 use crate::{
     callbacks,
     compiler::{Compiler, VarType},
-    data_types::{ScratchObject, ID_BOOL, ID_NUMBER},
+    data_types::{ID_BOOL, ID_NUMBER, ScratchObject},
     input_primitives::{Input, Ptr, ReturnValue},
 };
 

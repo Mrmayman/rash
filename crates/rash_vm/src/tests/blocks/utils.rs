@@ -7,16 +7,16 @@ use cranelift::{
         ir::{Function, UserFuncName},
     },
     prelude::{
+        AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature,
         isa::{self, CallConv},
         settings,
         types::I64,
-        AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature,
     },
 };
 use target_lexicon::Triple;
 
 use crate::{
-    compiler::{Compiler, ScratchBlock, MEMORY},
+    compiler::{Compiler, MEMORY, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,
 };

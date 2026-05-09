@@ -116,7 +116,7 @@ impl Renderer {
             Ok(_) => {}
             // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                self.resize(self.window_size, device, queue, surface)
+                self.resize(self.window_size, device, queue, surface);
             }
             // The system is out of memory, we should probably quit
             Err(wgpu::SurfaceError::OutOfMemory) => {
@@ -125,7 +125,7 @@ impl Renderer {
             }
             // This happens when the a frame takes too long to present
             Err(err) => {
-                eprintln!("[error] {err}")
+                eprintln!("[error] {err}");
             }
         }
 

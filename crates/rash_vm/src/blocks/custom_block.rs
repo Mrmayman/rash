@@ -1,6 +1,6 @@
 use cranelift::{
     codegen::ir::types::I8,
-    prelude::{types::I64, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value},
+    prelude::{FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value, types::I64},
 };
 
 use crate::{

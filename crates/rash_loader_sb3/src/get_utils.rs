@@ -39,14 +39,14 @@ impl Block {
 
         let mut compiled_blocks = Vec::new();
         let mut id = Some(child_block_id.to_owned());
-        while let Some(block_id) = id {
-            let block = ctx.get_block(&block_id).unwrap().clone();
+        while let Some(block_id) = &id {
+            let block = ctx.get_block(block_id).unwrap().clone();
             let JsonBlock::Block { block } = block else {
                 eprintln!("Array block encountered");
                 break;
             };
             compiled_blocks.push(block.compile(ctx).trace("Block::compile_substack()")?);
-            id = block.next.clone();
+            id.clone_from(&block.next);
         }
         Ok(compiled_blocks)
     }
@@ -120,7 +120,7 @@ impl Block {
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
-                        panic!("Unknown array input: {:?}", vec)
+                        panic!("Unknown array input: {vec:?}")
                     }
                 }
             }
@@ -256,7 +256,7 @@ impl Block {
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
-                        panic!("Unknown input: {:?}", vec)
+                        panic!("Unknown input: {vec:?}")
                     }
                 }
             }

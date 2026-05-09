@@ -1,6 +1,6 @@
 use cranelift::prelude::{
-    types::{F64, I64},
     FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+    types::{F64, I64},
 };
 
 use crate::{callbacks, compiler::Compiler, input_primitives::Ptr};
@@ -12,8 +12,7 @@ impl Compiler<'_> {
             3 * std::mem::size_of::<i64>() as u32,
             0,
         ));
-        let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
-        stack_ptr
+        builder.ins().stack_addr(I64, stack_slot, 0)
     }
 
     pub fn ins_drop_obj(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {

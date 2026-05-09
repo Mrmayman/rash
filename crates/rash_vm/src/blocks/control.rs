@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cranelift::prelude::{types::I64, FunctionBuilder, InstBuilder, IntCC, Value};
+use cranelift::prelude::{FunctionBuilder, InstBuilder, IntCC, Value, types::I64};
 
 use crate::{
     callbacks,
@@ -364,10 +364,10 @@ where
 {
     let mut common_map = HashMap::new();
     for (key, value) in map1 {
-        if let Some(other_value) = map2.get(key) {
-            if value == other_value {
-                common_map.insert(key.clone(), value.clone());
-            }
+        if let Some(other_value) = map2.get(key)
+            && value == other_value
+        {
+            common_map.insert(key.clone(), value.clone());
         }
     }
     common_map

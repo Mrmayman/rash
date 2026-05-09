@@ -1,6 +1,6 @@
 use cranelift::{
     codegen::ir::Inst,
-    prelude::{isa::CallConv, AbiParam, FunctionBuilder, InstBuilder, Signature, Type, Value},
+    prelude::{AbiParam, FunctionBuilder, InstBuilder, Signature, Type, Value, isa::CallConv},
 };
 
 use crate::compiler::Compiler;
