@@ -7,156 +7,29 @@ use core::f64;
 
 use crate::data_types::ScratchObject;
 use colored::Colorize;
-use rand::Rng;
 
 pub mod custom_block;
+pub mod op;
 pub mod repeat_stack;
 pub mod types;
 
-pub extern "C" fn op_sin(value: f64) -> f64 {
-    value.to_radians().sin()
-}
-
-pub extern "C" fn op_cos(value: f64) -> f64 {
-    value.to_radians().cos()
-}
-
-pub extern "C" fn op_tan(value: f64) -> f64 {
-    match (value + 90.0) % 360.0 {
-        0.0 => f64::NEG_INFINITY,
-        180.0 | -180.0 => f64::INFINITY,
-        _ => value.to_radians().tan(),
-    }
-}
-
-pub extern "C" fn op_round(value: f64) -> f64 {
-    // If number ends with .5 round up (Scratch behaviour).
-    if (value - value.trunc()).abs() == 0.5 {
-        value.ceil()
-    } else {
-        value.round()
-    }
-}
-
-pub unsafe extern "C" fn op_str_contains(
-    string: *mut String,
-    string_is_const: i64,
-    substring: *mut String,
-    substring_is_const: i64,
-) -> i64 {
-    let contains = {
-        let string = unsafe { &*string }.to_lowercase();
-        let substring = unsafe { &*substring }.to_lowercase();
-
-        string.contains(&substring)
-    };
-    if string_is_const == 0 {
-        unsafe {
-            std::ptr::drop_in_place(string);
-        }
-    }
-    if substring_is_const == 0 {
-        unsafe {
-            std::ptr::drop_in_place(substring);
-        }
-    }
-    contains as i64
-}
-
-pub unsafe extern "C" fn op_str_letter(
-    string: *mut String,
-    is_const: i64,
-    index: f64,
-    out: *mut String,
-) {
-    let letter = get_char_at_index(index, string);
-
-    let string = if is_const == 0 {
-        let mut string = unsafe { string.read() };
-
-        // Reuse the input string, since it's gonna get dropped anyway.
-        string.clear();
-        if let Some(letter) = letter {
-            string.push(letter);
-        }
-        string
-    } else {
-        letter.map(String::from).unwrap_or_default()
-    };
-    unsafe {
-        out.write(string);
-    }
-}
-
-/// Get character at index of a string, respecting UTF-16 behaviour
-fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
-    if index < 1.0 {
-        return None;
+pub fn print_function_addresses() {
+    fn print(name: &str, addr: *const ()) {
+        println!("{name:25} = {:#018x}", addr as usize);
     }
 
-    let index = index as usize - 1;
-    let string = unsafe { &*string };
+    custom_block::print_function_addresses();
+    repeat_stack::print_function_addresses();
+    types::print_function_addresses();
+    op::print_function_addresses();
 
-    // Scratch encodes strings in UTF-16, so we have to convert it.
-    // This HAS to be done for a fully correct implementation.
-    string
-        .encode_utf16()
-        .nth(index)
-        .map(|n| char::from_u32(n as u32).unwrap_or('\u{FFFD}'))
-    // For example, the emoji "💀" is 4 "chars" in rust string,
-    // but 2 chars in UTF-16 Scratch string.
-}
+    println!("\n========");
+    println!("mod.rs");
+    println!("========");
 
-/// Callback from JIT code to join two strings
-pub unsafe extern "C" fn op_str_join(
-    a: *mut String,
-    b: *mut String,
-    out: *mut String,
-    a_is_const: i64,
-    b_is_const: i64,
-) {
-    let a_ref = unsafe { &mut *a };
-    let b_ref = unsafe { &mut *b };
-
-    // If a isn't const, we can just append b to it.
-    if a_is_const == 0 {
-        a_ref.push_str(b_ref);
-        unsafe {
-            if b_is_const == 0 {
-                std::ptr::drop_in_place(b);
-            }
-            out.write(a.read());
-        }
-        return;
-    }
-
-    // Otherwise we create a new string.
-    let result = format!("{a_ref}{b_ref}");
-    unsafe {
-        out.write(result);
-
-        // Drop b.
-        // We know that a is const, so no need to drop a.
-        if b_is_const == 0 {
-            std::ptr::drop_in_place(b);
-        }
-    }
-}
-
-/// Callback from JIT code to get the length of a string
-pub unsafe extern "C" fn op_str_len(s: *mut String, is_const: i64) -> usize {
-    let string = unsafe { &*s };
-    // Scratch stores Strings in UTF-16 (unlike rust).
-    // For example, skull emoji ("💀") is 4 chars in rust,
-    // but 2 chars in Scratch.
-    // So a conversion is needed.
-    let len = string.encode_utf16().count();
-    if is_const == 0 {
-        unsafe {
-            std::ptr::drop_in_place(s);
-        }
-    }
-    len
+    print("var_read", var_read as *const ());
+    print("dbg_log", dbg_log as *const ());
+    print("op_days_since_2000", days_since_2000 as *const ());
 }
 
 /// Callback from JIT code to read a variable.
@@ -176,24 +49,6 @@ pub unsafe extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut ScratchO
     unsafe { dest.write(obj) };
 }
 
-/// Callback from JIT code to generate a random number.
-///
-/// # Arguments
-/// * `a` - The lower bound of the random number.
-/// * `b` - The upper bound of the random number.
-/// * `is_decimal` - Whether the number should be a decimal
-///   (eg: 3.1415) or round (eg: 3.0). If `is_decimal` is 1,
-///   the number will be a decimal. Represented this way for simplicity.
-pub extern "C" fn op_random(a: f64, b: f64, is_decimal: i64) -> f64 {
-    let mut rng = rand::thread_rng();
-    let num = rng.gen_range(a..b);
-    if is_decimal == 1 {
-        num
-    } else {
-        num.round()
-    }
-}
-
 pub unsafe extern "C" fn dbg_log(msg: *mut String, is_const: i64) {
     let msg_val = unsafe { &mut *msg };
     if !msg_val.is_empty() {
@@ -204,30 +59,7 @@ pub unsafe extern "C" fn dbg_log(msg: *mut String, is_const: i64) {
     }
 }
 
-// pub unsafe extern "C" fn op_gt(a: *mut ScratchObject, b: *mut ScratchObject) -> bool {
-//     let val = {
-//         let a = unsafe { &*a };
-//         let b = unsafe { &*b };
-
-//         match (a, b) {
-//             (ScratchObject::Number(_), ScratchObject::Number(_)) => todo!(),
-//             (ScratchObject::Number(_), ScratchObject::String(_)) => todo!(),
-//             (ScratchObject::Number(_), ScratchObject::Bool(_)) => todo!(),
-//             (ScratchObject::String(_), ScratchObject::Number(_)) => todo!(),
-//             (ScratchObject::String(_), ScratchObject::String(_)) => todo!(),
-//             (ScratchObject::String(_), ScratchObject::Bool(_)) => todo!(),
-//             (ScratchObject::Bool(b), ScratchObject::Number(n)) => (if *b { 1.0 } else { 0.0 }) > *n,
-//             (ScratchObject::Bool(true), n @ ScratchObject::String(ns)) => {
-//                 !(ns == "true" || (if *b { 1.0 } else { 0.0 }) > n.convert_to_number())
-//             }
-//             (ScratchObject::Bool(true), ScratchObject::Bool(false)) => true,
-//             (ScratchObject::Bool(_), _) => false,
-//         }
-//     };
-//     todo!()
-// }
-
-pub extern "C" fn op_days_since_2000() -> f64 {
+pub extern "C" fn days_since_2000() -> f64 {
     // Seconds between Unix epoch (1970-01-01) and 2000-01-01 UTC
     const SECONDS_1970_TO_2000: f64 = 946_684_800.0;
     const SECONDS_PER_DAY: f64 = 86_400.0;

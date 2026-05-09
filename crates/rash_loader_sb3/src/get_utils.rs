@@ -179,7 +179,16 @@ impl Block {
                         }
                         _ => panic!(),
                     },
-                    json_id::STRING => vec.get(1).unwrap().as_str().unwrap().into(),
+                    json_id::STRING => {
+                        let s = vec.get(1).unwrap().as_str().unwrap();
+                        let num = string_to_number(s);
+                        // Load-time optimization
+                        if number_to_string(num) == s {
+                            num.into()
+                        } else {
+                            s.into()
+                        }
+                    }
                     json_id::VARIABLE => {
                         let id = vec.get(2).unwrap().as_str().unwrap();
                         let ptr = ctx.get_var(id);

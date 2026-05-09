@@ -4,6 +4,13 @@ struct Sprite {
     size: f32,
     costume_id: u32,
     center_pos: vec2<f32>,
+
+    shown: u32,
+    // Padding
+    p1: u32,
+    p2: u32,
+    p3: u32,
+    p4: vec4<u32>,
 }
 
 struct Global {
@@ -15,7 +22,6 @@ struct Global {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) vert_pos: vec3<f32>,
-    @location(1) in_vertex_index: u32,
-    @location(2) uv: vec2<f32>,
+    @location(0) uv: vec2<f32>,
+    // @location(1) in_vertex_index: f32,
 };

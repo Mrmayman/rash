@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::{compiler::ScratchBlock, input_primitives::Input};
 
 impl ScratchBlock {
@@ -24,8 +26,9 @@ impl ScratchBlock {
             ScratchBlock::OpMSin(input) => func_call_inner("sin", &[input]),
             ScratchBlock::OpMCos(input) => func_call_inner("cos", &[input]),
             ScratchBlock::OpMTan(input) => func_call_inner("tan", &[input]),
-            ScratchBlock::OpCmpGreater(input, input1) => op_inner(">", input, input1),
-            ScratchBlock::OpCmpLesser(input, input1) => op_inner("<", input, input1),
+            ScratchBlock::OpCmp(input, input1, Ordering::Greater) => op_inner(">", input, input1),
+            ScratchBlock::OpCmp(input, input1, Ordering::Less) => op_inner("<", input, input1),
+            ScratchBlock::OpCmp(input, input1, Ordering::Equal) => op_inner("==", input, input1),
             ScratchBlock::OpRandom(input, input1) => func_call_inner("random", &[input, input1]),
             ScratchBlock::OpStrLetterOf(input, input1) => {
                 func_call_inner("str.letter_of", &[input, input1])
@@ -135,6 +138,12 @@ impl ScratchBlock {
             ScratchBlock::MotionSetY(input) => func_call_inner("motion.y = ", &[input]),
             ScratchBlock::MotionGetX => "motion.x".to_owned(),
             ScratchBlock::MotionGetY => "motion.y".to_owned(),
+            ScratchBlock::LooksShown(show) => if *show {
+                "looks.show()"
+            } else {
+                "looks.hide()"
+            }
+            .to_owned(),
         };
 
         format!("{}{out}", " ".repeat(indent * 4))

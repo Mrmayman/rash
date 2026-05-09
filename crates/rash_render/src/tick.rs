@@ -76,9 +76,15 @@ impl Renderer {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
             for i in sprite_order {
-                let costume_id = graphics.get(i.0 as usize).unwrap().current_costume;
+                let state = graphics.get(i.0 as usize).unwrap();
+                if state.shown == 0 {
+                    continue;
+                }
+
+                let costume_id = state.current_costume;
                 let costume = costume.get(&costume_id).unwrap();
                 render_pass.set_bind_group(1, &costume.bind_group, &[]);
+
                 let i = i.0 as u32 * 6;
                 render_pass.draw(i..(i + 6), 0..1);
             }

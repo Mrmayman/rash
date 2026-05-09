@@ -4,14 +4,14 @@ use cranelift::{
     codegen::{
         self,
         control::ControlPlane,
-        ir::{types::I8, Function, UserFuncName},
+        ir::{Function, UserFuncName, types::I8},
     },
     prelude::{
+        AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
+        MemFlags, Signature,
         isa::{self, CallConv, TargetIsa},
         settings,
         types::I64,
-        AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
-        MemFlags, Signature,
     },
 };
 use target_lexicon::Triple;

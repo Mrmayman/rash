@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::HashMap,
     sync::{LazyLock, Mutex},
 };
@@ -6,8 +7,8 @@ use std::{
 use cranelift::{
     codegen::ir::SigRef,
     prelude::{
-        types::{F64, I64},
         Block, FunctionBuilder, InstBuilder, Signature, StackSlotData, StackSlotKind, Value,
+        types::{F64, I64},
     },
 };
 
@@ -55,8 +56,7 @@ pub enum ScratchBlock {
     OpMSin(Input),
     OpMCos(Input),
     OpMTan(Input),
-    OpCmpGreater(Input, Input),
-    OpCmpLesser(Input, Input),
+    OpCmp(Input, Input, Ordering),
     OpRandom(Input, Input),
     OpStrLetterOf(Input, Input),
     OpStrContains(Input, Input),
@@ -93,6 +93,7 @@ pub enum ScratchBlock {
     MotionSetY(Input),
     MotionGetX,
     MotionGetY,
+    LooksShown(bool),
     ControlDaysSince2000,
 
     Log(Input),
@@ -104,6 +105,17 @@ pub enum VarTypeChecked {
     Bool,
     String,
     Unknown,
+}
+
+impl VarTypeChecked {
+    pub fn to_vartype(&self) -> Option<VarType> {
+        Some(match self {
+            VarTypeChecked::Number => VarType::Number,
+            VarTypeChecked::Bool => VarType::Bool,
+            VarTypeChecked::String => VarType::String,
+            VarTypeChecked::Unknown => return None,
+        })
+    }
 }
 
 impl From<VarType> for VarTypeChecked {
@@ -150,9 +162,8 @@ impl ScratchBlock {
             ScratchBlock::OpBAnd(_, _)
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
-            | ScratchBlock::OpCmpGreater(_, _)
             | ScratchBlock::OpStrContains(_, _)
-            | ScratchBlock::OpCmpLesser(_, _) => Some(VarTypeChecked::Bool),
+            | ScratchBlock::OpCmp(_, _, _) => Some(VarTypeChecked::Bool),
             ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
@@ -169,6 +180,7 @@ impl ScratchBlock {
             | ScratchBlock::MotionSetX(_)
             | ScratchBlock::MotionSetY(_)
             | ScratchBlock::ControlRepeatUntil(_, _)
+            | ScratchBlock::LooksShown(_)
             | ScratchBlock::Log(_) => None,
         }
     }
@@ -245,7 +257,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMul(_, _)
             | ScratchBlock::OpStrJoin(_, _)
             | ScratchBlock::OpStrLen(_)
-            | ScratchBlock::OpCmpGreater(_, _)
+            | ScratchBlock::OpCmp(_, _, _)
             | ScratchBlock::OpBAnd(_, _)
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
@@ -270,8 +282,8 @@ impl ScratchBlock {
             | ScratchBlock::FunctionCallScreenRefresh(_, _)
             | ScratchBlock::Log(_)
             | ScratchBlock::ControlDaysSince2000
-            | ScratchBlock::ControlForever(_)
-            | ScratchBlock::OpCmpLesser(_, _) => false,
+            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::ControlForever(_) => false,
             ScratchBlock::VarRead(_)
             | ScratchBlock::OpDiv(_, _)
             | ScratchBlock::OpMod(_, _)
@@ -303,8 +315,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
-            | ScratchBlock::OpCmpGreater(_, _)
-            | ScratchBlock::OpCmpLesser(_, _)
+            | ScratchBlock::OpCmp(_, _, _)
             | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpStrLetterOf(_, _)
             | ScratchBlock::OpStrContains(_, _)
@@ -325,6 +336,7 @@ impl ScratchBlock {
                 blocks_then.iter().any(|n| n.could_trigger_refresh())
                     || blocks_else.iter().any(|n| n.could_trigger_refresh())
             }
+            ScratchBlock::LooksShown(b) => *b, // Triggers refresh on show, not hide
 
             ScratchBlock::ScreenRefresh
             | ScratchBlock::FunctionCallScreenRefresh(_, _)
@@ -476,11 +488,8 @@ impl<'a> Compiler<'a> {
             ScratchBlock::ControlRepeatUntil(input, vec) => {
                 self.control_repeat_until(builder, input, vec);
             }
-            ScratchBlock::OpCmpGreater(a, b) => {
-                return Some(ReturnValue::Bool(self.op_cmp_gt(a, b, builder)));
-            }
-            ScratchBlock::OpCmpLesser(a, b) => {
-                return Some(ReturnValue::Bool(self.op_cmp_lt(a, b, builder)));
+            ScratchBlock::OpCmp(a, b, ordering) => {
+                return Some(ReturnValue::Bool(self.op_cmp(a, b, builder, *ordering)));
             }
             ScratchBlock::OpStrLen(input) => {
                 return Some(self.op_str_len(input, builder));
@@ -499,15 +508,15 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpStrLetterOf(letter, string) => {
                 return Some(ReturnValue::Object(
                     self.op_str_letter(letter, string, builder),
-                ))
+                ));
             }
             ScratchBlock::OpStrContains(string, pattern) => {
                 return Some(ReturnValue::Bool(
                     self.op_str_contains(string, pattern, builder),
-                ))
+                ));
             }
             ScratchBlock::OpRound(num) => {
-                return Some(ReturnValue::Num(self.op_round(num, builder)))
+                return Some(ReturnValue::Num(self.op_round(num, builder)));
             }
             ScratchBlock::OpMAbs(num) => {
                 return Some(ReturnValue::Num(self.op_m_abs(num, builder)));
@@ -633,10 +642,22 @@ impl<'a> Compiler<'a> {
                 let val = builder.inst_results(inst)[0];
                 return Some(ReturnValue::Num(val));
             }
+            ScratchBlock::LooksShown(shown) => {
+                let id = self.constants.get_int(self.sprite_id.0, builder);
+                let shown = self.constants.get_int(*shown as i64, builder);
+
+                self.call_function(
+                    builder,
+                    RunState::c_shown as *const (),
+                    &[I64, I64, I64],
+                    &[],
+                    &[self.graphics_ptr, id, shown],
+                );
+            }
             ScratchBlock::ControlDaysSince2000 => {
                 let inst = self.call_function(
                     builder,
-                    callbacks::op_days_since_2000 as *const (),
+                    callbacks::days_since_2000 as *const (),
                     &[],
                     &[F64],
                     &[],
@@ -697,62 +718,4 @@ impl<'a> Compiler<'a> {
             self.cache.init(builder, &mut self.constants, self.memory);
         }
     }
-}
-
-#[allow(unused)]
-pub(crate) fn print_func_addresses() {
-    println!("var_read: {:X}", callbacks::var_read as *const () as usize);
-    println!(
-        "op_str_join: {:X}",
-        callbacks::op_str_join as *const () as usize
-    );
-
-    println!("f64::floor: {:X}", f64::floor as *const () as usize);
-
-    println!(
-        "to_string_from_num: {:X}",
-        callbacks::types::to_string_from_num as *const () as usize
-    );
-    println!(
-        "to_string: {:X}",
-        callbacks::types::to_string as *const () as usize
-    );
-    println!(
-        "to_string_from_bool: {:X}",
-        callbacks::types::to_string_from_bool as *const () as usize
-    );
-    println!(
-        "to_number: {:X}",
-        callbacks::types::to_number as *const () as usize
-    );
-    println!(
-        "to_number_with_decimal_check: {:X}",
-        callbacks::types::to_number_with_decimal_check as *const () as usize
-    );
-    println!(
-        "drop_obj: {:X}",
-        callbacks::types::drop_obj as *const () as usize
-    );
-    println!(
-        "to_bool: {:X}",
-        callbacks::types::to_bool as *const () as usize
-    );
-
-    println!(
-        "custom_block(): {:X}",
-        callbacks::custom_block::call_no_screen_refresh as *const () as usize
-    );
-    println!(
-        "custom_block.await: {:X}",
-        callbacks::custom_block::call_screen_refresh as *const () as usize
-    );
-
-    println!(
-        "stack_pop: {:X}",
-        callbacks::repeat_stack::stack_pop as *const () as usize
-    );
-    println!(
-        "stack_push: {:X}",
-        callbacks::repeat_stack::stack_push as *const () as usize
-    );
 }

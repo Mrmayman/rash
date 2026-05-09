@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use rash_vm::{CostumeId, GraphicsState};
+use rash_vm::GraphicsState;
 use wgpu::util::DeviceExt;
 
 use crate::WindowSize;
@@ -136,19 +136,7 @@ impl Renderer {
             cache: None,
         });
 
-        let sprites_state = vec![
-            GraphicsState {
-                x: 36.0,
-                y: 28.0,
-                size: 100.0,
-                current_costume: CostumeId(0),
-                texture_width: 100.0,
-                texture_height: 100.0,
-                center_x: 0.0,
-                center_y: 0.0,
-            };
-            num_sprites
-        ];
+        let sprites_state = vec![GraphicsState::default(); num_sprites];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),

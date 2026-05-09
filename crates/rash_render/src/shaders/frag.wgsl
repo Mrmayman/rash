@@ -8,6 +8,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(t_diffuse, s_diffuse, in.uv);
     return color;
     // return vec4<f32>(in.uv, 0.0, 1.0);
+    // return vec4<f32>(0.0, 0.0, in.in_vertex_index / 12.0, 1.0);
 }
 
 fn id_to_color(id: u32) -> vec3<f32> {

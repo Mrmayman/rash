@@ -1,5 +1,27 @@
 use crate::data_types::ScratchObject;
 
+pub fn print_function_addresses() {
+    fn print(name: &str, addr: *const ()) {
+        println!("{name:40} = {:#018x}", addr as usize);
+    }
+
+    println!("\n========");
+    println!("types.rs");
+    println!("========");
+
+    print("to_bool", to_bool as *const ());
+    print("to_number", to_number as *const ());
+    print(
+        "to_number_with_decimal_check",
+        to_number_with_decimal_check as *const (),
+    );
+    print("to_string", to_string as *const ());
+    print("to_string_from_num", to_string_from_num as *const ());
+    print("to_string_from_bool", to_string_from_bool as *const ());
+    print("drop_obj", drop_obj as *const ());
+    print("clone_obj", clone_obj as *const ());
+}
+
 /// Converts a `ScratchObject` to a boolean.
 ///
 /// # Arguments

@@ -1,11 +1,16 @@
-use cranelift::prelude::{
-    types::{F64, I64},
-    FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+use std::cmp::Ordering;
+
+use cranelift::{
+    codegen::ir::condcodes::{FloatCC, IntCC},
+    prelude::{
+        FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+        types::{F64, I64},
+    },
 };
 
 use crate::{
     callbacks,
-    compiler::Compiler,
+    compiler::{Compiler, VarType},
     data_types::ID_STRING,
     input_primitives::{Input, ReturnValue},
 };
@@ -15,7 +20,7 @@ impl Compiler<'_> {
         let num = num.get_number(self, builder);
         let inst = self.call_function(
             builder,
-            callbacks::op_tan as *const (),
+            callbacks::op::tan as *const (),
             &[F64],
             &[F64],
             &[num],
@@ -27,7 +32,7 @@ impl Compiler<'_> {
         let num = num.get_number(self, builder);
         let inst = self.call_function(
             builder,
-            callbacks::op_cos as *const (),
+            callbacks::op::cos as *const (),
             &[F64],
             &[F64],
             &[num],
@@ -39,7 +44,7 @@ impl Compiler<'_> {
         let num = num.get_number(self, builder);
         let inst = self.call_function(
             builder,
-            callbacks::op_sin as *const (),
+            callbacks::op::sin as *const (),
             &[F64],
             &[F64],
             &[num],
@@ -75,22 +80,76 @@ impl Compiler<'_> {
         builder.ins().band(a, b)
     }
 
-    pub fn op_cmp_lt(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_number(self, builder);
-        let b = b.get_number(self, builder);
-        let res = builder.ins().fcmp(FloatCC::LessThan, a, b);
-        let one = self.constants.get_int(1, builder);
-        let zero = self.constants.get_int(0, builder);
-        builder.ins().select(res, one, zero)
-    }
+    pub fn op_cmp(
+        &mut self,
+        a: &Input,
+        b: &Input,
+        builder: &mut FunctionBuilder<'_>,
+        comp: Ordering,
+    ) -> Value {
+        // Compile-time known value
+        if let (Input::Obj(a), Input::Obj(b)) = (a, b) {
+            let out = a.scratch_cmp(b); // Same logic run by the callback
+            return self.constants.get_int((out == comp) as i64, builder);
+        }
 
-    pub fn op_cmp_gt(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_number(self, builder);
-        let b = b.get_number(self, builder);
-        let res = builder.ins().fcmp(FloatCC::GreaterThan, a, b);
-        let one = self.constants.get_int(1, builder);
-        let zero = self.constants.get_int(0, builder);
-        builder.ins().select(res, one, zero)
+        // Based on our smart (conservative) type analysis,
+        // `None` if can't be determined
+        if let (Some(at), Some(bt)) = (
+            a.expected_type(&self.variable_type_data),
+            b.expected_type(&self.variable_type_data),
+        ) {
+            // Primitive checks involving numbers/bools
+            match (at, bt) {
+                (VarType::Number, VarType::Number)
+                | (VarType::Number, VarType::Bool)
+                | (VarType::Bool, VarType::Number) => {
+                    let na = a.get_number(self, builder);
+                    let nb = b.get_number(self, builder);
+                    let res = builder.ins().fcmp(
+                        match comp {
+                            Ordering::Less => FloatCC::LessThan,
+                            Ordering::Equal => FloatCC::Equal,
+                            Ordering::Greater => FloatCC::GreaterThan,
+                        },
+                        na,
+                        nb,
+                    );
+                    return builder.ins().uextend(I64, res);
+                }
+                (VarType::Bool, VarType::Bool) => {
+                    let ba = a.get_bool(self, builder);
+                    let bb = b.get_bool(self, builder);
+                    let res = builder.ins().icmp(
+                        match comp {
+                            Ordering::Equal => IntCC::Equal,
+                            Ordering::Less => IntCC::UnsignedLessThan,
+                            Ordering::Greater => IntCC::UnsignedGreaterThan,
+                        },
+                        ba,
+                        bb,
+                    );
+                    return builder.ins().uextend(I64, res);
+                }
+                _ => {} // We'll deal with strings below
+            }
+        }
+
+        let obja = a.get_object(self, builder);
+        let objb = b.get_object(self, builder);
+
+        let inst = self.call_function(
+            builder,
+            callbacks::op::cmp as *const (),
+            &[I64; 8],
+            &[I64],
+            &[
+                obja[0], obja[1], obja[2], obja[3], objb[0], objb[1], objb[2], objb[3],
+            ],
+        );
+        let r = builder.inst_results(inst)[0];
+        let out = builder.ins().icmp_imm(IntCC::Equal, r, comp as i64);
+        return builder.ins().uextend(I64, out);
     }
 
     pub fn op_add(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
@@ -141,7 +200,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::op_str_join as *const (),
+            callbacks::op::str_join as *const (),
             &[I64, I64, I64, I64, I64],
             &[],
             &[a, b, stack_ptr, a_is_const, b_is_const],
@@ -196,7 +255,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op_str_len as *const (),
+            callbacks::op::str_len as *const (),
             &[I64, I64],
             &[I64],
             &[input, is_const],
@@ -219,7 +278,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op_random as *const (),
+            callbacks::op::random as *const (),
             &[F64, F64, I64],
             &[F64],
             &[a, b, is_decimal],
@@ -253,7 +312,7 @@ impl Compiler<'_> {
         let is_const = self.constants.get_int(i64::from(is_const), builder);
         self.call_function(
             builder,
-            callbacks::op_str_letter as *const (),
+            callbacks::op::str_letter as *const (),
             &[I64, I64, F64, I64],
             &[],
             &[string, is_const, letter, stack_ptr],
@@ -280,7 +339,7 @@ impl Compiler<'_> {
 
         let ins = self.call_function(
             builder,
-            callbacks::op_str_contains as *const (),
+            callbacks::op::str_contains as *const (),
             &[I64, I64, I64, I64],
             &[I64],
             &[string, string_is_const, pattern, pattern_is_const],
@@ -293,7 +352,7 @@ impl Compiler<'_> {
         let num = num.get_number(self, builder);
         let inst = self.call_function(
             builder,
-            callbacks::op_round as *const (),
+            callbacks::op::round as *const (),
             &[F64],
             &[F64],
             &[num],

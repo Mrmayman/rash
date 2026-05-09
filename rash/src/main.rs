@@ -5,7 +5,7 @@ use rash_render::{Costume, Renderer, WindowSize};
 use rash_vm::{
     CostumeId, GraphicsState, MEMORY, ProjectBuilder, RunState, Runtime, STRINGS_TO_DROP,
     ScratchBlock, ScratchObject, SpriteBuilder, SpriteData, SpriteId, SpriteLoadData,
-    runtime::Script,
+    print_function_addresses, runtime::Script,
 };
 use svg_render::SvgRenderer;
 use winit::{
@@ -43,6 +43,8 @@ fn main() {
         p
     };
 
+    print_function_addresses();
+
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
         WindowBuilder::new()
@@ -51,7 +53,13 @@ fn main() {
             .unwrap(),
     );
 
-    let vm = ProjectLoader::new(&path).unwrap().build().unwrap();
+    let vm = match ProjectLoader::new(&path).unwrap().build() {
+        Ok(n) => n,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
+    };
     let mut app = pollster::block_on(App::new(vm, window)).unwrap();
 
     event_loop
@@ -242,6 +250,8 @@ fn graphics(sprite_info: &SpriteLoadData, costume_info: &Costume) -> GraphicsSta
         current_costume: sprite_info.costume,
         center_x: costume_info.rotation_center_x as f32,
         center_y: costume_info.rotation_center_y as f32,
+        shown: sprite_info.shown as i32,
+        padding: [0; _],
     }
 }
 

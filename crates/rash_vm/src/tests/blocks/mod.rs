@@ -17,9 +17,11 @@ fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
 
 #[cfg(test)]
 mod tests {
+    use std::cmp::Ordering;
+
     use utils::run_code;
 
-    use crate::{compiler::VarType, ScratchObject};
+    use crate::{ScratchObject, compiler::VarType};
 
     use super::*;
 
@@ -162,7 +164,10 @@ mod tests {
                 )],
             )],
         )]);
-        assert_eq!(memory[0].convert_to_string(), "0HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+        assert_eq!(
+            memory[0].convert_to_string(),
+            "0HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
+        )
     }
 
     #[test]
@@ -170,14 +175,19 @@ mod tests {
         let memory = run_code(&vec![
             ScratchBlock::VarSet(Ptr(0), 0.0.into()),
             ScratchBlock::ControlRepeatUntil(
-                ScratchBlock::OpCmpGreater(ScratchBlock::VarRead(Ptr(0)).into(), 10.0.into())
-                    .into(),
+                ScratchBlock::OpCmp(
+                    ScratchBlock::VarRead(Ptr(0)).into(),
+                    10.0.into(),
+                    Ordering::Greater,
+                )
+                .into(),
                 vec![
                     ScratchBlock::VarSet(Ptr(1), 0.0.into()),
                     ScratchBlock::ControlRepeatUntil(
-                        ScratchBlock::OpCmpGreater(
+                        ScratchBlock::OpCmp(
                             ScratchBlock::VarRead(Ptr(1)).into(),
                             20.0.into(),
+                            Ordering::Greater,
                         )
                         .into(),
                         vec![ScratchBlock::VarChange(Ptr(1), 1.0.into())],
@@ -1077,7 +1087,7 @@ mod tests {
         let memory = run_code(&vec![ScratchBlock::VarSet(
             Ptr(0),
             ScratchBlock::OpBAnd(
-                ScratchBlock::OpCmpGreater(3.0.into(), 2.0.into()).into(),
+                ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
                 false.into(),
             )
             .into(),
@@ -1090,27 +1100,27 @@ mod tests {
         let memory = run_code(&vec![
             ScratchBlock::VarSet(
                 Ptr(0),
-                ScratchBlock::OpCmpGreater(3.0.into(), 2.0.into()).into(),
+                ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
             ),
             ScratchBlock::VarSet(
                 Ptr(1),
-                ScratchBlock::OpCmpGreater(2.0.into(), 3.0.into()).into(),
+                ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Greater).into(),
             ),
             ScratchBlock::VarSet(
                 Ptr(2),
-                ScratchBlock::OpCmpGreater(3.0.into(), 3.0.into()).into(),
+                ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Greater).into(),
             ),
             ScratchBlock::VarSet(
                 Ptr(3),
-                ScratchBlock::OpCmpLesser(3.0.into(), 2.0.into()).into(),
+                ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Less).into(),
             ),
             ScratchBlock::VarSet(
                 Ptr(4),
-                ScratchBlock::OpCmpLesser(2.0.into(), 3.0.into()).into(),
+                ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Less).into(),
             ),
             ScratchBlock::VarSet(
                 Ptr(5),
-                ScratchBlock::OpCmpLesser(3.0.into(), 3.0.into()).into(),
+                ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Less).into(),
             ),
         ]);
         assert_eq!(memory[0].convert_to_number(), 1.0);

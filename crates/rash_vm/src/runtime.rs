@@ -226,6 +226,7 @@ impl Runtime {
         let mut ended_threads = Vec::new();
 
         for (i, thread) in self.threads.iter_mut().enumerate() {
+            // Safety: Many invariants are checked by the runtime
             let has_ended = unsafe { thread.tick(&self.scripts, state) };
             if has_ended {
                 ended_threads.push(i);
@@ -351,7 +352,7 @@ impl ScratchThread {
         // running a child thread which also paused,
         // then tick the child thread instead until it ends,
         if let Some(thread) = &mut *self.child_thread {
-            let child_ended = thread.tick(scripts, state);
+            let child_ended = unsafe { thread.tick(scripts, state) };
             if child_ended {
                 *self.child_thread = None;
             } else {

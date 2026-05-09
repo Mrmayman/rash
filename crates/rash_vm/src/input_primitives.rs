@@ -1,18 +1,18 @@
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 use cranelift::{
     codegen::ir::StackSlot,
     prelude::{
-        types::{F64, I64},
         FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+        types::{F64, I64},
     },
 };
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock},
+    compiler::{Compiler, ScratchBlock, VarType},
     constant_set::ConstantMap,
-    data_types::{ScratchObject, ID_BOOL, ID_NUMBER},
+    data_types::{ID_BOOL, ID_NUMBER, ScratchObject},
 };
 
 /// Scratch has a special edge case for math with NaN.
@@ -269,6 +269,11 @@ impl Input {
                     ReturnValue::Num(value) => {
                         let id = builder.ins().iconst(I64, ID_NUMBER);
                         let zero = compiler.constants.get_int(0, builder);
+                        let value = builder.ins().bitcast(
+                            I64,
+                            cranelift::codegen::ir::MemFlags::new(),
+                            value,
+                        );
                         [id, value, zero, zero]
                     }
                     ReturnValue::Bool(value) => {
@@ -302,7 +307,7 @@ impl Input {
                     }
                     ReturnValue::Bool(value) => (
                         builder.ins().fcvt_from_sint(F64, value),
-                        compiler.constants.get_int(0, builder),
+                        compiler.constants.get_int(1, builder),
                     ),
                     ReturnValue::ObjectPointer(_value, slot) => {
                         let i1 = builder.ins().stack_load(I64, slot, 0);
@@ -314,6 +319,15 @@ impl Input {
                     }
                 }
             }
+        }
+    }
+
+    pub fn expected_type(&self, variable_type_data: &HashMap<Ptr, VarType>) -> Option<VarType> {
+        match self {
+            Input::Obj(o) => Some(o.get_type()),
+            Input::Block(b) => b
+                .return_type(variable_type_data)
+                .and_then(|n| n.to_vartype()),
         }
     }
 }

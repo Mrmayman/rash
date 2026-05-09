@@ -1,6 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct SpriteId(pub i64);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
@@ -17,9 +18,9 @@ impl RunState {
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_go_to(this: *mut Self, id: i64, x: f64, y: f64) {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).go_to(SpriteId(id), x as f32, y as f32);
+    pub unsafe extern "C" fn c_go_to(this: *mut Self, id: SpriteId, x: f64, y: f64) {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).go_to(id, x as f32, y as f32);
     }
 
     pub fn go_to(&mut self, id: SpriteId, x: f32, y: f32) {
@@ -30,9 +31,9 @@ impl RunState {
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_set_x(this: *mut Self, id: i64, x: f64) {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).set_x(SpriteId(id), x as f32);
+    pub unsafe extern "C" fn c_set_x(this: *mut Self, id: SpriteId, x: f64) {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).set_x(id, x as f32);
     }
 
     pub fn set_x(&mut self, id: SpriteId, x: f32) {
@@ -42,9 +43,9 @@ impl RunState {
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_set_y(this: *mut Self, id: i64, y: f64) {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).set_y(SpriteId(id), y as f32);
+    pub unsafe extern "C" fn c_set_y(this: *mut Self, id: SpriteId, y: f64) {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).set_y(id, y as f32);
     }
 
     pub fn set_y(&mut self, id: SpriteId, y: f32) {
@@ -54,16 +55,16 @@ impl RunState {
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_get_x(this: *mut Self, id: i64) -> f64 {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).get_x(SpriteId(id)) as f64
+    pub unsafe extern "C" fn c_get_x(this: *mut Self, id: SpriteId) -> f64 {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).get_x(id) as f64
     }
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_get_y(this: *mut Self, id: i64) -> f64 {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).get_y(SpriteId(id)) as f64
+    pub unsafe extern "C" fn c_get_y(this: *mut Self, id: SpriteId) -> f64 {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).get_y(id) as f64
     }
 
     pub fn get_x(&mut self, id: SpriteId) -> f32 {
@@ -78,16 +79,16 @@ impl RunState {
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_change_x(this: *mut Self, id: i64, x: f64) {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).change_x(SpriteId(id), x as f32);
+    pub unsafe extern "C" fn c_change_x(this: *mut Self, id: SpriteId, x: f64) {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).change_x(id, x as f32);
     }
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_change_y(this: *mut Self, id: i64, y: f64) {
-        assert!(!this.is_null());
-        (unsafe { &mut *this }).change_y(SpriteId(id), y as f32);
+    pub unsafe extern "C" fn c_change_y(this: *mut Self, id: SpriteId, y: f64) {
+        debug_assert!(!this.is_null());
+        (unsafe { &mut *this }).change_y(id, y as f32);
     }
 
     pub fn change_x(&mut self, id: SpriteId, x: f32) {
@@ -99,8 +100,25 @@ impl RunState {
         let state = self.sprites.get_mut(&id).unwrap();
         state.graphics.y += y;
     }
+
+    pub fn shown(&mut self, id: SpriteId, shown: bool) {
+        let state = self.sprites.get_mut(&id).unwrap();
+        state.graphics.shown = shown as i32;
+    }
+
+    pub unsafe extern "C" fn c_shown(this: *mut Self, id: SpriteId, shown: i64) {
+        debug_assert!(!this.is_null());
+        unsafe { &mut *this }.shown(id, shown == 1);
+    }
 }
 
+const _E: () = {
+    assert!(std::mem::size_of::<GraphicsState>() == 16 * 4);
+};
+
+// WARNING: If you change this,
+// update the shader-side definition too in
+// `crates/rash_render/src/shaders/common.wgsl`
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct GraphicsState {
@@ -108,10 +126,14 @@ pub struct GraphicsState {
     pub y: f32,
     pub texture_width: f32,
     pub texture_height: f32,
+
     pub size: f32,
     pub current_costume: CostumeId,
     pub center_x: f32,
     pub center_y: f32,
+
+    pub shown: i32,
+    pub padding: [i32; 7],
 }
 
 impl Default for GraphicsState {
@@ -125,6 +147,8 @@ impl Default for GraphicsState {
             texture_height: 100.0,
             center_x: 0.0,
             center_y: 0.0,
+            shown: 1,
+            padding: [0; _],
         }
     }
 }
@@ -151,6 +175,7 @@ pub struct SpriteLoadData {
     pub y: f64,
     pub size: f64,
     pub costume: CostumeId,
+    pub shown: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

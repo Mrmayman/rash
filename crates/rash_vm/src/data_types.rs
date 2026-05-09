@@ -12,6 +12,8 @@
 //! Side note: This module is probably the best documented part
 //! of the entire project lol.
 
+use std::cmp::Ordering;
+
 use colored::Colorize;
 
 use crate::compiler::VarType;
@@ -121,7 +123,7 @@ impl ScratchObject {
         let decimal = match self {
             ScratchObject::Number(n) => n.fract() != 0.0,
             ScratchObject::String(s) => s.contains('.'),
-            ScratchObject::Bool(_) => false,
+            ScratchObject::Bool(_) => true,
         };
         (self.convert_to_number(), decimal)
     }
@@ -183,10 +185,85 @@ impl ScratchObject {
     pub fn convert_to_string(&self) -> String {
         match self {
             ScratchObject::Number(num) => number_to_string(*num),
-            ScratchObject::String(s) => s.to_owned(), // Faster than s.to_string()
+            ScratchObject::String(s) => s.to_owned(),
             ScratchObject::Bool(true) => "true".to_owned(),
             ScratchObject::Bool(false) => "false".to_owned(),
         }
+    }
+
+    #[inline]
+    pub fn convert_to_string_cow(&self) -> std::borrow::Cow<'_, str> {
+        match self {
+            ScratchObject::Number(num) => number_to_string(*num).into(),
+            ScratchObject::String(s) => s.into(),
+            ScratchObject::Bool(true) => "true".into(),
+            ScratchObject::Bool(false) => "false".into(),
+        }
+    }
+
+    #[inline]
+    pub fn scratch_cmp(&self, other: &ScratchObject) -> Ordering {
+        #[inline]
+        fn makebool(b: bool) -> f64 {
+            if b { 1.0 } else { 0.0 }
+        }
+
+        #[inline]
+        fn check_str(a: &ScratchObject, cmp_str: &mut bool, n: &mut f64) {
+            match a {
+                ScratchObject::Number(num) => *n = *num,
+                ScratchObject::String(s) => {
+                    if s.is_empty() || s.trim().is_empty() {
+                        *cmp_str = true;
+                    }
+                    if let Ok(p) = s.parse::<f64>() {
+                        if p.is_nan() {
+                            *cmp_str = true;
+                        } else {
+                            *n = p;
+                        }
+                    } else {
+                        *cmp_str = true;
+                    }
+                }
+                ScratchObject::Bool(b) => *n = *b as u8 as f64,
+            }
+        }
+
+        let a = self;
+        let b = other;
+
+        match (a, b) {
+            // fast cases
+            (ScratchObject::Number(a), ScratchObject::Number(b)) => return a.total_cmp(&b),
+            (ScratchObject::Number(a), ScratchObject::Bool(b)) => {
+                return a.total_cmp(&makebool(*b));
+            }
+            (ScratchObject::Bool(b), ScratchObject::Number(a)) => {
+                return makebool(*b).total_cmp(a);
+            }
+            (ScratchObject::Bool(a), ScratchObject::Bool(b)) => return a.cmp(b),
+            _ => {} // We deal with strings below
+        }
+
+        let mut cmp_str = false;
+        let mut n1 = 0.0f64;
+        let mut n2 = 0.0f64;
+
+        // even if both are strings, we still have
+        // to try comparing them as numbers
+        check_str(a, &mut cmp_str, &mut n1);
+        if !cmp_str {
+            check_str(b, &mut cmp_str, &mut n2);
+        }
+
+        if cmp_str {
+            let s1 = a.convert_to_string_cow();
+            let s2 = b.convert_to_string_cow();
+            return s1.cmp(&s2);
+        }
+
+        n1.total_cmp(&n2)
     }
 }
 
@@ -244,11 +321,7 @@ pub fn string_to_number(string: &str) -> f64 {
             Default::default()
         }
     });
-    if s.is_nan() {
-        0.0
-    } else {
-        s
-    }
+    if s.is_nan() { 0.0 } else { s }
 }
 
 /// Takes in string such as "0x10" or "0b10" and converts it to number.
@@ -413,19 +486,27 @@ mod tests {
         assert_eq!(ScratchObject::Bool(true).convert_to_number(), 1.0);
         assert_eq!(ScratchObject::Bool(false).convert_to_number(), 0.0);
 
-        assert!(ScratchObject::String("Infinity".to_owned())
-            .convert_to_number()
-            .is_sign_positive());
-        assert!(ScratchObject::String("Infinity".to_owned())
-            .convert_to_number()
-            .is_infinite());
+        assert!(
+            ScratchObject::String("Infinity".to_owned())
+                .convert_to_number()
+                .is_sign_positive()
+        );
+        assert!(
+            ScratchObject::String("Infinity".to_owned())
+                .convert_to_number()
+                .is_infinite()
+        );
 
-        assert!(ScratchObject::String("-Infinity".to_owned())
-            .convert_to_number()
-            .is_sign_negative());
-        assert!(ScratchObject::String("-Infinity".to_owned())
-            .convert_to_number()
-            .is_infinite());
+        assert!(
+            ScratchObject::String("-Infinity".to_owned())
+                .convert_to_number()
+                .is_sign_negative()
+        );
+        assert!(
+            ScratchObject::String("-Infinity".to_owned())
+                .convert_to_number()
+                .is_infinite()
+        );
     }
 
     macro_rules! number_to_string {

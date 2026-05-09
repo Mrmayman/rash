@@ -13,7 +13,8 @@ pub mod runtime;
 mod stack_cache;
 mod tests;
 
-pub use compiler::{ScratchBlock, MEMORY};
+pub use callbacks::print_function_addresses;
+pub use compiler::{MEMORY, ScratchBlock};
 pub use data_types::ScratchObject;
 pub use graphics::{
     CostumeData, CostumeId, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData,

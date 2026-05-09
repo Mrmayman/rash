@@ -5,7 +5,7 @@ fn vs_main(
     @builtin(vertex_index) in_vertex_index: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.in_vertex_index = in_vertex_index;
+    // out.in_vertex_index = f32(in_vertex_index);
 
     var local_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
         vec2<f32>(-1.0, -1.0), // Bottom-left
@@ -34,6 +34,5 @@ fn vs_main(
         + (sprite.pos * 2.0 / global_resolution);
 
     out.clip_position = vec4<f32>(world_position, 0.0, 1.0);
-    out.vert_pos = out.clip_position.xyz;
     return out;
 }

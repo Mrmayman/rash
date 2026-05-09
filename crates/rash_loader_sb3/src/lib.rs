@@ -202,6 +202,7 @@ impl ProjectLoader {
                 y: sprite_json.y.unwrap_or_default(),
                 size: sprite_json.size.unwrap_or(100.0),
                 costume,
+                shown: sprite_json.visible.unwrap_or(true),
             };
 
             state_map.insert(id, state);

@@ -3,15 +3,15 @@ use std::collections::{HashMap, HashSet};
 use cranelift::{
     codegen::ir::StackSlot,
     prelude::{
-        types::{F64, I64},
         FunctionBuilder, InstBuilder, MemFlags, StackSlotData, StackSlotKind, Value,
+        types::{F64, I64},
     },
 };
 
 use crate::{
     compiler::ScratchBlock,
     constant_set::ConstantMap,
-    data_types::{ScratchObject, ID_BOOL, ID_NUMBER, ID_STRING},
+    data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     input_primitives::{Input, Ptr},
 };
 
@@ -280,8 +280,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::OpDiv(a, b)
         | ScratchBlock::OpStrJoin(a, b)
         | ScratchBlock::OpMod(a, b)
-        | ScratchBlock::OpCmpGreater(a, b)
-        | ScratchBlock::OpCmpLesser(a, b)
+        | ScratchBlock::OpCmp(a, b, _)
         | ScratchBlock::OpBAnd(a, b)
         | ScratchBlock::OpBOr(a, b)
         | ScratchBlock::MotionGoToXY(a, b)
@@ -327,6 +326,7 @@ pub fn accesses_var(block: &ScratchBlock, vars: &mut HashSet<Ptr>) {
         | ScratchBlock::ControlStopThisScript
         | ScratchBlock::FunctionGetArg(_)
         | ScratchBlock::ControlDaysSince2000
+        | ScratchBlock::LooksShown(_)
         | ScratchBlock::MotionGetX
         | ScratchBlock::MotionGetY => {}
     }

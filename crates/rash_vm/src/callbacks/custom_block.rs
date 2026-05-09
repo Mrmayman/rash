@@ -4,6 +4,22 @@ use crate::{
     runtime::{CustomBlockId, ScratchThread, Scripts},
 };
 
+pub fn print_function_addresses() {
+    fn print(name: &str, addr: *const ()) {
+        println!("{name:35} = {:#018x}", addr as usize);
+    }
+
+    println!("\n========");
+    println!("custom_block.rs");
+    println!("========");
+
+    print(
+        "call_no_screen_refresh",
+        call_no_screen_refresh as *const (),
+    );
+    print("call_screen_refresh", call_screen_refresh as *const ());
+}
+
 #[repr(i64)]
 pub enum PauseStatus {
     Ended = 0,
@@ -87,8 +103,8 @@ unsafe fn vec_from_raw<T: Clone>(ptr: *const T, count: usize) -> Vec<T> {
     let mut vec = Vec::with_capacity(count);
 
     for i in 0..count {
-        let item = ptr.add(i);
-        vec.push((*item).clone());
+        let item = unsafe { ptr.add(i) };
+        vec.push(unsafe { item.read().clone() });
     }
 
     vec
