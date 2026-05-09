@@ -438,63 +438,13 @@ impl Block {
                     .trace("Block::compile.motion_changeyby")?;
                 Ok(ScratchBlock::MotionChangeY(val))
             }
-            "control_if" => {
-                let condition = self
-                    .get_boolean_input(ctx, "CONDITION")
-                    .trace("Block::compile.control_if")?;
-
-                let compiled_blocks = self
-                    .compile_substack(ctx, "SUBSTACK")
-                    .trace("Block::compile.control_if")?;
-
-                Ok(ScratchBlock::ControlIf(condition, compiled_blocks))
-            }
-            "control_if_else" => {
-                let condition = self
-                    .get_boolean_input(ctx, "CONDITION")
-                    .trace("Block::compile.control_if_else")?;
-
-                let compiled_blocks = self
-                    .compile_substack(ctx, "SUBSTACK")
-                    .trace("Block::compile.control_if_else")?;
-
-                let compiled_blocks2 = self
-                    .compile_substack(ctx, "SUBSTACK2")
-                    .trace("Block::compile.control_if_else")?;
-
-                Ok(ScratchBlock::ControlIfElse(
-                    condition,
-                    compiled_blocks,
-                    compiled_blocks2,
-                ))
-            }
-            "control_repeat" => {
-                let times = self
-                    .get_number_input(ctx, "TIMES")
-                    .trace("Block::compile.control_repeat")?;
-
-                let blocks = self
-                    .compile_substack(ctx, "SUBSTACK")
-                    .trace("Block::compile.control_repeat")?;
-
-                Ok(ScratchBlock::ControlRepeat(times, blocks))
-            }
-            "control_repeat_until" => {
-                let condition = self
-                    .get_boolean_input(ctx, "CONDITION")
-                    .trace("Block::compile.control_repeat_until")?;
-                let blocks = self
-                    .compile_substack(ctx, "SUBSTACK")
-                    .trace("Block::compile.control_repeat")?;
-
-                Ok(ScratchBlock::ControlRepeatUntil(condition, blocks))
-            }
-            "control_forever" => {
-                let blocks = self
-                    .compile_substack(ctx, "SUBSTACK")
-                    .trace("Block::compile.control_forever")?;
-                Ok(ScratchBlock::ControlForever(blocks))
-            }
+            "looks_show" => Ok(ScratchBlock::LooksShown(true)),
+            "looks_hide" => Ok(ScratchBlock::LooksShown(false)),
+            "control_if" => self.c_cont_if(ctx),
+            "control_if_else" => self.c_cont_if_else(ctx),
+            "control_repeat" => self.c_cont_repeat(ctx),
+            "control_repeat_until" => self.c_cont_repeat_until(ctx),
+            "control_forever" => self.c_cont_forever(ctx),
             "looks_say" => {
                 // TODO: implement this properly
                 let message = self
