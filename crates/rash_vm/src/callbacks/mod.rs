@@ -5,8 +5,25 @@
 
 use core::f64;
 
-use crate::data_types::ScratchObject;
 use colored::Colorize;
+
+macro_rules! print_func {
+    ($module:expr, $($fn:ident),+ $(,)?) => {
+        pub fn print_function_addresses() {
+            fn print(name: &str, addr: *const ()) {
+                println!("{name:40} = {:#018x}", addr as usize);
+            }
+
+            println!("\n========");
+            println!("{}", $module);
+            println!("========");
+
+            $(
+                print(stringify!($fn), $fn as *const ());
+            )+
+        }
+    };
+}
 
 pub mod custom_block;
 pub mod op;
@@ -27,26 +44,8 @@ pub fn print_function_addresses() {
     println!("mod.rs");
     println!("========");
 
-    print("var_read", var_read as *const ());
     print("dbg_log", dbg_log as *const ());
     print("op_days_since_2000", days_since_2000 as *const ());
-}
-
-/// Callback from JIT code to read a variable.
-///
-/// **Why can't you just directly read from memory?**
-/// Because, if it's a String, it has to be cloned otherwise
-/// there may be double frees and other memory issues.
-///
-/// # Arguments
-/// * `ptr` - The pointer to the variable (supplied from the
-///   MEMORY array beforehand by the compiler).
-/// * `dest` - The pointer to the destination memory location.
-///   (not a pointer to `ScratchObject` for simplicity sake)
-pub unsafe extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut ScratchObject) {
-    // TODO: This is pointless, eliminate it.
-    let obj = unsafe { (*ptr).clone() };
-    unsafe { dest.write(obj) };
 }
 
 pub unsafe extern "C" fn dbg_log(msg: *mut String, is_const: i64) {

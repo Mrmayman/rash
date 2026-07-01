@@ -3,21 +3,20 @@ use std::collections::BTreeMap;
 use cranelift::prelude::{FunctionBuilder, InstBuilder, Value, types::I64};
 use ordered_float::OrderedFloat;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum ConstantType {
     Float(OrderedFloat<f64>),
     Int(i64),
 }
 
+#[derive(Default, Clone)]
 pub struct ConstantMap {
     map: BTreeMap<ConstantType, Value>,
 }
 
 impl ConstantMap {
     pub fn new() -> Self {
-        Self {
-            map: BTreeMap::new(),
-        }
+        Self::default()
     }
 
     pub fn get_int(&mut self, num: i64, builder: &mut FunctionBuilder) -> Value {

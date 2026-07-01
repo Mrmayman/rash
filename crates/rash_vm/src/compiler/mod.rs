@@ -5,7 +5,7 @@ use std::{
 };
 
 use cranelift::{
-    codegen::ir::SigRef,
+    codegen::ir::{SigRef, StackSlot},
     prelude::{
         Block, FunctionBuilder, InstBuilder, Signature, StackSlotData, StackSlotKind, Value,
         types::{F64, I64},
@@ -16,10 +16,11 @@ use crate::{
     callbacks,
     constant_set::ConstantMap,
     data_types::ScratchObject,
+    effects::{CheckEffects, Effects},
     graphics::{RunState, SpriteId},
     input_primitives::{Input, Ptr, ReturnValue},
     runtime::CustomBlockId,
-    stack_cache::StackCache,
+    variable_storage::VariableStorage,
 };
 
 mod display;
@@ -99,23 +100,13 @@ pub enum ScratchBlock {
     Log(Input),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Default, Clone, Copy)]
 pub enum VarTypeChecked {
     Number,
     Bool,
     String,
-    Unknown,
-}
-
-impl VarTypeChecked {
-    pub fn to_vartype(&self) -> Option<VarType> {
-        Some(match self {
-            VarTypeChecked::Number => VarType::Number,
-            VarTypeChecked::Bool => VarType::Bool,
-            VarTypeChecked::String => VarType::String,
-            VarTypeChecked::Unknown => return None,
-        })
-    }
+    #[default]
+    Object,
 }
 
 impl From<VarType> for VarTypeChecked {
@@ -128,17 +119,36 @@ impl From<VarType> for VarTypeChecked {
     }
 }
 
+impl From<Option<VarType>> for VarTypeChecked {
+    fn from(value: Option<VarType>) -> Self {
+        match value {
+            Some(n) => n.into(),
+            None => Self::Object,
+        }
+    }
+}
+
+impl Into<Option<VarType>> for VarTypeChecked {
+    fn into(self) -> Option<VarType> {
+        Some(match self {
+            VarTypeChecked::Number => VarType::Number,
+            VarTypeChecked::Bool => VarType::Bool,
+            VarTypeChecked::String => VarType::String,
+            VarTypeChecked::Object => return None,
+        })
+    }
+}
+
 impl ScratchBlock {
     pub fn return_type(
         &self,
-        variable_type_data: &HashMap<Ptr, VarType>,
+        mut vartype: impl FnMut(Ptr) -> Option<VarType>,
     ) -> Option<VarTypeChecked> {
         match self {
-            ScratchBlock::VarRead(ptr) => match variable_type_data.get(ptr) {
-                Some(vartype) => Some((*vartype).into()),
-                None => Some(VarTypeChecked::Unknown),
-            },
-            ScratchBlock::FunctionGetArg(_) => Some(VarTypeChecked::Unknown),
+            ScratchBlock::VarRead(ptr) => {
+                Some(vartype(*ptr).map(VarType::into).unwrap_or_default())
+            }
+            ScratchBlock::FunctionGetArg(_) => Some(VarTypeChecked::Object),
             ScratchBlock::OpAdd(_, _)
             | ScratchBlock::OpSub(_, _)
             | ScratchBlock::OpMul(_, _)
@@ -192,13 +202,13 @@ impl ScratchBlock {
     ) -> Option<VarTypeChecked> {
         match self {
             ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _) => Some(VarTypeChecked::Unknown),
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _) => Some(VarTypeChecked::Object),
             ScratchBlock::VarSet(ptr, input) => {
                 if var_ptr == *ptr {
                     match input {
                         Input::Obj(scratch_object) => Some(scratch_object.get_type().into()),
                         Input::Block(scratch_block) => {
-                            scratch_block.return_type(variable_type_data)
+                            scratch_block.return_type(|n| variable_type_data.get(&n).cloned())
                         }
                     }
                 } else {
@@ -235,7 +245,7 @@ impl ScratchBlock {
                         if a == b {
                             Some(a)
                         } else {
-                            Some(VarTypeChecked::Unknown)
+                            Some(VarTypeChecked::Object)
                         }
                     }
                 }
@@ -358,15 +368,17 @@ pub enum VarType {
 }
 
 pub(crate) struct Compiler<'compiler> {
-    pub variable_type_data: HashMap<Ptr, VarType>,
     pub args_list: Vec<[Value; 4]>,
     pub constants: ConstantMap,
     pub code_block: Block,
-    pub cache: StackCache,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
     pub func_signatures: HashMap<Signature, SigRef>,
+    pub program_analysis: Effects,
+
+    pub cache: VariableStorage<'compiler>,
+    pub temp_slot4: (Value, StackSlot),
 
     /// Storing how many loops inside we are right now
     /// while compiling the current code.
@@ -418,15 +430,27 @@ impl<'a> Compiler<'a> {
         is_called_as_refresh: Value,
         child_thread_ptr: Value,
     ) -> Self {
+        let mut constants = ConstantMap::new();
+        let slot = builder.create_sized_stack_slot(StackSlotData {
+            kind: StackSlotKind::ExplicitSlot,
+            size: 4 * std::mem::size_of::<i64>() as u32,
+            align_shift: 0,
+            key: None,
+        });
+
+        // TODO: inter-function analysis
+        let program_analysis = code.effects(&mut |_| Effects::unknown(), &|_| None);
+
         Self {
-            variable_type_data: HashMap::new(),
-            constants: ConstantMap::new(),
             code_block: block,
-            cache: StackCache::new(builder, code),
+            cache: VariableStorage::new(builder, &program_analysis, memory, &mut constants),
+            program_analysis,
+            constants,
             break_points: Vec::new(),
             func_signatures: HashMap::new(),
             break_counter: 0,
             repeat_stack: 0,
+            temp_slot4: (builder.ins().stack_addr(I64, slot, 0), slot),
             memory,
             script_ptr,
             loop_stack_ptr,
@@ -480,7 +504,7 @@ impl<'a> Compiler<'a> {
                 self.var_change(input, builder, *ptr);
             }
             ScratchBlock::ControlIf(input, vec) => {
-                self.control_if_statement(input, builder, vec);
+                self.control_if(input, builder, vec);
             }
             ScratchBlock::ControlIfElse(condition, then_block, else_block) => {
                 self.control_if_else(condition, builder, then_block, else_block);
@@ -675,25 +699,20 @@ impl<'a> Compiler<'a> {
         idx: &usize,
     ) -> [Value; 4] {
         let [i1, i2, i3, i4] = self.args_list[*idx];
-        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            4 * std::mem::size_of::<i64>() as u32,
-            0,
-        ));
-        let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
         self.call_function(
             builder,
             callbacks::types::clone_obj as *const (),
             &[I64, I64, I64, I64, I64],
             &[],
-            &[i1, i2, i3, i4, stack_ptr],
+            &[i1, i2, i3, i4, self.temp_slot4.0],
         );
 
-        let i1 = builder.ins().stack_load(I64, stack_slot, 0);
-        let i2 = builder.ins().stack_load(I64, stack_slot, 8);
-        let i3 = builder.ins().stack_load(I64, stack_slot, 16);
-        let i4 = builder.ins().stack_load(I64, stack_slot, 24);
+        let slot = self.temp_slot4.1;
+        let i1 = builder.ins().stack_load(I64, slot, 0);
+        let i2 = builder.ins().stack_load(I64, slot, 8);
+        let i3 = builder.ins().stack_load(I64, slot, 16);
+        let i4 = builder.ins().stack_load(I64, slot, 24);
         [i1, i2, i3, i4]
     }
 
@@ -702,10 +721,10 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        // TODO: Hacky workaround for too-fast timing
         for _ in 0..2 {
+            // TODO: Hacky workaround for too-fast timing
             self.break_counter += 1;
-            self.cache.save(builder, &mut self.constants, self.memory);
+            self.cache.save(builder, &mut self.constants);
             let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
             builder.ins().return_(&[break_counter]);

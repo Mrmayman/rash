@@ -1,7 +1,10 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashSet,
+    sync::{LazyLock, Mutex},
+};
 
 use cranelift::{
-    codegen::ir::StackSlot,
+    codegen::ir::MemFlags,
     prelude::{
         FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
         types::{F64, I64},
@@ -10,9 +13,9 @@ use cranelift::{
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock, VarType},
+    compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
     constant_set::ConstantMap,
-    data_types::{ID_BOOL, ID_NUMBER, ScratchObject},
+    data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
 };
 
 /// Scratch has a special edge case for math with NaN.
@@ -32,7 +35,8 @@ use crate::{
 /// - With NaN check: `6.5 ms`
 const ARITHMETIC_NAN_CHECK: bool = true;
 
-pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
+pub static STRINGS_TO_DROP: LazyLock<Mutex<HashSet<[i64; 3]>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
@@ -202,7 +206,7 @@ impl Input {
                 let string = scratch_object.convert_to_string();
 
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
-                STRINGS_TO_DROP.lock().unwrap().push(bytes);
+                STRINGS_TO_DROP.lock().unwrap().insert(bytes);
 
                 let val1 = compiler.constants.get_int(bytes[0], builder);
                 let val2 = compiler.constants.get_int(bytes[1], builder);
@@ -252,7 +256,7 @@ impl Input {
                 let [i1, i2, i3, i4] =
                     unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
                 if is_string {
-                    STRINGS_TO_DROP.lock().unwrap().push([i2, i3, i4]);
+                    STRINGS_TO_DROP.lock().unwrap().insert([i2, i3, i4]);
                 }
 
                 let i1 = compiler.constants.get_int(i1, builder);
@@ -265,11 +269,8 @@ impl Input {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
                     ReturnValue::Object(arr) => arr,
-                    ReturnValue::ObjectPointer(_, slot) => {
-                        let i1 = builder.ins().stack_load(I64, slot, 0);
-                        let i2 = builder.ins().stack_load(I64, slot, 8);
-                        let i3 = builder.ins().stack_load(I64, slot, 16);
-                        let i4 = builder.ins().stack_load(I64, slot, 24);
+                    ReturnValue::String([i2, i3, i4]) => {
+                        let i1 = compiler.constants.get_int(ID_STRING, builder);
                         [i1, i2, i3, i4]
                     }
                     ReturnValue::Num(value) => {
@@ -311,43 +312,41 @@ impl Input {
                     ReturnValue::Object([i1, i2, i3, i4]) => {
                         compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
                     }
+                    ReturnValue::String([i2, i3, i4]) => {
+                        let i1 = compiler.constants.get_int(ID_STRING, builder);
+                        compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                    }
                     ReturnValue::Bool(value) => (
                         builder.ins().fcvt_from_sint(F64, value),
                         compiler.constants.get_int(1, builder),
                     ),
-                    ReturnValue::ObjectPointer(_value, slot) => {
-                        let i1 = builder.ins().stack_load(I64, slot, 0);
-                        let i2 = builder.ins().stack_load(I64, slot, 8);
-                        let i3 = builder.ins().stack_load(I64, slot, 16);
-                        let i4 = builder.ins().stack_load(I64, slot, 24);
-
-                        compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
-                    }
                 }
             }
         }
     }
 
-    pub fn expected_type(&self, variable_type_data: &HashMap<Ptr, VarType>) -> Option<VarType> {
+    pub fn expected_type(&self, vartype: impl FnMut(Ptr) -> Option<VarType>) -> Option<VarType> {
         match self {
             Input::Obj(o) => Some(o.get_type()),
-            Input::Block(b) => b
-                .return_type(variable_type_data)
-                .and_then(|n| n.to_vartype()),
+            Input::Block(b) => b.return_type(vartype).and_then(VarTypeChecked::into),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReturnValue {
     Num(Value),
     Bool(Value),
+    String([Value; 3]),
     Object([Value; 4]),
-    ObjectPointer(Value, StackSlot),
 }
 
 impl ReturnValue {
-    pub fn get_number(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
+    pub(crate) fn get_number(
+        self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
         match self {
             ReturnValue::Num(value) => value,
             ReturnValue::Object(arr) => {
@@ -360,23 +359,17 @@ impl ReturnValue {
                 );
                 builder.inst_results(num)[0]
             }
-            ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
-            ReturnValue::ObjectPointer(_value, slot) => {
-                let i1 = builder.ins().stack_load(I64, slot, 0);
-                let i2 = builder.ins().stack_load(I64, slot, 8);
-                let i3 = builder.ins().stack_load(I64, slot, 16);
-                let i4 = builder.ins().stack_load(I64, slot, 24);
-
-                // Convert the object to number
+            ReturnValue::String(arr) => {
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number as *const (),
-                    &[I64, I64, I64, I64],
+                    callbacks::types::to_number_from_string as *const (),
+                    &[I64, I64, I64],
                     &[F64],
-                    &[i1, i2, i3, i4],
+                    &arr,
                 );
                 builder.inst_results(num)[0]
             }
+            ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
         }
     }
 
@@ -398,6 +391,10 @@ impl ReturnValue {
                 );
                 stack_ptr
             }
+            ReturnValue::String([i2, i3, i4]) => {
+                let i1 = compiler.constants.get_int(ID_STRING, builder);
+                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
+            }
             ReturnValue::Object([i1, i2, i3, i4]) => {
                 get_string_from_obj(builder, compiler, i1, i2, i3, i4)
             }
@@ -412,15 +409,6 @@ impl ReturnValue {
                     &[value, stack_ptr],
                 );
                 stack_ptr
-            }
-            ReturnValue::ObjectPointer(_value, slot) => {
-                // read 4 i64 from pointer
-                let i1 = builder.ins().stack_load(I64, slot, 0);
-                let i2 = builder.ins().stack_load(I64, slot, 8);
-                let i3 = builder.ins().stack_load(I64, slot, 16);
-                let i4 = builder.ins().stack_load(I64, slot, 24);
-
-                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
             }
         }
     }
@@ -442,33 +430,98 @@ impl ReturnValue {
                 builder.ins().select(res, one, zero)
             }
             ReturnValue::Bool(value) => *value,
-            ReturnValue::Object([i1, i2, i3, i4]) => {
-                let ins = compiler.call_function(
-                    builder,
-                    callbacks::types::to_bool as *const (),
-                    &[I64, I64, I64, I64],
-                    &[I64],
-                    &[*i1, *i2, *i3, *i4],
-                );
-                builder.inst_results(ins)[0]
+            ReturnValue::String([i2, i3, i4]) => {
+                let i1 = compiler.constants.get_int(ID_STRING, builder);
+                obj_to_bool(compiler, builder, i1, *i2, *i3, *i4)
             }
-            ReturnValue::ObjectPointer(_value, stack_slot) => {
-                let i1 = builder.ins().stack_load(I64, *stack_slot, 0);
-                let i2 = builder.ins().stack_load(I64, *stack_slot, 8);
-                let i3 = builder.ins().stack_load(I64, *stack_slot, 16);
-                let i4 = builder.ins().stack_load(I64, *stack_slot, 24);
-
-                let ins = compiler.call_function(
-                    builder,
-                    callbacks::types::to_bool as *const (),
-                    &[I64, I64, I64, I64],
-                    &[I64],
-                    &[i1, i2, i3, i4],
-                );
-                builder.inst_results(ins)[0]
+            ReturnValue::Object([i1, i2, i3, i4]) => {
+                obj_to_bool(compiler, builder, *i1, *i2, *i3, *i4)
             }
         }
     }
+
+    pub fn clone_in_code(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> ReturnValue {
+        match self {
+            ReturnValue::Num(value) => ReturnValue::Num(*value),
+            ReturnValue::Bool(value) => ReturnValue::Bool(*value),
+            ReturnValue::String([i2, i3, i4]) => {
+                let i1 = compiler.constants.get_int(ID_STRING, builder);
+                obj_clone(compiler, builder, i1, *i2, *i3, *i4)
+            }
+            ReturnValue::Object([i1, i2, i3, i4]) => {
+                obj_clone(compiler, builder, *i1, *i2, *i3, *i4)
+            }
+        }
+    }
+
+    pub fn get_object(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        constants: &mut ConstantMap,
+    ) -> [Value; 4] {
+        match self {
+            ReturnValue::Num(n) => {
+                let n = builder.ins().bitcast(I64, MemFlags::new(), *n);
+                let id = constants.get_int(ID_NUMBER, builder);
+                let zero = constants.get_int(0, builder);
+                [id, n, zero, zero]
+            }
+            ReturnValue::Bool(n) => {
+                let id = constants.get_int(ID_BOOL, builder);
+                let zero = constants.get_int(0, builder);
+                [id, *n, zero, zero]
+            }
+            ReturnValue::String([i2, i3, i4]) => {
+                let i1 = constants.get_int(ID_STRING, builder);
+                [i1, *i2, *i3, *i4]
+            }
+            ReturnValue::Object(n) => *n,
+        }
+    }
+}
+
+fn obj_clone(
+    compiler: &mut Compiler<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    i1: Value,
+    i2: Value,
+    i3: Value,
+    i4: Value,
+) -> ReturnValue {
+    compiler.call_function(
+        builder,
+        callbacks::types::clone_obj as *const (),
+        &[I64, I64, I64, I64, I64],
+        &[],
+        &[i1, i2, i3, i4, compiler.temp_slot4.0],
+    );
+    let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+    let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+    let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+    let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
+    ReturnValue::Object([i1, i2, i3, i4])
+}
+
+fn obj_to_bool(
+    compiler: &mut Compiler<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    i1: Value,
+    i2: Value,
+    i3: Value,
+    i4: Value,
+) -> Value {
+    let ins = compiler.call_function(
+        builder,
+        callbacks::types::to_bool as *const (),
+        &[I64, I64, I64, I64],
+        &[I64],
+        &[i1, i2, i3, i4],
+    );
+    builder.inst_results(ins)[0]
 }
 
 fn get_string_from_obj(

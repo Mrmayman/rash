@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use cranelift::{
     codegen::ir::condcodes::{FloatCC, IntCC},
     prelude::{
-        FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
+        FunctionBuilder, InstBuilder, Value,
         types::{F64, I64},
     },
 };
@@ -93,12 +93,16 @@ impl Compiler<'_> {
             return self.constants.get_int((out == comp) as i64, builder);
         }
 
+        let var_checker = |ptr| match self.cache.variable_vals.get(&ptr)? {
+            ReturnValue::Num(_) => Some(VarType::Number),
+            ReturnValue::Bool(_) => Some(VarType::Bool),
+            ReturnValue::String(_) => Some(VarType::String),
+            ReturnValue::Object(_) => None,
+        };
+
         // Based on our smart (conservative) type analysis,
         // `None` if can't be determined
-        if let (Some(at), Some(bt)) = (
-            a.expected_type(&self.variable_type_data),
-            b.expected_type(&self.variable_type_data),
-        ) {
+        if let (Some(at), Some(bt)) = (a.expected_type(var_checker), b.expected_type(var_checker)) {
             // Primitive checks involving numbers/bools
             match (at, bt) {
                 (VarType::Number, VarType::Number)
@@ -186,14 +190,6 @@ impl Compiler<'_> {
         let (a, a_is_const) = a.get_string(self, builder);
         let (b, b_is_const) = b.get_string(self, builder);
 
-        // Create stack slot for result
-        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            3 * std::mem::size_of::<i64>() as u32,
-            0,
-        ));
-        let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
-
         // Call join_string function
         let a_is_const = self.constants.get_int(i64::from(a_is_const), builder);
         let b_is_const = self.constants.get_int(i64::from(b_is_const), builder);
@@ -203,13 +199,13 @@ impl Compiler<'_> {
             callbacks::op::str_join as *const (),
             &[I64, I64, I64, I64, I64],
             &[],
-            &[a, b, stack_ptr, a_is_const, b_is_const],
+            &[a, b, self.temp_slot4.0, a_is_const, b_is_const],
         );
         // Read resulting string
         let id = self.constants.get_int(ID_STRING, builder);
-        let i1 = builder.ins().stack_load(I64, stack_slot, 0);
-        let i2 = builder.ins().stack_load(I64, stack_slot, 8);
-        let i3 = builder.ins().stack_load(I64, stack_slot, 16);
+        let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
+        let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        let i3 = builder.ins().stack_load(I64, self.temp_slot4.1, 16);
         [id, i1, i2, i3]
     }
 
@@ -302,26 +298,19 @@ impl Compiler<'_> {
         let (string, is_const) = string.get_string(self, builder);
         let letter = letter.get_number(self, builder);
 
-        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            3 * std::mem::size_of::<i64>() as u32,
-            0,
-        ));
-        let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
-
         let is_const = self.constants.get_int(i64::from(is_const), builder);
         self.call_function(
             builder,
             callbacks::op::str_letter as *const (),
             &[I64, I64, F64, I64],
             &[],
-            &[string, is_const, letter, stack_ptr],
+            &[string, is_const, letter, self.temp_slot4.0],
         );
 
         let id = self.constants.get_int(ID_STRING, builder);
-        let i1 = builder.ins().stack_load(I64, stack_slot, 0);
-        let i2 = builder.ins().stack_load(I64, stack_slot, 8);
-        let i3 = builder.ins().stack_load(I64, stack_slot, 16);
+        let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
+        let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        let i3 = builder.ins().stack_load(I64, self.temp_slot4.1, 16);
         [id, i1, i2, i3]
     }
 

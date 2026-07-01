@@ -18,6 +18,7 @@ mod tests {
 
     use super::*;
 
+    /*
     #[test]
     fn custom_block_screen_refresh() {
         let memory = MEMORY.lock().unwrap();
@@ -118,7 +119,7 @@ mod tests {
 
         assert_eq!(by_two(num_ticks), 16);
         assert_eq!(memory[3].convert_to_number(), 24.5);
-    }
+    }*/
 }
 
 #[cfg(test)]

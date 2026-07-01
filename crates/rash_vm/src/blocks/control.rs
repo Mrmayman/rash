@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 
-use cranelift::prelude::{FunctionBuilder, InstBuilder, IntCC, Value, types::I64};
+use cranelift::{
+    codegen::ir::BlockArg,
+    prelude::{FunctionBuilder, InstBuilder, IntCC, Value, types::I64},
+};
 
 use crate::{
     callbacks,
     compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
-    input_primitives::{Input, Ptr},
+    effects::{CheckEffects, Effects},
+    input_primitives::{Input, Ptr, ReturnValue},
 };
 
 impl Compiler<'_> {
@@ -14,7 +18,7 @@ impl Compiler<'_> {
             self.call_stack_pop(builder);
         }
 
-        self.cache.save(builder, &mut self.constants, self.memory);
+        self.cache.save(builder, &mut self.constants);
         let minus_one = self.constants.get_int(-1, builder);
         builder.ins().return_(&[minus_one]);
         let new_block = builder.create_block();
@@ -28,122 +32,118 @@ impl Compiler<'_> {
         input: &Input,
         vec: &[ScratchBlock],
     ) {
-        // Basically,
-        //
-        // for (i = 0; i < number; i += 1) {
-        //      your code
+        todo!()
+        // // Basically,
+        // //
+        // // for (i = 0; i < number; i += 1) {
+        // //      your code
+        // // }
+        // //
+        // // The different parts will be annotated
+
+        // let is_screen_refresh = vec.iter().any(|n| n.could_trigger_refresh());
+        // let number = input.get_number_int(self, builder);
+
+        // let loop_block = builder.create_block();
+        // builder.append_block_param(loop_block, I64);
+        // builder.append_block_param(loop_block, I64);
+        // let body_block = builder.create_block();
+        // builder.append_block_param(body_block, I64);
+        // let end_block = builder.create_block();
+
+        // // i = 0
+        // // Note: counter is the `i` here
+        // let counter = self.constants.get_int(0, builder);
+        // builder
+        //     .ins()
+        //     .jump(loop_block, &[counter.into(), number.into()]);
+
+        // builder.switch_to_block(loop_block);
+        // // (i < number)
+        // let counter = builder.block_params(loop_block)[0];
+        // let mut number = builder.block_params(loop_block)[1];
+        // let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
+
+        // // if (i < number):
+        // //      jump to body_block (continue)
+        // // else:
+        // //      jump to end_block (break)
+        // builder
+        //     .ins()
+        //     .brif(condition, body_block, &[counter.into()], end_block, &[]);
+
+        // builder.switch_to_block(body_block);
+        // // i += 1
+        // let counter = builder.block_params(body_block)[0];
+        // let mut incremented = builder.ins().iadd_imm(counter, 1);
+
+        // let mut inside_types = self.variable_type_data.clone();
+        // self.update_type_data_for_block(&mut inside_types, vec);
+        // let mut inside_types = common_entries(&inside_types, &self.variable_type_data);
+
+        // let temp_block = self.code_block;
+        // self.code_block = body_block;
+
+        // std::mem::swap(&mut inside_types, &mut self.variable_type_data);
+
+        // if is_screen_refresh {
+        //     self.call_stack_push(builder, incremented);
+        //     self.call_stack_push(builder, number);
         // }
-        //
-        // The different parts will be annotated
+        // self.constants.clear();
+        // self.repeat_stack += 1;
+        // for block in vec {
+        //     self.compile_block(block, builder);
+        // }
+        // if is_screen_refresh && !vec.ends_with(&[ScratchBlock::ScreenRefresh]) {
+        //     self.screen_refresh(builder);
+        // }
+        // self.repeat_stack -= 1;
+        // if is_screen_refresh {
+        //     number = self.call_stack_pop(builder);
+        //     incremented = self.call_stack_pop(builder);
+        // }
+        // std::mem::swap(&mut inside_types, &mut self.variable_type_data);
+        // self.code_block = temp_block;
+        // self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
+        // builder
+        //     .ins()
+        //     .jump(loop_block, &[incremented.into(), number.into()]);
+        // // // builder.seal_block(body_block);
+        // // builder.seal_block(loop_block);
 
-        let is_screen_refresh = vec.iter().any(|n| n.could_trigger_refresh());
-        let number = input.get_number_int(self, builder);
-
-        let loop_block = builder.create_block();
-        builder.append_block_param(loop_block, I64);
-        builder.append_block_param(loop_block, I64);
-        let body_block = builder.create_block();
-        builder.append_block_param(body_block, I64);
-        let end_block = builder.create_block();
-
-        // i = 0
-        // Note: counter is the `i` here
-        let counter = self.constants.get_int(0, builder);
-        builder
-            .ins()
-            .jump(loop_block, &[counter.into(), number.into()]);
-
-        builder.switch_to_block(loop_block);
-        // (i < number)
-        let counter = builder.block_params(loop_block)[0];
-        let mut number = builder.block_params(loop_block)[1];
-        let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
-
-        // if (i < number):
-        //      jump to body_block (continue)
-        // else:
-        //      jump to end_block (break)
-        builder
-            .ins()
-            .brif(condition, body_block, &[counter.into()], end_block, &[]);
-
-        builder.switch_to_block(body_block);
-        // i += 1
-        let counter = builder.block_params(body_block)[0];
-        let mut incremented = builder.ins().iadd_imm(counter, 1);
-
-        let mut inside_types = self.variable_type_data.clone();
-        self.update_type_data_for_block(&mut inside_types, vec);
-        let mut inside_types = common_entries(&inside_types, &self.variable_type_data);
-
-        let temp_block = self.code_block;
-        self.code_block = body_block;
-
-        std::mem::swap(&mut inside_types, &mut self.variable_type_data);
-
-        if is_screen_refresh {
-            self.call_stack_push(builder, incremented);
-            self.call_stack_push(builder, number);
-        }
-        self.constants.clear();
-        self.repeat_stack += 1;
-        for block in vec {
-            self.compile_block(block, builder);
-        }
-        if is_screen_refresh && !vec.ends_with(&[ScratchBlock::ScreenRefresh]) {
-            self.screen_refresh(builder);
-        }
-        self.repeat_stack -= 1;
-        if is_screen_refresh {
-            number = self.call_stack_pop(builder);
-            incremented = self.call_stack_pop(builder);
-        }
-        std::mem::swap(&mut inside_types, &mut self.variable_type_data);
-        self.code_block = temp_block;
-        self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
-        builder
-            .ins()
-            .jump(loop_block, &[incremented.into(), number.into()]);
-        // // builder.seal_block(body_block);
-        // builder.seal_block(loop_block);
-
-        builder.switch_to_block(end_block);
-        self.constants.clear();
-        self.code_block = end_block;
+        // builder.switch_to_block(end_block);
+        // self.constants.clear();
+        // self.code_block = end_block;
     }
 
-    pub fn control_forever(&mut self, builder: &mut FunctionBuilder<'_>, vec: &[ScratchBlock]) {
+    pub fn control_forever(&mut self, builder: &mut FunctionBuilder<'_>, blocks: &[ScratchBlock]) {
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
-        builder.ins().jump(loop_block, &[]);
+
+        // TODO: inter-function analysis
+        let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+
+        if effects.writes_is_unknown {
+            todo!("Gotta implement fallback behaviour");
+        }
+        let final_params =
+            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr).into());
+
+        let entry_params = self.generate_params(builder, &final_params);
+
+        builder.ins().jump(loop_block, &entry_params);
+        self.code_block = loop_block;
         builder.switch_to_block(loop_block);
+        self.cache.variable_vals.extend(final_params.clone());
 
-        let mut inside_types = self.variable_type_data.clone();
-        self.update_type_data_for_block(&mut inside_types, vec);
-        let mut inside_types = common_entries(&inside_types, &self.variable_type_data);
-        std::mem::swap(&mut inside_types, &mut self.variable_type_data);
-        // inside_types = old types
-        // self._ = narrowed
-
-        self.constants.clear();
-        for block in vec {
+        for block in blocks {
             self.compile_block(block, builder);
         }
-        if vec.iter().any(|n| n.could_trigger_refresh())
-            && !vec.ends_with(&[ScratchBlock::ScreenRefresh])
-        {
-            self.screen_refresh(builder);
-        }
-
-        std::mem::swap(&mut inside_types, &mut self.variable_type_data);
-        self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
-
-        builder.ins().jump(loop_block, &[]);
-        // // builder.seal_block(body_block);
-        // builder.seal_block(loop_block);
+        let loop_params = self.generate_params(builder, &final_params);
+        builder.ins().jump(loop_block, &loop_params);
 
         builder.switch_to_block(end_block);
-        self.constants.clear();
         self.code_block = end_block;
     }
 
@@ -190,7 +190,7 @@ impl Compiler<'_> {
                     VarTypeChecked::String => {
                         variable_type_data.insert(var, VarType::String);
                     }
-                    VarTypeChecked::Unknown => {
+                    VarTypeChecked::Object => {
                         variable_type_data.remove(&var);
                     }
                 }
@@ -198,110 +198,147 @@ impl Compiler<'_> {
         }
     }
 
-    pub fn control_if_statement(
+    pub fn control_if(
         &mut self,
-        input: &Input,
+        condition: &Input,
         builder: &mut FunctionBuilder<'_>,
         then: &[ScratchBlock],
     ) {
-        let input = input.get_bool(self, builder);
+        // TODO: inter-function analysis
+        let effects = then.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+
+        if effects.writes_is_unknown {
+            todo!("Gotta implement fallback behaviour");
+        }
+
         let inside_block = builder.create_block();
         let end_block = builder.create_block();
+        let final_params =
+            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr).into());
 
-        self.constants.clear();
-        builder.ins().brif(input, inside_block, &[], end_block, &[]);
-        // builder.seal_block(self.code_block);
+        // Before the code runs...
+        let direct_params = self.generate_params(builder, &final_params);
+
+        let condition = condition.get_bool(self, builder);
+        builder
+            .ins()
+            .brif(condition, inside_block, &[], end_block, &direct_params);
 
         builder.switch_to_block(inside_block);
-
-        let temp_types = self.variable_type_data.clone();
-        let temp_block = self.code_block;
         self.code_block = inside_block;
+        let old_consts = self.constants.clone();
         for block in then {
             self.compile_block(block, builder);
         }
-        self.code_block = temp_block;
 
-        // Only keep the variable type data that hasn't been changed by the if statement.
-        // For example:
-
-        // var a = String;
-        // var b = Bool;
-        // if condition {
-        //     var a = Number;
-        //     var b = Bool;
-        // }
-
-        // Here, the compiler can't tell beforehand if the condition will run.
-        // So it can't tell the type of variable a.
-
-        // But the type of variable b doesn't change inside the condition.
-        // So the compiler remembers the type of variable b.
-        self.variable_type_data = common_entries(&self.variable_type_data, &temp_types);
-
-        builder.ins().jump(end_block, &[]);
-
-        builder.switch_to_block(end_block);
-        self.constants.clear();
+        // After the code runs...
+        let end_params = self.generate_params(builder, &final_params);
+        builder.ins().jump(end_block, &end_params);
         self.code_block = end_block;
+        builder.switch_to_block(end_block);
+        self.constants = old_consts;
+        self.cache.variable_vals.extend(final_params);
+    }
+
+    fn generate_params(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        final_params: &Vec<(Ptr, ReturnValue)>,
+    ) -> Vec<BlockArg> {
+        let mut direct_params = Vec::new();
+        for (ptr, param) in final_params {
+            match param {
+                ReturnValue::Num(_) => {
+                    let val = self.cache.variable_vals.get(ptr).unwrap();
+                    let ReturnValue::Num(v) = val else {
+                        panic!("Not a number? Some type checking went wrong (val: {val:?})");
+                    };
+                    direct_params.push((*v).into());
+                }
+                ReturnValue::Bool(_) => {
+                    let val = self.cache.variable_vals.get(ptr).unwrap();
+                    let ReturnValue::Bool(v) = val else {
+                        panic!("Not a bool? Some type checking went wrong (val: {val:?})");
+                    };
+                    direct_params.push((*v).into());
+                }
+                ReturnValue::String(_) => {
+                    let val = self.cache.variable_vals.get(ptr).unwrap();
+                    let ReturnValue::String([i1, i2, i3]) = val else {
+                        panic!("Not a string? Some type checking went wrong (val: {val:?})");
+                    };
+                    direct_params.push((*i1).into());
+                    direct_params.push((*i2).into());
+                    direct_params.push((*i3).into());
+                }
+                ReturnValue::Object(_) => {
+                    let obj = self.cache.variable_vals.get(ptr).unwrap();
+                    let [i1, i2, i3, i4] = obj.get_object(builder, &mut self.constants);
+                    direct_params.push(i1.into());
+                    direct_params.push(i2.into());
+                    direct_params.push(i3.into());
+                    direct_params.push(i4.into());
+                }
+            }
+        }
+        direct_params
     }
 
     pub fn control_if_else(
         &mut self,
-        input: &Input,
+        condition: &Input,
         builder: &mut FunctionBuilder<'_>,
 
         then_blocks: &[ScratchBlock],
         else_blocks: &[ScratchBlock],
     ) {
-        let input = input.get_bool(self, builder);
-        let inside_block = builder.create_block();
+        // TODO: inter-function analysis
+        let effects = then_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v))
+            & else_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+
+        if effects.writes_is_unknown {
+            todo!("Gotta implement fallback behaviour");
+        }
+
+        let then_block = builder.create_block();
         let else_block = builder.create_block();
         let end_block = builder.create_block();
 
-        // If condition then { jump to inside block } else { jump to else block }.
+        let final_params =
+            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr).into());
+
+        let condition = condition.get_bool(self, builder);
         builder
             .ins()
-            .brif(input, inside_block, &[], else_block, &[]);
-        self.constants.clear();
-        // builder.seal_block(self.code_block);
+            .brif(condition, then_block, &[], else_block, &[]);
 
-        builder.switch_to_block(inside_block);
+        let old_consts = self.constants.clone();
+        let old_cache = self.cache.clone();
 
-        // Temporarily store the old type data from before the then block.
-        // Will be used later.
-        let old_types = self.variable_type_data.clone();
-        let current_block = self.code_block;
-        self.code_block = inside_block;
-
+        builder.switch_to_block(then_block);
+        self.code_block = then_block;
         for block in then_blocks {
             self.compile_block(block, builder);
         }
 
-        self.code_block = current_block;
-        let common_then_entries = common_entries(&self.variable_type_data, &old_types);
-        builder.ins().jump(end_block, &[]);
-        // builder.seal_block(inside_block);
+        let then_params = self.generate_params(builder, &final_params);
+        builder.ins().jump(end_block, &then_params);
 
         builder.switch_to_block(else_block);
-        self.constants.clear();
-        self.variable_type_data.clone_from(&old_types);
-
+        self.constants = old_consts.clone();
+        self.cache = old_cache;
         self.code_block = else_block;
         for block in else_blocks {
             self.compile_block(block, builder);
         }
-        self.code_block = current_block;
 
-        self.variable_type_data = common_entries(&old_types, &self.variable_type_data);
-        self.variable_type_data = common_entries(&common_then_entries, &self.variable_type_data);
+        let else_params = self.generate_params(builder, &final_params);
+        builder.ins().jump(end_block, &else_params);
 
-        builder.ins().jump(end_block, &[]);
-        // builder.seal_block(else_block);
-
-        builder.switch_to_block(end_block);
-        self.constants.clear();
         self.code_block = end_block;
+        builder.switch_to_block(end_block);
+        self.constants = old_consts;
+        self.cache.variable_vals.extend(final_params);
     }
 
     pub fn control_repeat_until(
@@ -310,65 +347,44 @@ impl Compiler<'_> {
         input: &Input,
         body: &[ScratchBlock],
     ) {
+        let condition_block = builder.create_block();
         let loop_block = builder.create_block();
-        let body_block = builder.create_block();
         let end_block = builder.create_block();
 
-        builder.ins().jump(loop_block, &[]);
-        self.constants.clear();
-        // builder.seal_block(self.code_block);
+        // TODO: inter-function analysis
+        let effects = body.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        if effects.writes_is_unknown {
+            todo!("Gotta implement fallback behaviour");
+        }
 
-        builder.switch_to_block(loop_block);
+        let final_params = effects.generate_params(builder, condition_block, &|ptr| {
+            self.cache.get_type(ptr).into()
+        });
+
+        let entry_params = self.generate_params(builder, &final_params);
+        builder.ins().jump(condition_block, &entry_params);
+
+        self.cache.variable_vals.extend(final_params.clone());
+        builder.switch_to_block(condition_block);
+        self.code_block = condition_block;
+
         let condition = input.get_bool(self, builder);
-        self.constants.clear();
         builder
             .ins()
-            .brif(condition, end_block, &[], body_block, &[]);
+            .brif(condition, end_block, &[], loop_block, &[]);
 
-        builder.switch_to_block(body_block);
-
-        let mut inside_types = self.variable_type_data.clone();
-        self.update_type_data_for_block(&mut inside_types, body);
-        let old_types = self.variable_type_data.clone();
-
-        let current_block = self.code_block;
-        self.code_block = body_block;
-        self.repeat_stack += 1;
+        builder.switch_to_block(loop_block);
+        self.code_block = loop_block;
+        let old_constants = self.constants.clone();
 
         for block in body {
             self.compile_block(block, builder);
         }
-        if body.iter().any(|n| n.could_trigger_refresh())
-            && !body.ends_with(&[ScratchBlock::ScreenRefresh])
-        {
-            self.screen_refresh(builder);
-        }
-
-        self.repeat_stack -= 1;
-        self.code_block = current_block;
-        self.variable_type_data = common_entries(&self.variable_type_data, &old_types);
-
-        builder.ins().jump(loop_block, &[]);
-        // builder.seal_block(loop_block);
-
+        let loop_params = self.generate_params(builder, &final_params);
+        builder.ins().jump(condition_block, &loop_params);
         builder.switch_to_block(end_block);
-        self.constants.clear();
         self.code_block = end_block;
+        self.cache.variable_vals.extend(final_params);
+        self.constants = old_constants;
     }
-}
-
-fn common_entries<K, V>(map1: &HashMap<K, V>, map2: &HashMap<K, V>) -> HashMap<K, V>
-where
-    K: Eq + std::hash::Hash + Clone,
-    V: PartialEq + Clone,
-{
-    let mut common_map = HashMap::new();
-    for (key, value) in map1 {
-        if let Some(other_value) = map2.get(key)
-            && value == other_value
-        {
-            common_map.insert(key.clone(), value.clone());
-        }
-    }
-    common_map
 }

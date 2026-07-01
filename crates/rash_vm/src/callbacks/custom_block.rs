@@ -1,24 +1,14 @@
 use crate::{
     data_types::ScratchObject,
     graphics::RunState,
-    runtime::{CustomBlockId, ScratchThread, Scripts},
+    runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, Scripts},
 };
 
-pub fn print_function_addresses() {
-    fn print(name: &str, addr: *const ()) {
-        println!("{name:35} = {:#018x}", addr as usize);
-    }
-
-    println!("\n========");
-    println!("custom_block.rs");
-    println!("========");
-
-    print(
-        "call_no_screen_refresh",
-        call_no_screen_refresh as *const (),
-    );
-    print("call_screen_refresh", call_screen_refresh as *const ());
-}
+print_func!(
+    "custom_block.rs",
+    call_no_screen_refresh,
+    call_screen_refresh
+);
 
 #[repr(i64)]
 pub enum PauseStatus {
@@ -45,7 +35,11 @@ pub unsafe extern "C" fn call_no_screen_refresh(
 
     let args = unsafe { vec_from_raw(arg_buffer, script.num_args) };
 
-    let mut script = script.thread.spawn(false, args);
+    let CustomBlockFunc::Compiled(script) = &script.script else {
+        panic!("Custom block {} hasn't been compiled yet", id.0)
+    };
+
+    let mut script = script.spawn(false, args);
     while !unsafe { script.tick(scripts, &mut *graphics) } {}
 }
 
@@ -75,7 +69,11 @@ pub unsafe extern "C" fn call_screen_refresh(
     let is_screen_refresh = parent_is_screen_refresh && script.is_screen_refresh;
 
     let args = unsafe { vec_from_raw(arg_buffer, script.num_args) };
-    let mut script = script.thread.spawn(is_screen_refresh, args);
+
+    let CustomBlockFunc::Compiled(script) = &script.script else {
+        panic!("Custom block {} hasn't been compiled yet", id.0)
+    };
+    let mut script = script.spawn(is_screen_refresh, args);
 
     if is_screen_refresh {
         let ended = unsafe { script.tick(scripts, &mut *graphics) };

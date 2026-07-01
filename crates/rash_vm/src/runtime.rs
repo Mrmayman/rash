@@ -13,7 +13,7 @@ use crate::{
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
 type JitFunction = unsafe extern "C" fn(
     JumpId,
-    *mut Vec<LoopFrame>,
+    *mut Vec<i64>, // Stack repeat
     *const ScratchObject,
     *const Scripts,
     *mut RunState,
@@ -43,18 +43,17 @@ impl Debug for JumpId {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-struct LoopFrame {
-    pub done: i64,
-    pub out_of: i64,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
 
+pub enum CustomBlockFunc {
+    ToCompile(Script),
+    Compiled(ScratchThread),
+}
+
 pub struct CustomBlock {
-    pub thread: ScratchThread,
+    pub script: CustomBlockFunc,
+    pub sprite_id: SpriteId,
     pub is_screen_refresh: bool,
     pub num_args: usize,
 }
@@ -85,6 +84,89 @@ impl Script {
                 num_args,
                 is_screen_refresh,
             },
+        }
+    }
+
+    fn insert_refreshes(&mut self) {
+        fn check_block(b: &mut ScratchBlock) {
+            match b {
+                ScratchBlock::ControlRepeat(_, blocks)
+                | ScratchBlock::ControlRepeatUntil(_, blocks)
+                | ScratchBlock::ControlForever(blocks) => {
+                    let mut trigger = false;
+                    for block in blocks.iter_mut() {
+                        if block.could_trigger_refresh() {
+                            trigger = true;
+                        }
+                        check_block(block);
+                    }
+                    if trigger && !matches!(blocks.last(), Some(ScratchBlock::ScreenRefresh)) {
+                        blocks.push(ScratchBlock::ScreenRefresh);
+                    }
+                }
+
+                ScratchBlock::ControlIf(_, b_then) => {
+                    for block in b_then {
+                        check_block(block);
+                    }
+                }
+                ScratchBlock::ControlIfElse(_, b_then, b_else) => {
+                    for block in b_then {
+                        check_block(block);
+                    }
+                    for block in b_else {
+                        check_block(block);
+                    }
+                }
+
+                ScratchBlock::VarSet(_, _)
+                | ScratchBlock::VarChange(_, _)
+                | ScratchBlock::VarRead(_)
+                | ScratchBlock::OpAdd(_, _)
+                | ScratchBlock::OpSub(_, _)
+                | ScratchBlock::OpMul(_, _)
+                | ScratchBlock::OpDiv(_, _)
+                | ScratchBlock::OpRound(_)
+                | ScratchBlock::OpStrJoin(_, _)
+                | ScratchBlock::OpMod(_, _)
+                | ScratchBlock::OpStrLen(_)
+                | ScratchBlock::OpBAnd(_, _)
+                | ScratchBlock::OpBNot(_)
+                | ScratchBlock::OpBOr(_, _)
+                | ScratchBlock::OpMFloor(_)
+                | ScratchBlock::OpMAbs(_)
+                | ScratchBlock::OpMSqrt(_)
+                | ScratchBlock::OpMSin(_)
+                | ScratchBlock::OpMCos(_)
+                | ScratchBlock::OpMTan(_)
+                | ScratchBlock::OpCmp(_, _, _)
+                | ScratchBlock::OpRandom(_, _)
+                | ScratchBlock::OpStrLetterOf(_, _)
+                | ScratchBlock::OpStrContains(_, _)
+                | ScratchBlock::ControlStopThisScript
+                | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+                | ScratchBlock::FunctionCallScreenRefresh(_, _)
+                | ScratchBlock::FunctionGetArg(_)
+                | ScratchBlock::ScreenRefresh
+                | ScratchBlock::MotionGoToXY(_, _)
+                | ScratchBlock::MotionChangeX(_)
+                | ScratchBlock::MotionChangeY(_)
+                | ScratchBlock::MotionSetX(_)
+                | ScratchBlock::MotionSetY(_)
+                | ScratchBlock::MotionGetX
+                | ScratchBlock::MotionGetY
+                | ScratchBlock::LooksShown(_)
+                | ScratchBlock::ControlDaysSince2000
+                | ScratchBlock::Log(_) => {}
+            }
+        }
+
+        if !self.kind.is_screen_refresh() {
+            return;
+        }
+
+        for block in self.blocks.iter_mut() {
+            check_block(block);
         }
     }
 }
@@ -122,20 +204,24 @@ impl SpriteBuilder {
         }
     }
 
-    pub fn add_script(&mut self, script: &Script, memory: &[ScratchObject]) {
+    pub fn add_script(&mut self, mut script: Script, memory: &[ScratchObject]) {
+        script.insert_refreshes();
+
         let num_args = match script.kind {
             ScriptKind::GreenFlag => 0,
             ScriptKind::CustomBlock { num_args, .. } => num_args,
         };
-        let thread = compile(
-            &script.blocks,
-            memory,
-            self.id,
-            num_args,
-            script.kind.is_screen_refresh(),
-        );
         match script.kind {
             ScriptKind::GreenFlag => {
+                // This is where all your magic happens :D
+                let thread = compile(
+                    &script.blocks,
+                    memory,
+                    self.id,
+                    num_args,
+                    script.kind.is_screen_refresh(),
+                );
+
                 self.scripts.green_flags.push(thread);
             }
             ScriptKind::CustomBlock {
@@ -146,9 +232,11 @@ impl SpriteBuilder {
                 self.scripts.custom_blocks.insert(
                     id,
                     CustomBlock {
-                        thread,
+                        // Delaying this till later for intelligent analysis
+                        script: CustomBlockFunc::ToCompile(script),
                         is_screen_refresh,
                         num_args,
+                        sprite_id: self.id,
                     },
                 );
             }
@@ -186,7 +274,25 @@ impl ProjectBuilder {
         self.runtime.costume_data = costume_intermediate;
     }
 
-    pub fn build(mut self) -> Runtime {
+    pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
+        for script in self.runtime.scripts.custom_blocks.values_mut() {
+            let CustomBlockFunc::ToCompile(scr) = &script.script else {
+                continue;
+            };
+
+            // Compiling custom blocks at last moment
+            // so that we get the most data for analysis
+            let thread = compile(
+                &scr.blocks,
+                memory,
+                script.sprite_id,
+                script.num_args,
+                scr.kind.is_screen_refresh(),
+            );
+
+            script.script = CustomBlockFunc::Compiled(thread);
+        }
+
         self.runtime.init();
         self.runtime
     }
@@ -269,7 +375,7 @@ pub struct ScratchThread {
     is_screen_refresh: bool,
     arguments: Vec<ScratchObject>,
 
-    stack_repeat: Vec<LoopFrame>,
+    stack_repeat: Vec<i64>,
     jumped_point: JumpId,
     child_thread: Box<Option<ScratchThread>>,
 
@@ -381,7 +487,7 @@ impl ScratchThread {
 impl Drop for Runtime {
     fn drop(&mut self) {
         let mut strings_buf = STRINGS_TO_DROP.lock().unwrap();
-        let s: &mut Vec<[i64; 3]> = strings_buf.as_mut();
+        let s = &mut *strings_buf;
         let strings = std::mem::take(s);
 
         for string in strings {

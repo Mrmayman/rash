@@ -101,19 +101,13 @@ pub fn compile(
         child_thread_ptr,
     );
 
-    compiler
-        .cache
-        .init(&mut builder, &mut compiler.constants, memory);
-
     compiler.break_points.push(code_block);
 
     for block in script {
         compiler.compile_block(block, &mut builder);
     }
 
-    compiler
-        .cache
-        .save(&mut builder, &mut compiler.constants, memory);
+    compiler.cache.save(&mut builder, &mut compiler.constants);
 
     let return_value = builder.ins().iconst(I64, -1);
     builder.ins().return_(&[return_value]);
@@ -123,7 +117,7 @@ pub fn compile(
     builder.seal_all_blocks();
     builder.finalize();
 
-    // println!("{}", func.display());
+    println!("{}", func.display());
 
     compile_ir(func, &isa, id, compiler.is_screen_refresh)
 }

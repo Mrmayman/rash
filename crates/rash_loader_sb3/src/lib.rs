@@ -221,7 +221,7 @@ impl ProjectLoader {
         builder.set_costume(costume_names, costume_numbers, costume_hashes, costume_ids);
         builder.set_init_state(state_map);
 
-        Ok(builder.build())
+        Ok(builder.build(&memory))
     }
 
     fn load_costumes(
@@ -343,14 +343,14 @@ fn load_blocks(
         match hat_block.opcode.as_str() {
             "event_whenflagclicked" => {
                 let new_green_flag = Script::new_green_flag(blocks);
-                sprite.add_script(&new_green_flag, memory);
+                sprite.add_script(new_green_flag, memory);
             }
             "procedures_definition" => {
                 let custom_block = custom_block.unwrap();
 
                 println!("{custom_block:?}");
                 sprite.add_script(
-                    &Script::new_custom_block(
+                    Script::new_custom_block(
                         blocks,
                         custom_block.args.len(),
                         custom_block.id,

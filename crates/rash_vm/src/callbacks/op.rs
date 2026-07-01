@@ -2,27 +2,19 @@ use rand::Rng;
 
 use crate::ScratchObject;
 
-pub fn print_function_addresses() {
-    fn print(name: &str, addr: *const ()) {
-        println!("{name:35} = {:#018x}", addr as usize);
-    }
-
-    println!("\n========");
-    println!("op.rs");
-    println!("========");
-
-    print("sin", sin as *const ());
-    print("cos", cos as *const ());
-    print("tan", tan as *const ());
-    print("round", round as *const ());
-    print("cmp", cmp as *const ());
-
-    print("str_contains", str_contains as *const ());
-    print("str_letter", str_letter as *const ());
-    print("str_join", str_join as *const ());
-    print("str_len", str_len as *const ());
-    print("random", random as *const ());
-}
+print_func!(
+    "op.rs",
+    sin,
+    cos,
+    tan,
+    round,
+    cmp,
+    str_contains,
+    str_letter,
+    str_join,
+    str_len,
+    random,
+);
 
 pub extern "C" fn sin(value: f64) -> f64 {
     value.to_radians().sin()

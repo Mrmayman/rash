@@ -1,26 +1,17 @@
-use crate::data_types::ScratchObject;
+use crate::data_types::{ScratchObject, string_to_number};
 
-pub fn print_function_addresses() {
-    fn print(name: &str, addr: *const ()) {
-        println!("{name:40} = {:#018x}", addr as usize);
-    }
-
-    println!("\n========");
-    println!("types.rs");
-    println!("========");
-
-    print("to_bool", to_bool as *const ());
-    print("to_number", to_number as *const ());
-    print(
-        "to_number_with_decimal_check",
-        to_number_with_decimal_check as *const (),
-    );
-    print("to_string", to_string as *const ());
-    print("to_string_from_num", to_string_from_num as *const ());
-    print("to_string_from_bool", to_string_from_bool as *const ());
-    print("drop_obj", drop_obj as *const ());
-    print("clone_obj", clone_obj as *const ());
-}
+print_func!(
+    "types.rs",
+    to_bool,
+    to_number,
+    to_number_from_string,
+    to_number_with_decimal_check,
+    to_string,
+    to_string_from_num,
+    to_string_from_bool,
+    drop_obj,
+    clone_obj
+);
 
 /// Converts a `ScratchObject` to a boolean.
 ///
@@ -71,6 +62,12 @@ pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
     debug_assert!(i1 >= 0);
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
     obj.convert_to_number()
+}
+
+pub unsafe extern "C" fn to_number_from_string(i1: i64, i2: i64, i3: i64) -> f64 {
+    let s: String = unsafe { std::mem::transmute([i1, i2, i3]) };
+    string_to_number(&s)
+    // TODO: Deallocating this shit
 }
 
 pub struct DecimalCheck {
@@ -161,11 +158,9 @@ pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut String) {
 ///
 /// Ran when a variable is set to a new value,
 /// dropping the old value.
-pub unsafe extern "C" fn drop_obj(i1: *mut ScratchObject) {
-    unsafe {
-        // println!("dropping obj {:?} at mem {:X}", *i1, i1 as usize);
-        std::ptr::drop_in_place(i1);
-    }
+pub unsafe extern "C" fn drop_obj(i1: i64, i2: i64, i3: i64, i4: i64) {
+    let _: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    // Dropped
 }
 
 pub unsafe extern "C" fn clone_obj(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {

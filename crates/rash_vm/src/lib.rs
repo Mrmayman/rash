@@ -4,13 +4,14 @@ mod compile_fn;
 mod compiler;
 mod constant_set;
 pub mod data_types;
+mod effects;
 pub mod error;
 pub mod graphics;
 mod input_primitives;
 mod ins_shortcuts;
 pub mod runtime;
-mod stack_cache;
 mod tests;
+mod variable_storage;
 
 pub use callbacks::print_function_addresses;
 pub use compiler::{MEMORY, ScratchBlock};

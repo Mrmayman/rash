@@ -40,7 +40,7 @@ fn main() {
         p
     };
 
-    // rash_vm::print_function_addresses();
+    rash_vm::print_function_addresses();
 
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
@@ -181,7 +181,7 @@ fn run_demo() {
 
     let mut sprite = SpriteBuilder::new(SpriteId(0));
     sprite.add_script(
-        &Script::new_green_flag(vec![
+        Script::new_green_flag(vec![
             ScratchBlock::Log("Hello World".into()),
             ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
         ]),
@@ -189,7 +189,7 @@ fn run_demo() {
     );
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
-    let mut vm = builder.build();
+    let mut vm = builder.build(&memory);
     let mut state = RunState {
         // We won't do any graphics operations here
         sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
