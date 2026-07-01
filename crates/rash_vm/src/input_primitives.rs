@@ -121,6 +121,12 @@ impl From<ScratchBlock> for Input {
     }
 }
 
+impl From<Ptr> for Input {
+    fn from(ptr: Ptr) -> Self {
+        Input::Block(Box::new(ScratchBlock::VarRead(ptr)))
+    }
+}
+
 impl Input {
     pub(crate) fn get_number(
         &self,

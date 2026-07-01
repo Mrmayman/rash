@@ -17,16 +17,12 @@ impl Block {
         ctx: &mut CompileContext,
         substack_name: &str,
     ) -> Res<Vec<ScratchBlock>> {
-        let substack = self
-            .inputs
-            .get(substack_name)
-            .ok_or(RashError::field_not_found(&format!(
-                "self.inputs.{substack_name}"
-            )))?
-            .as_array()
-            .ok_or(RashError::field_not_found(
-                "self.inputs.{substack_name}: not array",
-            ))?;
+        let Some(substack) = self.inputs.get(substack_name) else {
+            return Ok(Vec::new());
+        };
+        let substack = substack.as_array().ok_or(RashError::field_not_found(
+            "self.inputs.{substack_name}: not array",
+        ))?;
         let Some(child_block_id) = substack
             .get(1)
             .ok_or(RashError::field_not_found(&format!(

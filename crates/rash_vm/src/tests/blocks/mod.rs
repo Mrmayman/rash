@@ -1,19 +1,5 @@
-use crate::{
-    compiler::ScratchBlock,
-    input_primitives::{Input, Ptr},
-};
-
 mod utils;
 // pub use utils::run_code;
-
-#[allow(unused)]
-fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
-    input
-        .into_iter()
-        .enumerate()
-        .map(|(i, input)| ScratchBlock::VarSet(Ptr(i), input))
-        .collect()
-}
 
 #[cfg(test)]
 mod tests {
@@ -21,61 +7,44 @@ mod tests {
 
     use utils::run_code;
 
-    use crate::{ScratchObject, compiler::VarType};
+    use crate::{Input, Ptr, ScratchBlock, ScratchObject, compiler::VarType};
 
     use super::*;
 
+    fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
+        input
+            .into_iter()
+            .enumerate()
+            .map(|(i, input)| set_var(Ptr(i), input))
+            .collect()
+    }
+
+    fn set_var(ptr: Ptr, input: impl Into<Input>) -> ScratchBlock {
+        ScratchBlock::VarSet(ptr, input.into())
+    }
+
+    fn c_if(input: impl Into<Input>, then: Vec<ScratchBlock>) -> ScratchBlock {
+        ScratchBlock::ControlIf(input.into(), then)
+    }
+
     #[test]
     pub fn b_str_ops() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(
-                Ptr(0),
-                ScratchBlock::OpStrJoin("hello".into(), "world".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpStrJoin("hello".into(), 1.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpStrJoin(1.0.into(), "world".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(3),
-                ScratchBlock::OpStrJoin(true.into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpStrLen(true.into()).into()),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpStrLen("💀".into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpStrLetterOf(2.0.into(), "hello".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpStrLetterOf(0.0.into(), "hello".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(8),
-                ScratchBlock::OpStrLetterOf(1.0.into(), "💀".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(9),
-                ScratchBlock::OpStrContains("Hello World".into(), "World".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(10),
-                ScratchBlock::OpStrContains("Hello World".into(), "world".into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(11),
-                ScratchBlock::OpStrContains("Hello World".into(), "Hi".into()).into(),
-            ),
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpStrJoin("hello".into(), "world".into()).into(),
+            ScratchBlock::OpStrJoin("hello".into(), 1.0.into()).into(),
+            ScratchBlock::OpStrJoin(1.0.into(), "world".into()).into(),
+            ScratchBlock::OpStrJoin(true.into(), 2.0.into()).into(),
+            ScratchBlock::OpStrLen(true.into()).into(),
+            ScratchBlock::OpStrLen("💀".into()).into(),
+            ScratchBlock::OpStrLetterOf(2.0.into(), "hello".into()).into(),
+            ScratchBlock::OpStrLetterOf(0.0.into(), "hello".into()).into(),
+            ScratchBlock::OpStrLetterOf(1.0.into(), "💀".into()).into(),
+            ScratchBlock::OpStrContains("Hello World".into(), "World".into()).into(),
+            ScratchBlock::OpStrContains("Hello World".into(), "world".into()).into(),
+            ScratchBlock::OpStrContains("Hello World".into(), "Hi".into()).into(),
             // real bug btw
-            ScratchBlock::VarSet(
-                Ptr(12),
-                ScratchBlock::OpStrJoin("".into(), true.into()).into(),
-            ),
-        ]);
+            ScratchBlock::OpStrJoin("".into(), true.into()).into(),
+        ]));
 
         assert_eq!(memory[4].get_type(), VarType::Number);
 
@@ -108,9 +77,9 @@ mod tests {
             const D: Ptr = Ptr(1);
             const I: Ptr = Ptr(2);
             vec![
-                ScratchBlock::VarSet(PI, 0.0.into()),
-                ScratchBlock::VarSet(D, 1.0.into()),
-                ScratchBlock::VarSet(I, 0.0.into()),
+                set_var(PI, 0.0),
+                set_var(D, 1.0),
+                set_var(I, 0.0),
                 // A test of nested repeat loops
                 ScratchBlock::ControlRepeat(
                     1_000_000.0.into(),
@@ -157,10 +126,9 @@ mod tests {
             9.0.into(),
             vec![ScratchBlock::ControlRepeat(
                 11.0.into(),
-                vec![ScratchBlock::VarSet(
+                vec![set_var(
                     Ptr(0),
-                    ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(0)).into(), "H".into())
-                        .into(),
+                    ScratchBlock::OpStrJoin(Ptr(0).into(), "H".into()),
                 )],
             )],
         )]);
@@ -173,23 +141,13 @@ mod tests {
     #[test]
     pub fn b_repeat_until() {
         let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), 0.0.into()),
+            set_var(Ptr(0), 0.0),
             ScratchBlock::ControlRepeatUntil(
-                ScratchBlock::OpCmp(
-                    ScratchBlock::VarRead(Ptr(0)).into(),
-                    10.0.into(),
-                    Ordering::Greater,
-                )
-                .into(),
+                ScratchBlock::OpCmp(Ptr(0).into(), 10.0.into(), Ordering::Greater).into(),
                 vec![
-                    ScratchBlock::VarSet(Ptr(1), 0.0.into()),
+                    set_var(Ptr(1), 0.0),
                     ScratchBlock::ControlRepeatUntil(
-                        ScratchBlock::OpCmp(
-                            ScratchBlock::VarRead(Ptr(1)).into(),
-                            20.0.into(),
-                            Ordering::Greater,
-                        )
-                        .into(),
+                        ScratchBlock::OpCmp(Ptr(1).into(), 20.0.into(), Ordering::Greater).into(),
                         vec![ScratchBlock::VarChange(Ptr(1), 1.0.into())],
                     ),
                     ScratchBlock::VarChange(Ptr(0), 1.0.into()),
@@ -207,33 +165,33 @@ mod tests {
         let memory = run_code(&vec![
             ScratchBlock::ControlIfElse(
                 true.into(),
-                vec![ScratchBlock::VarSet(Ptr(0), 1.0.into())],
-                vec![ScratchBlock::VarSet(Ptr(0), 0.0.into())],
+                vec![set_var(Ptr(0), 1.0)],
+                vec![set_var(Ptr(0), 0.0)],
             ),
             ScratchBlock::ControlIfElse(
                 false.into(),
-                vec![ScratchBlock::VarSet(Ptr(1), 0.0.into())],
-                vec![ScratchBlock::VarSet(Ptr(1), 1.0.into())],
+                vec![set_var(Ptr(1), 0.0)],
+                vec![set_var(Ptr(1), 1.0)],
             ),
             ScratchBlock::ControlIfElse(
                 "hello".into(),
-                vec![ScratchBlock::VarSet(Ptr(2), 1.0.into())],
-                vec![ScratchBlock::VarSet(Ptr(2), 0.0.into())],
+                vec![set_var(Ptr(2), 1.0)],
+                vec![set_var(Ptr(2), 0.0)],
             ),
             ScratchBlock::ControlIfElse(
                 String::new().into(),
-                vec![ScratchBlock::VarSet(Ptr(3), 0.0.into())],
-                vec![ScratchBlock::VarSet(Ptr(3), 1.0.into())],
+                vec![set_var(Ptr(3), 0.0)],
+                vec![set_var(Ptr(3), 1.0)],
             ),
             ScratchBlock::ControlIfElse(
                 "true".into(),
-                vec![ScratchBlock::VarSet(Ptr(4), 1.0.into())],
-                vec![ScratchBlock::VarSet(Ptr(4), 0.0.into())],
+                vec![set_var(Ptr(4), 1.0)],
+                vec![set_var(Ptr(4), 0.0)],
             ),
             ScratchBlock::ControlIfElse(
                 "false".into(),
-                vec![ScratchBlock::VarSet(Ptr(5), 0.0.into())],
-                vec![ScratchBlock::VarSet(Ptr(5), 1.0.into())],
+                vec![set_var(Ptr(5), 0.0)],
+                vec![set_var(Ptr(5), 1.0)],
             ),
         ]);
         assert_eq!(memory[0].convert_to_number(), 1.0);
@@ -245,49 +203,28 @@ mod tests {
     }
 
     #[test]
-    pub fn b_if_test() {
+    pub fn b_if() {
         let memory = run_code(&vec![
-            ScratchBlock::ControlIf(1.0.into(), vec![ScratchBlock::VarSet(Ptr(0), 1.0.into())]),
-            ScratchBlock::ControlIf(0.0.into(), vec![ScratchBlock::VarSet(Ptr(1), 1.0.into())]),
-            ScratchBlock::ControlIf(true.into(), vec![ScratchBlock::VarSet(Ptr(2), 1.0.into())]),
-            ScratchBlock::ControlIf(false.into(), vec![ScratchBlock::VarSet(Ptr(3), 1.0.into())]),
-            ScratchBlock::ControlIf(
-                "hello".into(),
-                vec![ScratchBlock::VarSet(Ptr(4), 1.0.into())],
-            ),
-            ScratchBlock::ControlIf(
-                String::new().into(),
-                vec![ScratchBlock::VarSet(Ptr(5), 1.0.into())],
-            ),
-            ScratchBlock::ControlIf(
-                "true".into(),
-                vec![ScratchBlock::VarSet(Ptr(6), 1.0.into())],
-            ),
-            ScratchBlock::ControlIf(
-                "false".into(),
-                vec![ScratchBlock::VarSet(Ptr(7), 1.0.into())],
-            ),
+            c_if(1.0, vec![set_var(Ptr(0), 1.0)]),
+            c_if(0.0, vec![set_var(Ptr(1), 1.0)]),
+            c_if(true, vec![set_var(Ptr(2), 1.0)]),
+            c_if(false, vec![set_var(Ptr(3), 1.0)]),
+            c_if("hello", vec![set_var(Ptr(4), 1.0)]),
+            c_if(String::new(), vec![set_var(Ptr(5), 1.0)]),
+            c_if("true", vec![set_var(Ptr(6), 1.0)]),
+            c_if("false", vec![set_var(Ptr(7), 1.0)]),
             // nested statements
-            ScratchBlock::ControlIf(
-                true.into(),
+            c_if(
+                true,
                 vec![
-                    ScratchBlock::ControlIf(
-                        true.into(),
-                        vec![ScratchBlock::VarSet(Ptr(8), 1.0.into())],
-                    ),
-                    ScratchBlock::ControlIf(
-                        false.into(),
-                        vec![ScratchBlock::VarSet(Ptr(9), 1.0.into())],
-                    ),
+                    c_if(true, vec![set_var(Ptr(8), 1.0)]),
+                    c_if(false, vec![set_var(Ptr(9), 1.0)]),
                 ],
             ),
-            ScratchBlock::ControlIf(
-                f64::NAN.into(),
-                vec![ScratchBlock::VarSet(Ptr(10), 1.0.into())],
-            ),
-            ScratchBlock::ControlIf(
-                ScratchBlock::OpDiv(0.0.into(), 0.0.into()).into(),
-                vec![ScratchBlock::VarSet(Ptr(11), 1.0.into())],
+            c_if(f64::NAN, vec![set_var(Ptr(10), 1.0)]),
+            c_if(
+                ScratchBlock::OpDiv(0.0.into(), 0.0.into()),
+                vec![set_var(Ptr(11), 1.0)],
             ),
         ]);
         assert_eq!(memory[0].convert_to_number(), 1.0);
@@ -307,22 +244,20 @@ mod tests {
     #[test]
     pub fn b_repeated_sum() {
         let memory = run_code(&vec![
-            ScratchBlock::VarSet(
+            set_var(
                 Ptr(7),
-                ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), false.into()).into(),
+                ScratchBlock::OpAdd(Ptr(7).into(), false.into()).into(),
             ),
             ScratchBlock::ControlRepeat(
                 100_000.0.into(),
                 vec![
-                    ScratchBlock::VarSet(
+                    set_var(
                         Ptr(7),
-                        ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), true.into())
-                            .into(),
+                        ScratchBlock::OpAdd(Ptr(7).into(), true.into()),
                     ),
-                    ScratchBlock::VarSet(
+                    set_var(
                         Ptr(7),
-                        ScratchBlock::OpAdd(ScratchBlock::VarRead(Ptr(7)).into(), true.into())
-                            .into(),
+                        ScratchBlock::OpAdd(Ptr(7).into(), true.into()),
                     ),
                 ],
             ),
@@ -333,22 +268,20 @@ mod tests {
     #[test]
     pub fn b_repeated_join_string() {
         let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(7), "hello ".into()),
+            set_var(Ptr(7), "hello "),
             ScratchBlock::ControlRepeat(
                 100.0.into(),
                 vec![
-                    ScratchBlock::VarSet(
+                    set_var(
                         Ptr(7),
                         ScratchBlock::OpStrJoin(
-                            ScratchBlock::VarRead(Ptr(7)).into(),
+                            Ptr(7).into(),
                             "world".into(),
-                        )
-                        .into(),
+                        ),
                     ),
-                    ScratchBlock::VarSet(
+                    set_var(
                         Ptr(7),
-                        ScratchBlock::OpStrJoin(ScratchBlock::VarRead(Ptr(7)).into(), ", ".into())
-                            .into(),
+                        ScratchBlock::OpStrJoin(Ptr(7).into(), ", ".into()),
                     ),
                 ],
             ),
@@ -362,27 +295,27 @@ mod tests {
     #[test]
     pub fn b_random() {
         let memory = run_code(&vec![
-            ScratchBlock::VarSet(
+            set_var(
                 Ptr(0),
-                ScratchBlock::OpRandom(0.0.into(), 100.0.into()).into(),
+                ScratchBlock::OpRandom(0.0.into(), 100.0.into()),
             ),
-            ScratchBlock::VarSet(
+            set_var(
                 Ptr(1),
-                ScratchBlock::OpRandom(1.0.into(), 2.5.into()).into(),
+                ScratchBlock::OpRandom(1.0.into(), 2.5.into()),
             ),
-            ScratchBlock::VarSet(
+            set_var(
                 Ptr(2),
-                ScratchBlock::OpRandom("1".into(), "2".into()).into(),
+                ScratchBlock::OpRandom("1".into(), "2".into()),
             ),
-            ScratchBlock::VarSet(
+            set_var(
                 Ptr(3),
-                ScratchBlock::OpRandom("1.0".into(), "2".into()).into(),
+                ScratchBlock::OpRandom("1.0".into(), "2".into()),
             ),
             ScratchBlock::ControlRepeat(
                 100_000.0.into(),
-                vec![ScratchBlock::VarSet(
+                vec![set_var(
                     Ptr(4),
-                    ScratchBlock::OpRandom(0.0.into(), 100.0.into()).into(),
+                    ScratchBlock::OpRandom(0.0.into(), 100.0.into()),
                 )],
             ),
         ]);
@@ -409,48 +342,21 @@ mod tests {
     }
 
     #[test]
-    pub fn b_math_add_test() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpAdd(50.0.into(), 25.0.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpAdd((-500.0).into(), 25.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpAdd((-500.0).into(), (-25.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpAdd(2.54.into(), 6.25.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(4),
-                ScratchBlock::OpAdd(2.54.into(), (-6.25).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpAdd(true.into(), true.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpAdd((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpAdd((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(8),
-                ScratchBlock::OpAdd((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(9),
-                ScratchBlock::OpAdd((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(10),
-                ScratchBlock::OpAdd(1.0.into(), f64::NAN.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(11),
-                ScratchBlock::OpAdd(f64::NAN.into(), 1.0.into()).into(),
-            ),
-        ]);
+    pub fn b_math_add() {
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpAdd(50.0.into(), 25.0.into()).into(),
+            ScratchBlock::OpAdd((-500.0).into(), 25.0.into()).into(),
+            ScratchBlock::OpAdd((-500.0).into(), (-25.0).into()).into(),
+            ScratchBlock::OpAdd(2.54.into(), 6.25.into()).into(),
+            ScratchBlock::OpAdd(2.54.into(), (-6.25).into()).into(),
+            ScratchBlock::OpAdd(true.into(), true.into()).into(),
+            ScratchBlock::OpAdd((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpAdd((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpAdd((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpAdd((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpAdd(1.0.into(), f64::NAN.into()).into(),
+            ScratchBlock::OpAdd(f64::NAN.into(), 1.0.into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 75.0);
         assert_eq!(memory[1].convert_to_number(), -475.0);
         assert_eq!(memory[2].convert_to_number(), -525.0);
@@ -469,48 +375,21 @@ mod tests {
     }
 
     #[test]
-    pub fn b_math_sub_test() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpSub(50.0.into(), 25.0.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpSub((-500.0).into(), 25.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpSub((-500.0).into(), (-25.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpSub(2.54.into(), 6.25.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(4),
-                ScratchBlock::OpSub(2.54.into(), (-6.25).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpSub(true.into(), true.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpSub((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpSub((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(8),
-                ScratchBlock::OpSub((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(9),
-                ScratchBlock::OpSub((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(10),
-                ScratchBlock::OpSub(1.0.into(), f64::NAN.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(11),
-                ScratchBlock::OpSub(f64::NAN.into(), 1.0.into()).into(),
-            ),
-        ]);
+    pub fn b_math_sub() {
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpSub(50.0.into(), 25.0.into()).into(),
+            ScratchBlock::OpSub((-500.0).into(), 25.0.into()).into(),
+            ScratchBlock::OpSub((-500.0).into(), (-25.0).into()).into(),
+            ScratchBlock::OpSub(2.54.into(), 6.25.into()).into(),
+            ScratchBlock::OpSub(2.54.into(), (-6.25).into()).into(),
+            ScratchBlock::OpSub(true.into(), true.into()).into(),
+            ScratchBlock::OpSub((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpSub((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpSub((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpSub((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpSub(1.0.into(), f64::NAN.into()).into(),
+            ScratchBlock::OpSub(f64::NAN.into(), 1.0.into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 25.0);
         assert_eq!(memory[1].convert_to_number(), -525.0);
         assert_eq!(memory[2].convert_to_number(), -475.0);
@@ -530,72 +409,27 @@ mod tests {
     }
 
     #[test]
-    pub fn b_math_mul_test() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMul(50.0.into(), 2.0.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpMul((-50.0).into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpMul((-50.0).into(), (-2.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpMul(2.54.into(), 6.25.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(4),
-                ScratchBlock::OpMul(2.54.into(), (-6.25).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpMul(true.into(), true.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpMul((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpMul((1.0 / 0.0).into(), 0.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(8),
-                ScratchBlock::OpMul((1.0 / 0.0).into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(9),
-                ScratchBlock::OpMul((1.0 / 0.0).into(), (-2.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(10),
-                ScratchBlock::OpMul((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(11),
-                ScratchBlock::OpMul((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(12),
-                ScratchBlock::OpMul((-1.0 / 0.0).into(), 0.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(13),
-                ScratchBlock::OpMul((-1.0 / 0.0).into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(14),
-                ScratchBlock::OpMul((-1.0 / 0.0).into(), (-2.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(15),
-                ScratchBlock::OpMul((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(16),
-                ScratchBlock::OpMul(1.0.into(), f64::NAN.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(17),
-                ScratchBlock::OpMul(f64::NAN.into(), 1.0.into()).into(),
-            ),
-        ]);
+    pub fn b_math_mul() {
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpMul(50.0.into(), 2.0.into()).into(),
+            ScratchBlock::OpMul((-50.0).into(), 2.0.into()).into(),
+            ScratchBlock::OpMul((-50.0).into(), (-2.0).into()).into(),
+            ScratchBlock::OpMul(2.54.into(), 6.25.into()).into(),
+            ScratchBlock::OpMul(2.54.into(), (-6.25).into()).into(),
+            ScratchBlock::OpMul(true.into(), true.into()).into(),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), 0.0.into()).into(),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), 2.0.into()).into(),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), (-2.0).into()).into(),
+            ScratchBlock::OpMul((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), 0.0.into()).into(),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), 2.0.into()).into(),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), (-2.0).into()).into(),
+            ScratchBlock::OpMul((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpMul(1.0.into(), f64::NAN.into()).into(),
+            ScratchBlock::OpMul(f64::NAN.into(), 1.0.into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 100.0);
         assert_eq!(memory[1].convert_to_number(), -100.0);
         assert_eq!(memory[2].convert_to_number(), 100.0);
@@ -636,72 +470,27 @@ mod tests {
     }
 
     #[test]
-    pub fn b_math_div_test() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpDiv(50.0.into(), 2.0.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpDiv((-50.0).into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpDiv((-50.0).into(), (-2.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpDiv(3.5.into(), 2.5.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(4),
-                ScratchBlock::OpDiv(3.5.into(), (-2.5).into()).into(),
-            ),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpDiv(true.into(), true.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpDiv((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpDiv((1.0 / 0.0).into(), 0.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(8),
-                ScratchBlock::OpDiv((1.0 / 0.0).into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(9),
-                ScratchBlock::OpDiv((1.0 / 0.0).into(), (-2.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(10),
-                ScratchBlock::OpDiv((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(11),
-                ScratchBlock::OpDiv((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(12),
-                ScratchBlock::OpDiv((-1.0 / 0.0).into(), 0.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(13),
-                ScratchBlock::OpDiv((-1.0 / 0.0).into(), 2.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(14),
-                ScratchBlock::OpDiv((-1.0 / 0.0).into(), (-2.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(15),
-                ScratchBlock::OpDiv((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(16),
-                ScratchBlock::OpDiv(1.0.into(), f64::NAN.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(17),
-                ScratchBlock::OpDiv(f64::NAN.into(), 1.0.into()).into(),
-            ),
-        ]);
+    pub fn b_math_div() {
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpDiv(50.0.into(), 2.0.into()).into(),
+            ScratchBlock::OpDiv((-50.0).into(), 2.0.into()).into(),
+            ScratchBlock::OpDiv((-50.0).into(), (-2.0).into()).into(),
+            ScratchBlock::OpDiv(3.5.into(), 2.5.into()).into(),
+            ScratchBlock::OpDiv(3.5.into(), (-2.5).into()).into(),
+            ScratchBlock::OpDiv(true.into(), true.into()).into(),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), 0.0.into()).into(),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), 2.0.into()).into(),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), (-2.0).into()).into(),
+            ScratchBlock::OpDiv((1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), (1.0 / 0.0).into()).into(),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), 0.0.into()).into(),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), 2.0.into()).into(),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), (-2.0).into()).into(),
+            ScratchBlock::OpDiv((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
+            ScratchBlock::OpDiv(1.0.into(), f64::NAN.into()).into(),
+            ScratchBlock::OpDiv(f64::NAN.into(), 1.0.into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 25.0);
         assert_eq!(memory[1].convert_to_number(), -25.0);
         assert_eq!(memory[2].convert_to_number(), 25.0);
@@ -756,43 +545,42 @@ mod tests {
             assert_eq!(memory[offset + 3].convert_to_number(), 0.0);
         }
 
-        let set = |p, b: ScratchBlock| ScratchBlock::VarSet(Ptr(p), b.into());
         // Testing multiple data types as this caused a real bug earlier
-        let memory = run_code(&vec![
+        let memory = run_code(&set_vars(vec![
             // Bools
-            set(0, ScratchBlock::OpBAnd(true.into(), true.into())),
-            set(1, ScratchBlock::OpBAnd(true.into(), false.into())),
-            set(2, ScratchBlock::OpBAnd(false.into(), true.into())),
-            set(3, ScratchBlock::OpBAnd(false.into(), false.into())),
-            set(4, ScratchBlock::OpBOr(true.into(), true.into())),
-            set(5, ScratchBlock::OpBOr(true.into(), false.into())),
-            set(6, ScratchBlock::OpBOr(false.into(), true.into())),
-            set(7, ScratchBlock::OpBOr(false.into(), false.into())),
-            set(8, ScratchBlock::OpBNot(true.into())),
-            set(9, ScratchBlock::OpBNot(false.into())),
+            ScratchBlock::OpBAnd(true.into(), true.into()).into(),
+            ScratchBlock::OpBAnd(true.into(), false.into()).into(),
+            ScratchBlock::OpBAnd(false.into(), true.into()).into(),
+            ScratchBlock::OpBAnd(false.into(), false.into()).into(),
+            ScratchBlock::OpBOr(true.into(), true.into()).into(),
+            ScratchBlock::OpBOr(true.into(), false.into()).into(),
+            ScratchBlock::OpBOr(false.into(), true.into()).into(),
+            ScratchBlock::OpBOr(false.into(), false.into()).into(),
+            ScratchBlock::OpBNot(true.into()).into(),
+            ScratchBlock::OpBNot(false.into()).into(),
             // Numbers
-            set(10, ScratchBlock::OpBNot(1.0.into())),
-            set(11, ScratchBlock::OpBNot(0.0.into())),
-            set(12, ScratchBlock::OpBAnd(1.0.into(), 1.0.into())),
-            set(13, ScratchBlock::OpBAnd(1.0.into(), 0.0.into())),
-            set(14, ScratchBlock::OpBAnd(0.0.into(), 1.0.into())),
-            set(15, ScratchBlock::OpBAnd(0.0.into(), 0.0.into())),
-            set(16, ScratchBlock::OpBOr(1.0.into(), 1.0.into())),
-            set(17, ScratchBlock::OpBOr(1.0.into(), 0.0.into())),
-            set(18, ScratchBlock::OpBOr(0.0.into(), 1.0.into())),
-            set(19, ScratchBlock::OpBOr(0.0.into(), 0.0.into())),
+            ScratchBlock::OpBNot(1.0.into()).into(),
+            ScratchBlock::OpBNot(0.0.into()).into(),
+            ScratchBlock::OpBAnd(1.0.into(), 1.0.into()).into(),
+            ScratchBlock::OpBAnd(1.0.into(), 0.0.into()).into(),
+            ScratchBlock::OpBAnd(0.0.into(), 1.0.into()).into(),
+            ScratchBlock::OpBAnd(0.0.into(), 0.0.into()).into(),
+            ScratchBlock::OpBOr(1.0.into(), 1.0.into()).into(),
+            ScratchBlock::OpBOr(1.0.into(), 0.0.into()).into(),
+            ScratchBlock::OpBOr(0.0.into(), 1.0.into()).into(),
+            ScratchBlock::OpBOr(0.0.into(), 0.0.into()).into(),
             // Strings
-            set(20, ScratchBlock::OpBAnd("true".into(), "true".into())),
-            set(21, ScratchBlock::OpBAnd("true".into(), "false".into())),
-            set(22, ScratchBlock::OpBAnd("false".into(), "true".into())),
-            set(23, ScratchBlock::OpBAnd("false".into(), "false".into())),
-            set(24, ScratchBlock::OpBOr("true".into(), "true".into())),
-            set(25, ScratchBlock::OpBOr("true".into(), "false".into())),
-            set(26, ScratchBlock::OpBOr("false".into(), "true".into())),
-            set(27, ScratchBlock::OpBOr("false".into(), "false".into())),
-            set(28, ScratchBlock::OpBNot("true".into())),
-            set(29, ScratchBlock::OpBNot("false".into())),
-        ]);
+            ScratchBlock::OpBAnd("true".into(), "true".into()).into(),
+            ScratchBlock::OpBAnd("true".into(), "false".into()).into(),
+            ScratchBlock::OpBAnd("false".into(), "true".into()).into(),
+            ScratchBlock::OpBAnd("false".into(), "false".into()).into(),
+            ScratchBlock::OpBOr("true".into(), "true".into()).into(),
+            ScratchBlock::OpBOr("true".into(), "false".into()).into(),
+            ScratchBlock::OpBOr("false".into(), "true".into()).into(),
+            ScratchBlock::OpBOr("false".into(), "false".into()).into(),
+            ScratchBlock::OpBNot("true".into()).into(),
+            ScratchBlock::OpBNot("false".into()).into(),
+        ]));
 
         check_and(&memory, 0);
         check_or(&memory, 4);
@@ -813,61 +601,25 @@ mod tests {
 
     #[test]
     pub fn b_math_modulo() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMod(5.5.into(), 3.0.into()).into()), // 5.5 % 3.0
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpMod((-5.5).into(), 3.0.into()).into(),
-            ), // -5.5 % 3.0
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpMod(5.5.into(), (-3.0).into()).into(),
-            ), // 5.5 % -3.0
-            ScratchBlock::VarSet(
-                Ptr(3),
-                ScratchBlock::OpMod((-5.5).into(), (-3.0).into()).into(),
-            ), // -5.5 % -3.0
-            ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpMod(10.0.into(), 3.0.into()).into()), // 10.0 % 3.0
-            ScratchBlock::VarSet(
-                Ptr(5),
-                ScratchBlock::OpMod((-10.0).into(), 3.0.into()).into(),
-            ), // -10.0 % 3.0
-            ScratchBlock::VarSet(
-                Ptr(6),
-                ScratchBlock::OpMod(10.0.into(), (-3.0).into()).into(),
-            ), // 10.0 % -3.0
-            ScratchBlock::VarSet(
-                Ptr(7),
-                ScratchBlock::OpMod((-10.0).into(), (-3.0).into()).into(),
-            ), // -10.0 % -3.0
-            ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMod(0.0.into(), 1.0.into()).into()), // 0.0 % 1.0
-            ScratchBlock::VarSet(
-                Ptr(9),
-                ScratchBlock::OpMod((-1.0).into(), 1.0.into()).into(),
-            ), // -1.0 % 1.0
-            ScratchBlock::VarSet(
-                Ptr(10),
-                ScratchBlock::OpMod(1.0.into(), (-1.0).into()).into(),
-            ), // 1.0 % -1.0
-            ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMod(1.0.into(), 2.5.into()).into()), // 1.0 % 2.5
-            ScratchBlock::VarSet(
-                Ptr(12),
-                ScratchBlock::OpMod((-1.0).into(), 2.5.into()).into(),
-            ), // -1.0 % 2.5
-            ScratchBlock::VarSet(Ptr(13), ScratchBlock::OpMod(1e10.into(), 3.0.into()).into()), // Large numbers
-            ScratchBlock::VarSet(
-                Ptr(14),
-                ScratchBlock::OpMod((-1e10).into(), 3.0.into()).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(15),
-                ScratchBlock::OpMod(0.0001.into(), 0.003.into()).into(),
-            ), // Small remainders
-            ScratchBlock::VarSet(
-                Ptr(16),
-                ScratchBlock::OpMod((-0.0001).into(), 0.003.into()).into(),
-            ),
-        ]);
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpMod(5.5.into(), 3.0.into()).into(), // 5.5 % 3.0
+            ScratchBlock::OpMod((-5.5).into(), 3.0.into()).into(), // -5.5 % 3.0
+            ScratchBlock::OpMod(5.5.into(), (-3.0).into()).into(), // 5.5 % -3.0
+            ScratchBlock::OpMod((-5.5).into(), (-3.0).into()).into(), // -5.5 % -3.0
+            ScratchBlock::OpMod(10.0.into(), 3.0.into()).into(), // 10.0 % 3.0
+            ScratchBlock::OpMod((-10.0).into(), 3.0.into()).into(), // -10.0 % 3.0
+            ScratchBlock::OpMod(10.0.into(), (-3.0).into()).into(), // 10.0 % -3.0
+            ScratchBlock::OpMod((-10.0).into(), (-3.0).into()).into(), // -10.0 % -3.0
+            ScratchBlock::OpMod(0.0.into(), 1.0.into()).into(), // 0.0 % 1.0
+            ScratchBlock::OpMod((-1.0).into(), 1.0.into()).into(), // -1.0 % 1.0
+            ScratchBlock::OpMod(1.0.into(), (-1.0).into()).into(), // 1.0 % -1.0
+            ScratchBlock::OpMod(1.0.into(), 2.5.into()).into(), // 1.0 % 2.5
+            ScratchBlock::OpMod((-1.0).into(), 2.5.into()).into(), // -1.0 % 2.5
+            ScratchBlock::OpMod(1e10.into(), 3.0.into()).into(), // Large numbers
+            ScratchBlock::OpMod((-1e10).into(), 3.0.into()).into(),
+            ScratchBlock::OpMod(0.0001.into(), 0.003.into()).into(), // Small remainders
+            ScratchBlock::OpMod((-0.0001).into(), 0.003.into()).into(),
+        ]));
 
         assert_eq!(memory[0].convert_to_number(), 2.5);
         assert!((memory[1].convert_to_number() - 0.5) <= f64::EPSILON);
@@ -899,22 +651,22 @@ mod tests {
 
     #[test]
     pub fn b_math_floor() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMFloor(5.5.into()).into()),
-            ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpMFloor((-3.2).into()).into()),
-            ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpMFloor(0.0.into()).into()),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpMFloor((-0.8).into()).into()),
-            ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpMFloor(2.999.into()).into()),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpMFloor((-1.1).into()).into()),
-            ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpMFloor(10.0.into()).into()),
-            ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpMFloor((-10.999).into()).into()),
-            ScratchBlock::VarSet(Ptr(8), ScratchBlock::OpMFloor(123_456.789.into()).into()),
-            ScratchBlock::VarSet(Ptr(9), ScratchBlock::OpMFloor((-123_456.789).into()).into()),
-            ScratchBlock::VarSet(Ptr(10), ScratchBlock::OpMFloor(1e-9.into()).into()),
-            ScratchBlock::VarSet(Ptr(11), ScratchBlock::OpMFloor((-1e-9).into()).into()),
-            ScratchBlock::VarSet(Ptr(12), ScratchBlock::OpMFloor(1e10.into()).into()),
-            ScratchBlock::VarSet(Ptr(13), ScratchBlock::OpMFloor((-1e10).into()).into()),
-        ]);
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpMFloor(5.5.into()).into(),
+            ScratchBlock::OpMFloor((-3.2).into()).into(),
+            ScratchBlock::OpMFloor(0.0.into()).into(),
+            ScratchBlock::OpMFloor((-0.8).into()).into(),
+            ScratchBlock::OpMFloor(2.999.into()).into(),
+            ScratchBlock::OpMFloor((-1.1).into()).into(),
+            ScratchBlock::OpMFloor(10.0.into()).into(),
+            ScratchBlock::OpMFloor((-10.999).into()).into(),
+            ScratchBlock::OpMFloor(123_456.789.into()).into(),
+            ScratchBlock::OpMFloor((-123_456.789).into()).into(),
+            ScratchBlock::OpMFloor(1e-9.into()).into(),
+            ScratchBlock::OpMFloor((-1e-9).into()).into(),
+            ScratchBlock::OpMFloor(1e10.into()).into(),
+            ScratchBlock::OpMFloor((-1e10).into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 5.0);
         assert_eq!(memory[1].convert_to_number(), -4.0);
         assert_eq!(memory[2].convert_to_number(), 0.0);
@@ -933,16 +685,16 @@ mod tests {
 
     #[test]
     pub fn b_math_round() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpRound(2.3.into()).into()),
-            ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpRound(2.5.into()).into()),
-            ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpRound(2.7.into()).into()),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpRound(3.0.into()).into()),
-            ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpRound((-2.3).into()).into()),
-            ScratchBlock::VarSet(Ptr(5), ScratchBlock::OpRound((-2.5).into()).into()),
-            ScratchBlock::VarSet(Ptr(6), ScratchBlock::OpRound((-2.7).into()).into()),
-            ScratchBlock::VarSet(Ptr(7), ScratchBlock::OpRound((-3.0).into()).into()),
-        ]);
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpRound(2.3.into()).into(),
+            ScratchBlock::OpRound(2.5.into()).into(),
+            ScratchBlock::OpRound(2.7.into()).into(),
+            ScratchBlock::OpRound(3.0.into()).into(),
+            ScratchBlock::OpRound((-2.3).into()).into(),
+            ScratchBlock::OpRound((-2.5).into()).into(),
+            ScratchBlock::OpRound((-2.7).into()).into(),
+            ScratchBlock::OpRound((-3.0).into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 2.0);
         assert_eq!(memory[1].convert_to_number(), 3.0);
         assert_eq!(memory[2].convert_to_number(), 3.0);
@@ -955,17 +707,14 @@ mod tests {
 
     #[test]
     pub fn b_math_abs() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(Ptr(0), ScratchBlock::OpMAbs(2.3.into()).into()),
-            ScratchBlock::VarSet(Ptr(1), ScratchBlock::OpMAbs((-2.3).into()).into()),
-            ScratchBlock::VarSet(Ptr(2), ScratchBlock::OpMAbs(0.0.into()).into()),
-            ScratchBlock::VarSet(Ptr(3), ScratchBlock::OpMAbs((-0.0).into()).into()),
-            ScratchBlock::VarSet(Ptr(4), ScratchBlock::OpMAbs(f64::INFINITY.into()).into()),
-            ScratchBlock::VarSet(
-                Ptr(5),
-                ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
-            ),
-        ]);
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpMAbs(2.3.into()).into(),
+            ScratchBlock::OpMAbs((-2.3).into()).into(),
+            ScratchBlock::OpMAbs(0.0.into()).into(),
+            ScratchBlock::OpMAbs((-0.0).into()).into(),
+            ScratchBlock::OpMAbs(f64::INFINITY.into()).into(),
+            ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 2.3);
         assert_eq!(memory[1].convert_to_number(), 2.3);
         assert_eq!(memory[2].convert_to_number(), 0.0);
@@ -1084,45 +833,26 @@ mod tests {
 
     #[test]
     fn b_bool_return() {
-        let memory = run_code(&vec![ScratchBlock::VarSet(
+        let memory = run_code(&vec![set_var(
             Ptr(0),
             ScratchBlock::OpBAnd(
                 ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
                 false.into(),
-            )
-            .into(),
+            ),
         )]);
         assert_eq!(memory[0].convert_to_number(), 0.0);
     }
 
     #[test]
     fn b_comparison() {
-        let memory = run_code(&vec![
-            ScratchBlock::VarSet(
-                Ptr(0),
-                ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(1),
-                ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Greater).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(2),
-                ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Greater).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(3),
-                ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Less).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(4),
-                ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Less).into(),
-            ),
-            ScratchBlock::VarSet(
-                Ptr(5),
-                ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Less).into(),
-            ),
-        ]);
+        let memory = run_code(&set_vars(vec![
+            ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
+            ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Greater).into(),
+            ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Greater).into(),
+            ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Less).into(),
+            ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Less).into(),
+            ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Less).into(),
+        ]));
         assert_eq!(memory[0].convert_to_number(), 1.0);
         assert_eq!(memory[1].convert_to_number(), 0.0);
         assert_eq!(memory[2].convert_to_number(), 0.0);

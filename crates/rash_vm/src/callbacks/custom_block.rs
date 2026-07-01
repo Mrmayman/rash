@@ -40,10 +40,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
     let id = CustomBlockId(id as usize);
 
     let Some(script) = scripts.custom_blocks.get(&id) else {
-        panic!(
-            "custom_block::call_no_screen_refresh : No custom block found with id {}",
-            id.0
-        )
+        panic!("No custom block found with id {}", id.0)
     };
 
     let args = unsafe { vec_from_raw(arg_buffer, script.num_args) };
@@ -72,10 +69,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     let id = CustomBlockId(id as usize);
 
     let Some(script) = scripts.custom_blocks.get(&id) else {
-        panic!(
-            "custom_block::call_no_screen_refresh : No custom block found with id {}",
-            id.0
-        )
+        panic!("No custom block found with id {}", id.0)
     };
 
     let is_screen_refresh = parent_is_screen_refresh && script.is_screen_refresh;
