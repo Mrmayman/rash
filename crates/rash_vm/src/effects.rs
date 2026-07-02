@@ -20,6 +20,7 @@ pub struct Effects {
     pub reads_is_unknown: bool,
     pub writes: HashMap<Ptr, VarTypeChecked>,
     pub writes_is_unknown: bool,
+    pub yields: bool,
 
     pub may_not_happen: bool,
 }
@@ -31,6 +32,7 @@ impl Effects {
             reads_is_unknown: false,
             writes: HashMap::new(),
             writes_is_unknown: false,
+            yields: false,
             may_not_happen: false,
         }
     }
@@ -66,6 +68,9 @@ impl Effects {
         if other.writes_is_unknown {
             self.writes_is_unknown = true;
         }
+        if other.yields {
+            self.yields = true;
+        }
         self.writes.extend(other.writes);
     }
 
@@ -81,6 +86,9 @@ impl Effects {
 
         if other.writes_is_unknown {
             self.writes_is_unknown = true;
+        }
+        if other.yields {
+            self.yields = true;
         }
 
         // Just intersect writes, but if the types don't match, set to unknown
@@ -245,7 +253,11 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::FunctionCallScreenRefresh(custom_block_id, inputs) => {
                 inputs.effects(c, v) | c(*custom_block_id)
             }
-            ScratchBlock::ScreenRefresh => Effects::unknown(),
+            ScratchBlock::ScreenRefresh => {
+                let mut e = Effects::unknown();
+                e.yields = true;
+                e
+            }
 
             ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::LooksShown(_)

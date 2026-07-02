@@ -69,51 +69,10 @@ mod tests {
         assert!(!memory[11].convert_to_bool());
         assert_eq!(memory[12].convert_to_string(), "true");
     }
-    /*
+
     #[test]
     pub fn b_pi() {
-        let memory = run_code(&{
-            const PI: Ptr = Ptr(0);
-            const D: Ptr = Ptr(1);
-            const I: Ptr = Ptr(2);
-            vec![
-                set_var(PI, 0.0),
-                set_var(D, 1.0),
-                set_var(I, 0.0),
-                // A test of nested repeat loops
-                ScratchBlock::ControlRepeat(
-                    1_000_000.0.into(),
-                    // vec![ScratchBlock::ControlRepeat(
-                    // 1000.0.into(),
-                    vec![
-                        // PI += ((8 * (I % 2)) - 4) / D
-                        ScratchBlock::VarChange(
-                            PI,
-                            ScratchBlock::OpDiv(
-                                ScratchBlock::OpSub(
-                                    ScratchBlock::OpMul(
-                                        8.0.into(),
-                                        ScratchBlock::OpMod(
-                                            ScratchBlock::VarRead(I).into(),
-                                            2.0.into(),
-                                        )
-                                        .into(),
-                                    )
-                                    .into(),
-                                    4.0.into(),
-                                )
-                                .into(),
-                                ScratchBlock::VarRead(D).into(),
-                            )
-                            .into(),
-                        ),
-                        ScratchBlock::VarChange(D, 2.0.into()),
-                        ScratchBlock::VarChange(I, 1.0.into()),
-                    ],
-                    // )],
-                ),
-            ]
-        });
+        let memory = run_code(&crate::program_pi());
 
         assert_eq!(memory[0].convert_to_number(), -3.1415916535897743);
         assert_eq!(memory[1].convert_to_number(), 2000001.0);
@@ -136,7 +95,7 @@ mod tests {
             memory[0].convert_to_string(),
             "0HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
         )
-    }*/
+    }
 
     #[test]
     pub fn b_repeat_until() {
@@ -251,25 +210,15 @@ mod tests {
         assert_eq!(memory[11].convert_to_number(), 0.0);
     }
 
-    /*
     #[test]
     pub fn b_repeated_sum() {
         let memory = run_code(&vec![
-            set_var(
-                Ptr(7),
-                ScratchBlock::OpAdd(Ptr(7).into(), false.into()).into(),
-            ),
+            set_var(Ptr(7), ScratchBlock::OpAdd(Ptr(7).into(), false.into())),
             ScratchBlock::ControlRepeat(
                 100_000.0.into(),
                 vec![
-                    set_var(
-                        Ptr(7),
-                        ScratchBlock::OpAdd(Ptr(7).into(), true.into()),
-                    ),
-                    set_var(
-                        Ptr(7),
-                        ScratchBlock::OpAdd(Ptr(7).into(), true.into()),
-                    ),
+                    set_var(Ptr(7), ScratchBlock::OpAdd(Ptr(7).into(), true.into())),
+                    set_var(Ptr(7), ScratchBlock::OpAdd(Ptr(7).into(), true.into())),
                 ],
             ),
         ]);
@@ -285,15 +234,9 @@ mod tests {
                 vec![
                     set_var(
                         Ptr(7),
-                        ScratchBlock::OpStrJoin(
-                            Ptr(7).into(),
-                            "world".into(),
-                        ),
+                        ScratchBlock::OpStrJoin(Ptr(7).into(), "world".into()),
                     ),
-                    set_var(
-                        Ptr(7),
-                        ScratchBlock::OpStrJoin(Ptr(7).into(), ", ".into()),
-                    ),
+                    set_var(Ptr(7), ScratchBlock::OpStrJoin(Ptr(7).into(), ", ".into())),
                 ],
             ),
         ]);
@@ -306,22 +249,10 @@ mod tests {
     #[test]
     pub fn b_random() {
         let memory = run_code(&vec![
-            set_var(
-                Ptr(0),
-                ScratchBlock::OpRandom(0.0.into(), 100.0.into()),
-            ),
-            set_var(
-                Ptr(1),
-                ScratchBlock::OpRandom(1.0.into(), 2.5.into()),
-            ),
-            set_var(
-                Ptr(2),
-                ScratchBlock::OpRandom("1".into(), "2".into()),
-            ),
-            set_var(
-                Ptr(3),
-                ScratchBlock::OpRandom("1.0".into(), "2".into()),
-            ),
+            set_var(Ptr(0), ScratchBlock::OpRandom(0.0.into(), 100.0.into())),
+            set_var(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
+            set_var(Ptr(2), ScratchBlock::OpRandom("1".into(), "2".into())),
+            set_var(Ptr(3), ScratchBlock::OpRandom("1.0".into(), "2".into())),
             ScratchBlock::ControlRepeat(
                 100_000.0.into(),
                 vec![set_var(
@@ -350,7 +281,7 @@ mod tests {
         assert!(memory[4].convert_to_number() >= 0.0);
         assert!(memory[4].convert_to_number() <= 100.0);
         assert_eq!(memory[4].convert_to_number().fract(), 0.0);
-    }*/
+    }
 
     #[test]
     pub fn b_math_add() {

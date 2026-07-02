@@ -30,9 +30,74 @@ impl Compiler<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         input: &Input,
-        vec: &[ScratchBlock],
+        blocks: &[ScratchBlock],
     ) {
-        todo!()
+        let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        if effects.writes_is_unknown {
+            todo!("Gotta implement fallback behaviour");
+        }
+        if effects.yields {
+            todo!("Gotta implement yield behaviour");
+        }
+
+        let zero = self.constants.get_int(0, builder);
+        let one = self.constants.get_int(1, builder);
+        let old_constants = self.constants.clone();
+
+        let loop_value = input.get_number_int(self, builder);
+
+        let loop_block = builder.create_block();
+        let end_block = builder.create_block();
+
+        let final_params_loop =
+            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr).into());
+        let loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
+        let final_params_end =
+            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr).into());
+
+        let entry_params = self.generate_params(builder, &final_params_loop);
+        let mut entry_params2 = entry_params.clone();
+        entry_params2.push(loop_value.into());
+        let condition = builder
+            .ins()
+            .icmp(IntCC::SignedGreaterThan, loop_value, zero);
+        builder.ins().brif(
+            condition,
+            loop_block,
+            &entry_params2,
+            end_block,
+            &entry_params,
+        );
+
+        builder.switch_to_block(loop_block);
+        self.code_block = loop_block;
+        self.cache.variable_vals.extend(final_params_loop.clone());
+
+        for block in blocks {
+            self.compile_block(block, builder);
+        }
+        let loop_params = self.generate_params(builder, &final_params_loop);
+        let mut loop_params2 = loop_params.clone();
+
+        let new_loop_value = builder.ins().isub(loop_value_param, one);
+        loop_params2.push(new_loop_value.into());
+
+        let condition = builder
+            .ins()
+            .icmp(IntCC::SignedGreaterThan, new_loop_value, zero);
+        builder.ins().brif(
+            condition,
+            loop_block,
+            &loop_params2,
+            end_block,
+            &loop_params,
+        );
+
+        builder.switch_to_block(end_block);
+        self.cache.variable_vals.extend(final_params_end.clone());
+        self.code_block = end_block;
+        self.constants = old_constants;
+
         // // Basically,
         // //
         // // for (i = 0; i < number; i += 1) {

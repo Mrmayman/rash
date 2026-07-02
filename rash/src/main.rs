@@ -3,8 +3,8 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use rash_loader_sb3::ProjectLoader;
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{
-    MEMORY, ProjectBuilder, RunState, Runtime, ScratchBlock, ScratchObject, SpriteBuilder,
-    SpriteData, SpriteId, runtime::Script,
+    MEMORY, ProjectBuilder, RunState, Runtime, ScratchObject, SpriteBuilder, SpriteData, SpriteId,
+    runtime::Script,
 };
 use winit::{
     event::{Event, WindowEvent},
@@ -181,10 +181,11 @@ fn run_demo() {
 
     let mut sprite = SpriteBuilder::new(SpriteId(0));
     sprite.add_script(
-        Script::new_green_flag(vec![
-            ScratchBlock::Log("Hello World".into()),
-            ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
-        ]),
+        // Script::new_green_flag(vec![
+        //     ScratchBlock::Log("Hello World".into()),
+        //     ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
+        // ]),
+        Script::new_green_flag(rash_vm::program_pi()),
         &memory,
     );
     let mut builder = ProjectBuilder::new();
