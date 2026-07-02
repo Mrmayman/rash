@@ -90,4 +90,4 @@ Pi calculation:
 
 - Scratch: `621 ms`
 - Turbowarp: `13 ms`
-- Rash: `7 ms`
+- Rash: `4.4 ms`
