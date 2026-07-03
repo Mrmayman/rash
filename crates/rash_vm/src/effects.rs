@@ -35,15 +35,15 @@ impl VariableWrite {
     }
 }
 
-impl Into<VarTypeChecked> for VariableWrite {
-    fn into(self) -> VarTypeChecked {
-        self.ty
+impl From<VariableWrite> for VarTypeChecked {
+    fn from(val: VariableWrite) -> Self {
+        val.ty
     }
 }
 
-impl Into<Option<VarType>> for VariableWrite {
-    fn into(self) -> Option<VarType> {
-        self.ty.into()
+impl From<VariableWrite> for Option<VarType> {
+    fn from(val: VariableWrite) -> Self {
+        val.ty.into()
     }
 }
 
@@ -139,7 +139,7 @@ impl Effects {
         }
 
         // Just intersect writes, but if the types don't match, set to unknown
-        for (ptr, ty) in self.writes.iter_mut() {
+        for (ptr, ty) in &mut self.writes {
             if let Some(other_ty) = other.writes.get(ptr) {
                 ty.skip_nan = ty.skip_nan && other_ty.skip_nan;
                 if ty.ty != other_ty.ty {
@@ -167,7 +167,7 @@ impl Effects {
     ) -> Vec<(Ptr, VariableSlot)> {
         let mut param_values = Vec::new();
 
-        for (ptr, ty) in self.writes.iter() {
+        for (ptr, ty) in &self.writes {
             let original = original_vals(*ptr);
             let skip_nan = ty.skip_nan && original.skip_nan;
             let ty = if original.ty == ty.ty {
@@ -270,9 +270,7 @@ impl CheckEffects for ScratchBlock {
         v: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Effects {
         match self {
-            ScratchBlock::VarSet(ptr, input) => {
-                Effects::with_write(*ptr, input.expected_type(|ptr| v(ptr)))
-            }
+            ScratchBlock::VarSet(ptr, input) => Effects::with_write(*ptr, input.expected_type(v)),
             ScratchBlock::VarChange(ptr, _) => Effects::with_write(
                 *ptr,
                 VariableWrite {

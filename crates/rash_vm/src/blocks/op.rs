@@ -108,9 +108,8 @@ impl Compiler<'_> {
         // Primitive checks involving numbers/bools,
         // based on our smart (conservative) type analysis
         match (at, bt) {
-            (VarTypeChecked::Number, VarTypeChecked::Number)
-            | (VarTypeChecked::Number, VarTypeChecked::Bool)
-            | (VarTypeChecked::Bool, VarTypeChecked::Number) => {
+            (VarTypeChecked::Number | VarTypeChecked::Bool, VarTypeChecked::Number)
+            | (VarTypeChecked::Number, VarTypeChecked::Bool) => {
                 let na = a.get_number(self, builder);
                 let nb = b.get_number(self, builder);
                 let res = builder.ins().fcmp(
@@ -160,21 +159,21 @@ impl Compiler<'_> {
 
     pub fn op_add(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         if has_hardware_fma() {
-            if let Input::Block(block) = a {
-                if let ScratchBlock::OpMul(a1, a2) = &**block {
-                    let a1 = a1.get_number(self, builder);
-                    let a2 = a2.get_number(self, builder);
-                    let b = b.get_number(self, builder);
-                    return builder.ins().fma(a1, a2, b);
-                }
+            if let Input::Block(block) = a
+                && let ScratchBlock::OpMul(a1, a2) = &**block
+            {
+                let a1 = a1.get_number(self, builder);
+                let a2 = a2.get_number(self, builder);
+                let b = b.get_number(self, builder);
+                return builder.ins().fma(a1, a2, b);
             }
-            if let Input::Block(block) = b {
-                if let ScratchBlock::OpMul(b1, b2) = &**block {
-                    let a = a.get_number(self, builder);
-                    let b1 = b1.get_number(self, builder);
-                    let b2 = b2.get_number(self, builder);
-                    return builder.ins().fma(b1, b2, a);
-                }
+            if let Input::Block(block) = b
+                && let ScratchBlock::OpMul(b1, b2) = &**block
+            {
+                let a = a.get_number(self, builder);
+                let b1 = b1.get_number(self, builder);
+                let b2 = b2.get_number(self, builder);
+                return builder.ins().fma(b1, b2, a);
             }
         }
 
@@ -184,15 +183,14 @@ impl Compiler<'_> {
     }
 
     pub fn op_sub(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        if has_hardware_fma() {
-            if let Input::Block(block) = a {
-                if let ScratchBlock::OpMul(a1, a2) = &**block {
-                    let a1 = a1.get_number(self, builder);
-                    let a2 = a2.get_number(self, builder);
-                    let b = b.get_number_negated(self, builder);
-                    return builder.ins().fma(a1, a2, b);
-                }
-            }
+        if has_hardware_fma()
+            && let Input::Block(block) = a
+            && let ScratchBlock::OpMul(a1, a2) = &**block
+        {
+            let a1 = a1.get_number(self, builder);
+            let a2 = a2.get_number(self, builder);
+            let b = b.get_number_negated(self, builder);
+            return builder.ins().fma(a1, a2, b);
         }
 
         let a = a.get_number(self, builder);
@@ -208,12 +206,10 @@ impl Compiler<'_> {
 
     pub fn op_div(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_number(self, builder);
-        if IMPRECISE_DIVISION {
-            if let Input::Obj(obj) = b {
-                let reciprocal = 1.0 / obj.convert_to_number();
-                let r = self.constants.get_float(reciprocal, builder);
-                return builder.ins().fmul(a, r);
-            }
+        if IMPRECISE_DIVISION && let Input::Obj(obj) = b {
+            let reciprocal = 1.0 / obj.convert_to_number();
+            let r = self.constants.get_float(reciprocal, builder);
+            return builder.ins().fmul(a, r);
         }
         let b = b.get_number(self, builder);
         builder.ins().fdiv(a, b)
@@ -425,7 +421,7 @@ pub fn has_hardware_fma() -> bool {
         return false;
     }
 
-    static VAL: LazyLock<bool> = LazyLock::new(|| check());
+    static VAL: LazyLock<bool> = LazyLock::new(check);
 
     *VAL
 }

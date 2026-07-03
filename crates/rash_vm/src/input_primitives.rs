@@ -66,6 +66,7 @@ pub enum Input {
 }
 
 impl Input {
+    #[must_use]
     pub fn format(&self, indent: usize) -> String {
         match self {
             Input::Obj(scratch_object) => format!("{scratch_object:?}"),

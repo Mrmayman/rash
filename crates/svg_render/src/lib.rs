@@ -7,6 +7,7 @@ pub struct SvgRenderer {
 }
 
 impl SvgRenderer {
+    #[must_use]
     pub fn new() -> Self {
         let mut fonts = usvg_text_layout::fontdb::Database::new();
         fonts.load_system_fonts();

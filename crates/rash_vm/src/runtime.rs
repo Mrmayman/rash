@@ -70,6 +70,7 @@ pub struct Script {
 }
 
 impl Script {
+    #[must_use]
     pub fn new_green_flag(blocks: Vec<ScratchBlock>) -> Script {
         Self {
             blocks,
@@ -77,6 +78,7 @@ impl Script {
         }
     }
 
+    #[must_use]
     pub fn new_custom_block(
         blocks: Vec<ScratchBlock>,
         num_args: usize,
@@ -171,7 +173,7 @@ impl Script {
             return;
         }
 
-        for block in self.blocks.iter_mut() {
+        for block in &mut self.blocks {
             check_block(block);
         }
     }
@@ -187,6 +189,7 @@ pub enum ScriptKind {
 }
 
 impl ScriptKind {
+    #[must_use]
     pub fn is_screen_refresh(&self) -> bool {
         match self {
             ScriptKind::GreenFlag => true,
@@ -203,6 +206,7 @@ pub struct SpriteBuilder {
 }
 
 impl SpriteBuilder {
+    #[must_use]
     pub fn new(id: SpriteId) -> Self {
         Self {
             id,
@@ -280,6 +284,7 @@ impl ProjectBuilder {
         self.runtime.costume_data = costume_intermediate;
     }
 
+    #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
         for script in self.runtime.scripts.custom_blocks.values_mut() {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
@@ -403,6 +408,7 @@ impl Debug for ScratchThread {
 }
 
 impl ScratchThread {
+    #[must_use]
     pub fn spawn(&self, is_screen_refresh: bool, arguments: Vec<ScratchObject>) -> Self {
         // Non-standard clone behaviour for use
         // when spawning new threads.
@@ -418,6 +424,7 @@ impl ScratchThread {
         }
     }
 
+    #[must_use]
     pub fn new(code: &CompiledCode, sprite_id: SpriteId, is_screen_refresh: bool) -> Self {
         let buf = code.code_buffer();
 
@@ -562,7 +569,7 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut) {
                 );
 
                 unsafe {
-                    let instr = std::ptr::read_unaligned(at as *const u32);
+                    let instr = std::ptr::read_unaligned(at.cast::<u32>());
                     let imm26 = (word_offset as u32) & 0x03FF_FFFF;
                     let patched = (instr & 0xFC00_0000) | imm26; // keep opcode bits [31:26]
                     std::ptr::write_unaligned(at as *mut u32, patched);

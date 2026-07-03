@@ -25,9 +25,7 @@ impl Compiler<'_> {
             .cache
             .variable_vals
             .get(&ptr)
-            .expect(&format!(
-                "variable {ptr:?} should have been stored in cache"
-            ))
+            .unwrap_or_else(|| panic!("variable {ptr:?} should have been stored in cache"))
             .val
         {
             ReturnValue::Num(_) | ReturnValue::Bool(_) => {

@@ -184,6 +184,7 @@ pub struct SpriteLoadData {
 pub struct CostumeHash(Rc<str>);
 
 impl CostumeHash {
+    #[must_use]
     pub fn new(s: &str) -> Self {
         Self(Rc::from(s))
     }

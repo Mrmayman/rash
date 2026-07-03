@@ -102,7 +102,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 }
 
 /// Simple headless runner for the JIT, limited in scope.
-/// Takes in an array of ScratchBlock operations, compiles and executes them.
+/// Takes in an array of [`ScratchBlock`] operations, compiles and executes them.
 ///
 /// This is only used for the test-suite.
 ///

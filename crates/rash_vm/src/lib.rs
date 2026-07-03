@@ -45,6 +45,7 @@ mod config {
     pub const IMPRECISE_DIVISION: bool = false;
 }
 
+#[must_use]
 pub fn program_pi() -> Vec<ScratchBlock> {
     fn set_var(ptr: Ptr, input: impl Into<Input>) -> ScratchBlock {
         ScratchBlock::VarSet(ptr, input.into())

@@ -126,8 +126,8 @@ impl App {
 
         Ok(Self {
             renderer,
-            window,
             vm,
+            window,
             surface,
             device,
             queue,

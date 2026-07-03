@@ -191,7 +191,7 @@ impl Block {
                         ScratchBlock::VarRead(ptr).into()
                     }
                     _ => {
-                        panic!("Unknown array input: {:?}", vec)
+                        panic!("Unknown array input: {vec:?}")
                     }
                 }
             }

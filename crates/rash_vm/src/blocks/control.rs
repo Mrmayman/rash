@@ -49,10 +49,10 @@ impl Compiler<'_> {
         let end_block = builder.create_block();
 
         let final_params_loop =
-            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr).into());
+            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr));
         let loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
         let final_params_end =
-            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr).into());
+            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
 
         let entry_params = self.generate_params(builder, &final_params_loop);
         let mut entry_params2 = entry_params.clone();
@@ -192,7 +192,7 @@ impl Compiler<'_> {
             todo!("Gotta implement fallback behaviour");
         }
         let final_params =
-            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr).into());
+            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr));
 
         let entry_params = self.generate_params(builder, &final_params);
 
@@ -248,7 +248,7 @@ impl Compiler<'_> {
         let inside_block = builder.create_block();
         let end_block = builder.create_block();
         let final_params =
-            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr).into());
+            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
 
         // Before the code runs...
         let direct_params = self.generate_params(builder, &final_params);
@@ -339,7 +339,7 @@ impl Compiler<'_> {
         let end_block = builder.create_block();
 
         let final_params =
-            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr).into());
+            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
 
         let condition = condition.get_bool(self, builder);
         builder
@@ -391,9 +391,8 @@ impl Compiler<'_> {
             todo!("Gotta implement fallback behaviour");
         }
 
-        let final_params = effects.generate_params(builder, condition_block, &|ptr| {
-            self.cache.get_type(ptr).into()
-        });
+        let final_params =
+            effects.generate_params(builder, condition_block, &|ptr| self.cache.get_type(ptr));
 
         let entry_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &entry_params);

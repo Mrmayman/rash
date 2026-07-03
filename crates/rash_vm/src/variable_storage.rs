@@ -96,7 +96,7 @@ impl<'a> VariableStorage<'a> {
         constants: &mut ConstantMap,
         memory: &[ScratchObject],
     ) {
-        for (var, val) in self.variable_vals.iter_mut() {
+        for (var, val) in &mut self.variable_vals {
             let ptr = var.constant(constants, builder, memory);
             let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
             let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
@@ -221,12 +221,11 @@ impl<'a> VariableStorage<'a> {
     ///
     /// Panics if the variable was not included in the original [`Effects`].
     pub fn set_retval(&mut self, ptr: Ptr, value: VariableSlot) {
-        if !self.variable_vals.contains_key(&ptr) {
-            panic!(
-                "Stack Cache: Variable {ptr:?} not found!\nOffsets: {:?}",
-                self.variable_vals
-            );
-        }
+        assert!(
+            self.variable_vals.contains_key(&ptr),
+            "Stack Cache: Variable {ptr:?} not found!\nOffsets: {:?}",
+            self.variable_vals
+        );
 
         *self.variable_vals.get_mut(&ptr).unwrap() = value;
     }

@@ -128,9 +128,9 @@ impl From<Option<VarType>> for VarTypeChecked {
     }
 }
 
-impl Into<Option<VarType>> for VarTypeChecked {
-    fn into(self) -> Option<VarType> {
-        Some(match self {
+impl From<VarTypeChecked> for Option<VarType> {
+    fn from(val: VarTypeChecked) -> Self {
+        Some(match val {
             VarTypeChecked::Number => VarType::Number,
             VarTypeChecked::Bool => VarType::Bool,
             VarTypeChecked::String => VarType::String,
@@ -140,6 +140,7 @@ impl Into<Option<VarType>> for VarTypeChecked {
 }
 
 impl ScratchBlock {
+    #[must_use]
     pub fn return_type(
         &self,
         mut vartype: impl FnMut(Ptr) -> VariableWrite,
@@ -194,6 +195,7 @@ impl ScratchBlock {
         }
     }
 
+    #[must_use]
     pub fn could_trigger_refresh(&self) -> bool {
         match self {
             ScratchBlock::VarSet(_, _)
@@ -231,11 +233,11 @@ impl ScratchBlock {
             | ScratchBlock::ControlRepeatUntil(_, blocks)
             | ScratchBlock::ControlForever(blocks)
             | ScratchBlock::ControlRepeat(_, blocks) => {
-                blocks.iter().any(|n| n.could_trigger_refresh())
+                blocks.iter().any(ScratchBlock::could_trigger_refresh)
             }
             ScratchBlock::ControlIfElse(_, blocks_then, blocks_else) => {
-                blocks_then.iter().any(|n| n.could_trigger_refresh())
-                    || blocks_else.iter().any(|n| n.could_trigger_refresh())
+                blocks_then.iter().any(ScratchBlock::could_trigger_refresh)
+                    || blocks_else.iter().any(ScratchBlock::could_trigger_refresh)
             }
             ScratchBlock::LooksShown(b) => *b, // Triggers refresh on show, not hide
 

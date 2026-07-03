@@ -13,9 +13,7 @@ impl Compiler<'_> {
             .variable_vals
             .get(&ptr)
             .copied()
-            .expect(&format!(
-                "variable {ptr:?} should have been stored in cache"
-            ))
+            .unwrap_or_else(|| panic!("variable {ptr:?} should have been stored in cache"))
             .val
             .clone_in_code(self, builder)
     }
@@ -54,14 +52,14 @@ impl Compiler<'_> {
                 self.cache.set_retval(
                     ptr,
                     VariableSlot {
-                        val: val,
+                        val,
                         skip_nan: block
                             .return_type(|n| self.cache.get_type(n))
                             .is_some_and(|n| n.skip_nan),
                     },
                 );
             }
-        };
+        }
     }
 
     pub fn var_change(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {

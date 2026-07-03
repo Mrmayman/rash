@@ -82,6 +82,7 @@ impl std::fmt::Debug for ScratchObject {
 
 impl ScratchObject {
     /// Gets the data type of the `ScratchObject`.
+    #[must_use]
     pub fn get_type(&self) -> VarType {
         match self {
             ScratchObject::Number(_) => VarType::Number,
@@ -104,6 +105,7 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Bool(true).convert_to_number(), 1.0);
     /// ```
     #[inline]
+    #[must_use]
     pub fn convert_to_number(&self) -> f64 {
         match self {
             ScratchObject::Number(number) => *number,
@@ -119,6 +121,7 @@ impl ScratchObject {
     }
 
     #[inline]
+    #[must_use]
     pub fn convert_to_number_with_decimal_check(&self) -> (f64, bool) {
         let decimal = match self {
             ScratchObject::Number(n) => n.fract() != 0.0,
@@ -157,6 +160,7 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Bool(false).convert_to_bool(), false);
     /// ```
     #[inline]
+    #[must_use]
     pub fn convert_to_bool(&self) -> bool {
         match self {
             ScratchObject::Number(n) => !(n.is_nan() || (*n == 0.0 && n.is_sign_positive())),
@@ -182,6 +186,7 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Bool(false).convert_to_string(), "false");
     /// ```
     #[inline]
+    #[must_use]
     pub fn convert_to_string(&self) -> String {
         match self {
             ScratchObject::Number(num) => number_to_string(*num),
@@ -192,6 +197,7 @@ impl ScratchObject {
     }
 
     #[inline]
+    #[must_use]
     pub fn convert_to_string_cow(&self) -> std::borrow::Cow<'_, str> {
         match self {
             ScratchObject::Number(num) => number_to_string(*num).into(),
@@ -202,6 +208,7 @@ impl ScratchObject {
     }
 
     #[inline]
+    #[must_use]
     pub fn scratch_cmp(&self, other: &ScratchObject) -> Ordering {
         #[inline]
         fn makebool(b: bool) -> f64 {
@@ -268,6 +275,7 @@ impl ScratchObject {
 }
 
 #[inline]
+#[must_use]
 pub fn number_to_string(num: f64) -> String {
     // If number is bigger than this then represent as exponentials.
     const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
@@ -303,6 +311,7 @@ pub fn number_to_string(num: f64) -> String {
 }
 
 #[inline]
+#[must_use]
 pub fn string_to_number(string: &str) -> f64 {
     let s = string.parse().unwrap_or({
         // Couldn't parse the string normally, so it must be typed strangely.

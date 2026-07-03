@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::{compiler::ScratchBlock, input_primitives::Input};
 
 impl ScratchBlock {
+    #[must_use]
     pub fn format(&self, indent: usize) -> String {
         let out = match self {
             ScratchBlock::VarSet(ptr, input) => format!("{ptr:?} = {}", input.format(0)),
