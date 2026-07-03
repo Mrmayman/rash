@@ -298,6 +298,17 @@ mod tests {
             ScratchBlock::OpAdd((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
             ScratchBlock::OpAdd(1.0.into(), f64::NAN.into()).into(),
             ScratchBlock::OpAdd(f64::NAN.into(), 1.0.into()).into(),
+            // FMA
+            ScratchBlock::OpAdd(
+                1.0.into(),
+                ScratchBlock::OpMul(2.0.into(), 3.0.into()).into(),
+            )
+            .into(),
+            ScratchBlock::OpAdd(
+                ScratchBlock::OpMul(2.0.into(), 3.0.into()).into(),
+                1.0.into(),
+            )
+            .into(),
         ]));
         assert_eq!(memory[0].convert_to_number(), 75.0);
         assert_eq!(memory[1].convert_to_number(), -475.0);
@@ -314,6 +325,9 @@ mod tests {
 
         assert_eq!(memory[10].convert_to_number(), 1.0);
         assert_eq!(memory[11].convert_to_number(), 1.0);
+
+        assert_eq!(memory[12].convert_to_number(), 7.0);
+        assert_eq!(memory[13].convert_to_number(), 7.0);
     }
 
     #[test]
@@ -331,6 +345,12 @@ mod tests {
             ScratchBlock::OpSub((-1.0 / 0.0).into(), (-1.0 / 0.0).into()).into(),
             ScratchBlock::OpSub(1.0.into(), f64::NAN.into()).into(),
             ScratchBlock::OpSub(f64::NAN.into(), 1.0.into()).into(),
+            // FMA
+            ScratchBlock::OpSub(
+                ScratchBlock::OpMul(2.0.into(), 3.0.into()).into(),
+                1.0.into(),
+            )
+            .into(),
         ]));
         assert_eq!(memory[0].convert_to_number(), 25.0);
         assert_eq!(memory[1].convert_to_number(), -525.0);
@@ -348,6 +368,8 @@ mod tests {
 
         assert_eq!(memory[10].convert_to_number(), 1.0);
         assert_eq!(memory[11].convert_to_number(), -1.0);
+
+        assert_eq!(memory[12].convert_to_number(), 5.0);
     }
 
     #[test]

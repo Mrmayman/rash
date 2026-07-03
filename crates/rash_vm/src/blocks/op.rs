@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, sync::LazyLock};
 
 use cranelift::{
     codegen::ir::condcodes::{FloatCC, IntCC},
@@ -9,7 +9,7 @@ use cranelift::{
 };
 
 use crate::{
-    callbacks,
+    ScratchBlock, callbacks,
     compiler::{Compiler, VarTypeChecked},
     config::IMPRECISE_DIVISION,
     data_types::ID_STRING,
@@ -159,12 +159,42 @@ impl Compiler<'_> {
     }
 
     pub fn op_add(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        if has_hardware_fma() {
+            if let Input::Block(block) = a {
+                if let ScratchBlock::OpMul(a1, a2) = &**block {
+                    let a1 = a1.get_number(self, builder);
+                    let a2 = a2.get_number(self, builder);
+                    let b = b.get_number(self, builder);
+                    return builder.ins().fma(a1, a2, b);
+                }
+            }
+            if let Input::Block(block) = b {
+                if let ScratchBlock::OpMul(b1, b2) = &**block {
+                    let a = a.get_number(self, builder);
+                    let b1 = b1.get_number(self, builder);
+                    let b2 = b2.get_number(self, builder);
+                    return builder.ins().fma(b1, b2, a);
+                }
+            }
+        }
+
         let a = a.get_number(self, builder);
         let b = b.get_number(self, builder);
         builder.ins().fadd(a, b)
     }
 
     pub fn op_sub(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
+        if has_hardware_fma() {
+            if let Input::Block(block) = a {
+                if let ScratchBlock::OpMul(a1, a2) = &**block {
+                    let a1 = a1.get_number(self, builder);
+                    let a2 = a2.get_number(self, builder);
+                    let b = b.get_number_negated(self, builder);
+                    return builder.ins().fma(a1, a2, b);
+                }
+            }
+        }
+
         let a = a.get_number(self, builder);
         let b = b.get_number(self, builder);
         builder.ins().fsub(a, b)
@@ -370,4 +400,32 @@ impl Compiler<'_> {
         );
         builder.inst_results(inst)[0]
     }
+}
+
+pub fn has_hardware_fma() -> bool {
+    fn check() -> bool {
+        // Intel/AMD FMA3 instruction set extension.
+        #[cfg(target_arch = "x86_64")]
+        return std::is_x86_feature_detected!("fma");
+
+        // FMA is built into the baseline ARMv8 Neon vector system.
+        #[cfg(target_arch = "aarch64")]
+        return std::is_aarch64_feature_detected!("neon");
+
+        // RISC-V mandates hardware FMA operations inside its floating point units.
+        // We check for "d" (Double-precision FP)
+        #[cfg(target_arch = "riscv64")]
+        return std::is_riscv_feature_detected!("d");
+
+        #[cfg(not(any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "riscv64"
+        )))]
+        return false;
+    }
+
+    static VAL: LazyLock<bool> = LazyLock::new(|| check());
+
+    *VAL
 }

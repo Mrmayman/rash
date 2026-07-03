@@ -93,5 +93,5 @@ Pi calculation (10,000,000 iterations):
 | Scratch | \~7 seconds |
 | Turbowarp (Warp timer on) | \~112 ms |
 | Turbowarp | \~72 ms |
-| Rash | \~27 ms |
-| Rash (with lossy flags) | \~25 ms |
+| Rash | \~26.3 ms |
+| Rash (with lossy flags) | \~24.7 ms |
