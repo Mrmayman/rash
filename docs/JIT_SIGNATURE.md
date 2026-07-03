@@ -28,22 +28,37 @@ Any function can indirectly inherit warp-ness (non-yielding) when called by a wa
 
 # Arguments
 
-- [`JumpId`]: The execution state to resume from. Pass [`JumpId::default`] to start from beginning.
-- `*mut Vec<LoopFrame>`: The loop stack, represents what loops we're inside, and how many times it iterated out of what total limit.
-	- This is used for storing state between yields, so it can be `null` for warp functions.
-- `*const ScratchObject`:  A list of arguments when a Scratch function ("Custom Block") is called.
-	- Points to the first element of a contiguous array of [`ScratchObject`] values.
-	- The compiled function accesses arguments through fixed offsets from this pointer.
-	- **WARNING:** If the Custom Block requires arguments, this *must* be valid and have the right number of elements. There is no bounds checking for performance reasons.
-		- If the Custom Block doesn't require arguments, it doesn't matter what you pass here, though.
-- `*const Scripts`: Compiled functions ready to be spawned/executed.
-	- This is used for "spawning" Custom Blocks to be called, ie. getting a handle to another JIT function to be called from a JIT function.
-	- Can be `null` if you aren't calling any Custom Blocks.
-- `i64`: Is yielding enabled (pausable)? (1 or 0)
-	- (Also known as "Screen Refresh" in Scratch)
-	- Default `1`. Opt in to false (`0`) for better performance if you know the functions won't yield.
-	- This is used for propagating non-yielding behavior through a long chain of calls (see top of this doc, "Execution model").
-- `*mut Option<ScratchThread>`: 
-	- Place to store the state of any child function that is called by the parent.
-	- Let's say we have a function `foo()` that calls `bar()`. If `bar()` yields while called by `foo()`, then `foo()` stores `bar()`'s [`ScratchThread`] inside this `Option` (`None` by default), before pausing itself. Then, on resume it recursively walks down this linked list of `ScratchThread`s until it finds the final element, the function to first resume.
-	- Can be `null` if this function doesn't yield or doesn't call anything that yields.
+## [`JumpId`]
+
+The execution state to resume from. Pass [`JumpId::default`] to start from beginning.
+    
+## `*mut Vec<i64>`
+- The loop stack, represents what loops we're inside, and how iterations are left.
+- This is used for storing state between yields, so it can be `null` for warp functions.
+
+## `*const ScratchObject`
+- A list of arguments when a Scratch function ("Custom Block") is called.
+- Points to the first element of a contiguous array of [`ScratchObject`] values.
+- The compiled function accesses arguments through fixed offsets from this pointer.
+- **WARNING:** If the Custom Block requires arguments, this *must* be valid and have the right number of elements. There is no bounds checking for performance reasons.
+  - If the Custom Block doesn't require arguments, it doesn't matter what you pass here, though.
+
+## `*const Scripts`
+- Compiled functions ready to be spawned/executed.
+- This is used for "spawning" Custom Blocks to be called, ie. getting a handle to another JIT function to be called from a JIT function.
+- Can be `null` if you aren't calling any Custom Blocks.
+
+## `*mut RunState`
+- Access to any sprite-specific data and global miscellanious state, especially for things like graphics.
+- Can be `null` if this function doesn't do any graphical or audio operations.
+
+## `bool`
+- Is yielding enabled (pausable)? (1 or 0)
+- (Also known as "Screen Refresh" in Scratch)
+- Default `1`. Opt in to false (`0`) for better performance if you know the functions won't yield.
+- This is used for propagating non-yielding behavior through a long chain of calls (see top of this doc, "Execution model").
+
+## `*mut Option<ScratchThread>`
+- Place to store the state of any child function that is called by the parent.
+- Let's say we have a function `foo()` that calls `bar()`. If `bar()` yields while called by `foo()`, then `foo()` stores `bar()`'s [`ScratchThread`] inside this `Option` (`None` by default), before pausing itself. Then, on resume it recursively walks down this linked list of `ScratchThread`s until it finds the final element, the function to first resume.
+- Can be `null` if this function doesn't yield or doesn't call anything that yields.
