@@ -13,7 +13,7 @@ use cranelift::{
 };
 
 use crate::{
-    compile_fn::get_isa,
+    compile_fn::{create_main_slot, get_isa},
     compiler::{Compiler, MEMORY, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,
@@ -37,8 +37,9 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     builder.switch_to_block(code_block);
     let vec_ptr = builder.block_params(code_block)[0];
     let zero = builder.ins().iconst(I64, 0);
+    let temp_slot4 = create_main_slot(&mut builder);
     let mut compiler = Compiler::new(
-        code_block,
+        true,
         &mut builder,
         program,
         memory,
@@ -50,6 +51,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         false,
         zero,
         zero,
+        temp_slot4,
     );
 
     for block in program {

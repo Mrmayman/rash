@@ -27,7 +27,7 @@ mod tests {
 
         let mut sprite1 = SpriteBuilder::new(SpriteId(0));
         sprite1.add_script(
-            &Script::new_custom_block(
+            Script::new_custom_block(
                 vec![ScratchBlock::ControlRepeat(
                     3.0.into(),
                     vec![
@@ -42,7 +42,7 @@ mod tests {
             &memory,
         );
         sprite1.add_script(
-            &Script::new_custom_block(
+            Script::new_custom_block(
                 vec![
                     ScratchBlock::VarSet(Ptr(3), 0.0.into()),
                     ScratchBlock::ControlRepeat(
@@ -70,7 +70,7 @@ mod tests {
             &memory,
         );
         builder.add_sprite(sprite1);
-        let mut runtime = builder.build();
+        let mut runtime = builder.build(&memory);
 
         let mut num_ticks = 1;
         let mut graphics = RunState::default();
@@ -80,7 +80,7 @@ mod tests {
 
         assert_eq!(by_two(num_ticks), 21);
         assert_eq!(memory[3].convert_to_number(), 15.0);
-    }
+    }*/
 
     #[test]
     fn nested_loop_screen_refresh() {
@@ -90,7 +90,7 @@ mod tests {
 
         let mut sprite1 = SpriteBuilder::new(SpriteId(0));
         sprite1.add_script(
-            &Script::new_green_flag(vec![
+            Script::new_green_flag(vec![
                 ScratchBlock::VarSet(Ptr(3), 0.5.into()),
                 ScratchBlock::ControlRepeat(
                     3.0.into(),
@@ -109,7 +109,7 @@ mod tests {
             &memory,
         );
         builder.add_sprite(sprite1);
-        let mut runtime = builder.build();
+        let mut runtime = builder.build(&memory);
 
         let mut num_ticks = 1;
         let mut graphics = RunState::default();
@@ -119,7 +119,7 @@ mod tests {
 
         assert_eq!(by_two(num_ticks), 16);
         assert_eq!(memory[3].convert_to_number(), 24.5);
-    }*/
+    }
 }
 
 #[cfg(test)]

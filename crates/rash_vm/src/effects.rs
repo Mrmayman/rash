@@ -334,7 +334,11 @@ impl CheckEffects for ScratchBlock {
                 inputs.effects(c, v) | c(*custom_block_id)
             }
             ScratchBlock::ScreenRefresh => {
-                let mut e = Effects::unknown();
+                // Not doing Effects::unknown() here,
+                // because even though the variables could change to
+                // *anything* during this time, all invalidation
+                // is *already handled* after the refresh
+                let mut e = Effects::new();
                 e.yields = true;
                 e
             }

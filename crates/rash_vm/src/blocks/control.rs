@@ -13,7 +13,7 @@ use crate::{
 
 impl Compiler<'_> {
     pub fn control_stop_this_script(&mut self, builder: &mut FunctionBuilder<'_>) {
-        for _ in 0..(self.repeat_stack * 2) {
+        for _ in 0..self.repeat_stack {
             self.call_stack_pop(builder);
         }
 
@@ -35,12 +35,8 @@ impl Compiler<'_> {
         if effects.writes_is_unknown {
             todo!("Gotta implement fallback behaviour");
         }
-        if effects.yields {
-            todo!("Gotta implement yield behaviour");
-        }
 
         let zero = self.constants.get_int(0, builder);
-        let one = self.constants.get_int(1, builder);
         let old_constants = self.constants.clone();
 
         let loop_value = input.get_number_int(self, builder);
@@ -50,7 +46,7 @@ impl Compiler<'_> {
 
         let final_params_loop =
             effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr));
-        let loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
+        let mut loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
         let final_params_end =
             effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
 
@@ -72,15 +68,27 @@ impl Compiler<'_> {
         self.code_block = loop_block;
         self.cache.variable_vals.extend(final_params_loop.clone());
 
+        if effects.yields {
+            self.constants.clear();
+            self.repeat_stack += 1;
+            self.call_stack_push(builder, loop_value_param);
+        }
         for block in blocks {
             self.compile_block(block, builder);
         }
+        if effects.yields {
+            self.repeat_stack -= 1;
+            loop_value_param = self.call_stack_pop(builder);
+        }
+
         let loop_params = self.generate_params(builder, &final_params_loop);
         let mut loop_params2 = loop_params.clone();
 
+        let one = self.constants.get_int(1, builder);
         let new_loop_value = builder.ins().isub(loop_value_param, one);
         loop_params2.push(new_loop_value.into());
 
+        let zero = self.constants.get_int(0, builder);
         let condition = builder
             .ins()
             .icmp(IntCC::SignedGreaterThan, new_loop_value, zero);
@@ -95,90 +103,11 @@ impl Compiler<'_> {
         builder.switch_to_block(end_block);
         self.cache.variable_vals.extend(final_params_end.clone());
         self.code_block = end_block;
-        self.constants = old_constants;
-
-        // // Basically,
-        // //
-        // // for (i = 0; i < number; i += 1) {
-        // //      your code
-        // // }
-        // //
-        // // The different parts will be annotated
-
-        // let is_screen_refresh = vec.iter().any(|n| n.could_trigger_refresh());
-        // let number = input.get_number_int(self, builder);
-
-        // let loop_block = builder.create_block();
-        // builder.append_block_param(loop_block, I64);
-        // builder.append_block_param(loop_block, I64);
-        // let body_block = builder.create_block();
-        // builder.append_block_param(body_block, I64);
-        // let end_block = builder.create_block();
-
-        // // i = 0
-        // // Note: counter is the `i` here
-        // let counter = self.constants.get_int(0, builder);
-        // builder
-        //     .ins()
-        //     .jump(loop_block, &[counter.into(), number.into()]);
-
-        // builder.switch_to_block(loop_block);
-        // // (i < number)
-        // let counter = builder.block_params(loop_block)[0];
-        // let mut number = builder.block_params(loop_block)[1];
-        // let condition = builder.ins().icmp(IntCC::SignedLessThan, counter, number);
-
-        // // if (i < number):
-        // //      jump to body_block (continue)
-        // // else:
-        // //      jump to end_block (break)
-        // builder
-        //     .ins()
-        //     .brif(condition, body_block, &[counter.into()], end_block, &[]);
-
-        // builder.switch_to_block(body_block);
-        // // i += 1
-        // let counter = builder.block_params(body_block)[0];
-        // let mut incremented = builder.ins().iadd_imm(counter, 1);
-
-        // let mut inside_types = self.variable_type_data.clone();
-        // self.update_type_data_for_block(&mut inside_types, vec);
-        // let mut inside_types = common_entries(&inside_types, &self.variable_type_data);
-
-        // let temp_block = self.code_block;
-        // self.code_block = body_block;
-
-        // std::mem::swap(&mut inside_types, &mut self.variable_type_data);
-
-        // if is_screen_refresh {
-        //     self.call_stack_push(builder, incremented);
-        //     self.call_stack_push(builder, number);
-        // }
-        // self.constants.clear();
-        // self.repeat_stack += 1;
-        // for block in vec {
-        //     self.compile_block(block, builder);
-        // }
-        // if is_screen_refresh && !vec.ends_with(&[ScratchBlock::ScreenRefresh]) {
-        //     self.screen_refresh(builder);
-        // }
-        // self.repeat_stack -= 1;
-        // if is_screen_refresh {
-        //     number = self.call_stack_pop(builder);
-        //     incremented = self.call_stack_pop(builder);
-        // }
-        // std::mem::swap(&mut inside_types, &mut self.variable_type_data);
-        // self.code_block = temp_block;
-        // self.variable_type_data = common_entries(&self.variable_type_data, &inside_types);
-        // builder
-        //     .ins()
-        //     .jump(loop_block, &[incremented.into(), number.into()]);
-        // // // builder.seal_block(body_block);
-        // // builder.seal_block(loop_block);
-
-        // builder.switch_to_block(end_block);
-        // self.constants.clear();
-        // self.code_block = end_block;
+        if effects.yields {
+            self.constants.clear();
+        } else {
+            self.constants = old_constants;
+        }
     }
 
     pub fn control_forever(&mut self, builder: &mut FunctionBuilder<'_>, blocks: &[ScratchBlock]) {

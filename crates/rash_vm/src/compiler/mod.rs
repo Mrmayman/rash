@@ -7,7 +7,7 @@ use std::{
 use cranelift::{
     codegen::ir::{SigRef, StackSlot},
     prelude::{
-        Block, FunctionBuilder, InstBuilder, Signature, StackSlotData, StackSlotKind, Value,
+        Block, FunctionBuilder, InstBuilder, Signature, Value,
         types::{F64, I64},
     },
 };
@@ -310,7 +310,7 @@ pub struct Compiler<'compiler> {
 
 impl<'a> Compiler<'a> {
     pub fn new(
-        block: Block,
+        jump_from_existing: bool,
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
@@ -322,29 +322,30 @@ impl<'a> Compiler<'a> {
         is_screen_refresh: bool,
         is_called_as_refresh: Value,
         child_thread_ptr: Value,
+        temp_slot4: (Value, StackSlot),
     ) -> Self {
         let mut constants = ConstantMap::new();
-        let slot = builder.create_sized_stack_slot(StackSlotData {
-            kind: StackSlotKind::ExplicitSlot,
-            size: 4 * std::mem::size_of::<i64>() as u32,
-            align_shift: 0,
-            key: None,
-        });
+
+        let code_block = builder.create_block();
+        if jump_from_existing {
+            builder.ins().jump(code_block, &[]);
+        }
+        builder.switch_to_block(code_block);
 
         // TODO: inter-function analysis
         let program_analysis =
             code.effects(&mut |_| Effects::unknown(), &|_| VariableWrite::default());
 
         Self {
-            code_block: block,
+            code_block,
+            temp_slot4,
             cache: VariableStorage::new(builder, &program_analysis, memory, &mut constants),
             program_analysis,
             constants,
-            break_points: Vec::new(),
+            break_points: vec![code_block],
             func_signatures: HashMap::new(),
             break_counter: 0,
             repeat_stack: 0,
-            temp_slot4: (builder.ins().stack_addr(I64, slot, 0), slot),
             memory,
             script_ptr,
             loop_stack_ptr,

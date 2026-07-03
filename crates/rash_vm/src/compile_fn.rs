@@ -4,7 +4,7 @@ use cranelift::{
     codegen::{
         self,
         control::ControlPlane,
-        ir::{Function, UserFuncName, types::I8},
+        ir::{Function, StackSlotData, StackSlotKind, UserFuncName, types::I8},
     },
     prelude::{
         AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
@@ -80,13 +80,11 @@ pub fn compile(
         args_list.push([i1, i2, i3, i4]);
     }
 
+    let temp_slot4 = create_main_slot(&mut builder);
     builder.ins().jump(jmp1_block, &[jump_id.into()]);
 
-    let code_block = builder.create_block();
-    builder.switch_to_block(code_block);
-
     let mut compiler = Compiler::new(
-        code_block,
+        false,
         &mut builder,
         script,
         memory,
@@ -98,9 +96,8 @@ pub fn compile(
         is_screen_refresh,
         is_called_as_refresh,
         child_thread_ptr,
+        temp_slot4,
     );
-
-    compiler.break_points.push(code_block);
 
     for block in script {
         compiler.compile_block(block, &mut builder);
@@ -119,6 +116,19 @@ pub fn compile(
     println!("{}", func.display());
 
     compile_ir(func, &isa, id, compiler.is_screen_refresh)
+}
+
+pub fn create_main_slot(
+    builder: &mut FunctionBuilder<'_>,
+) -> (cranelift::prelude::Value, codegen::ir::StackSlot) {
+    let slot = builder.create_sized_stack_slot(StackSlotData {
+        kind: StackSlotKind::ExplicitSlot,
+        size: 4 * std::mem::size_of::<i64>() as u32,
+        align_shift: 0,
+        key: None,
+    });
+    let stack_addr = builder.ins().stack_addr(I64, slot, 0);
+    (stack_addr, slot)
 }
 
 fn compile_ir(
