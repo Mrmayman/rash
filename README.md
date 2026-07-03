@@ -86,8 +86,12 @@ Feel free to submit any changes you make as a pull request, I'll be happy to rev
 
 # Benchmarks
 
-Pi calculation:
+Pi calculation (10,000,000 iterations):
 
-- Scratch: `621 ms`
-- Turbowarp: `13 ms`
-- Rash: `4.4 ms`
+| **Platform** | **Time** |
+| --- | --- |
+| Scratch | \~7 seconds |
+| Turbowarp (Warp timer on) | \~112 ms |
+| Turbowarp | \~72 ms |
+| Rash | \~27 ms |
+| Rash (with lossy flags) | \~25 ms |

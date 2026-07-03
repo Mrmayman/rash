@@ -13,27 +13,12 @@ use cranelift::{
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
+    compiler::{Compiler, ScratchBlock},
+    config::ARITHMETIC_NAN_CHECK,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
+    effects::VariableWrite,
 };
-
-/// Scratch has a special edge case for math with NaN.
-/// Any operation with NaN will be treated as
-/// an operation with 0.
-///
-/// For example, `NaN + 1` will be `0 + 1`.
-///
-/// This is a special case for Scratch, and is not
-/// a standard behavior for most programming languages.
-/// Enabling this check adds special behavior for NaN in the
-/// compiled code, making it more correct but slower.
-///
-/// # Performance
-/// Pi benchmark:
-/// - Without NaN check: `4.6 ms`
-/// - With NaN check: `6.5 ms`
-const ARITHMETIC_NAN_CHECK: bool = true;
 
 pub static STRINGS_TO_DROP: LazyLock<Mutex<HashSet<[i64; 3]>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
@@ -132,23 +117,28 @@ impl From<Ptr> for Input {
 }
 
 impl Input {
+    pub(crate) fn could_be_nan(&self, vartype: impl FnMut(Ptr) -> VariableWrite) -> bool {
+        match self {
+            Input::Obj(obj) => obj.convert_to_number().is_nan(),
+            Input::Block(block) => block.return_type(vartype).is_none_or(|n| !n.skip_nan),
+        }
+    }
+
     pub(crate) fn get_number(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let (mut num, could_be_nan) = match self {
-            Input::Obj(scratch_object) => {
-                let o = scratch_object.convert_to_number();
-                (compiler.constants.get_float(o, builder), o.is_nan())
-            }
-            Input::Block(scratch_block) => {
-                let could_be_nan = scratch_block.could_be_nan();
-                let o = compiler.compile_block(scratch_block, builder).unwrap();
-                (o.get_number(compiler, builder), could_be_nan)
-            }
+        let mut num = match self {
+            Input::Obj(scratch_object) => compiler
+                .constants
+                .get_float(scratch_object.convert_to_number(), builder),
+            Input::Block(scratch_block) => compiler
+                .compile_block(scratch_block, builder)
+                .unwrap()
+                .get_number(compiler, builder),
         };
-        if ARITHMETIC_NAN_CHECK && could_be_nan {
+        if ARITHMETIC_NAN_CHECK && self.could_be_nan(|ptr| compiler.cache.get_type(ptr)) {
             let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
             let zero_value = compiler.constants.get_float(0.0, builder);
             num = builder.ins().select(is_not_nan, num, zero_value);
@@ -162,22 +152,19 @@ impl Input {
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let (mut num, could_be_nan) = match self {
-            Input::Obj(scratch_object) => {
-                let o = scratch_object.convert_to_number();
-                (compiler.constants.get_int(o as i64, builder), o.is_nan())
-            }
+        let mut num = match self {
+            Input::Obj(scratch_object) => compiler
+                .constants
+                .get_int(scratch_object.convert_to_number() as i64, builder),
             Input::Block(scratch_block) => {
-                let could_be_nan = scratch_block.could_be_nan();
-
-                let o = compiler.compile_block(scratch_block, builder).unwrap();
-                let get_number = o.get_number(compiler, builder);
-                let number = builder.ins().fcvt_to_sint(I64, get_number);
-
-                (number, could_be_nan)
+                let number = compiler
+                    .compile_block(scratch_block, builder)
+                    .unwrap()
+                    .get_number(compiler, builder);
+                builder.ins().fcvt_to_sint(I64, number)
             }
         };
-        if ARITHMETIC_NAN_CHECK && could_be_nan {
+        if ARITHMETIC_NAN_CHECK && self.could_be_nan(|ptr| compiler.cache.get_type(ptr)) {
             let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
             let zero_value = compiler.constants.get_float(0.0, builder);
             num = builder.ins().select(is_not_nan, num, zero_value);
@@ -325,10 +312,15 @@ impl Input {
         }
     }
 
-    pub fn expected_type(&self, vartype: impl FnMut(Ptr) -> Option<VarType>) -> Option<VarType> {
+    pub fn expected_type(&self, vartype: impl FnMut(Ptr) -> VariableWrite) -> VariableWrite {
         match self {
-            Input::Obj(o) => Some(o.get_type()),
-            Input::Block(b) => b.return_type(vartype).and_then(VarTypeChecked::into),
+            Input::Obj(o) => VariableWrite {
+                ty: Some(o.get_type()).into(),
+                skip_nan: !o.convert_to_number().is_nan(),
+            },
+            Input::Block(b) => b
+                .return_type(vartype)
+                .expect("Shouldn't take return value of non-returning block"),
         }
     }
 }

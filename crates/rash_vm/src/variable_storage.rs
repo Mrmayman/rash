@@ -3,10 +3,9 @@ use std::collections::{HashMap, HashSet};
 use cranelift::prelude::{FunctionBuilder, InstBuilder, MemFlags, types::I64};
 
 use crate::{
-    compiler::VarType,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
-    effects::Effects,
+    effects::{Effects, VariableWrite},
     input_primitives::{Ptr, ReturnValue, STRINGS_TO_DROP},
 };
 
@@ -20,8 +19,30 @@ use crate::{
 /// while generating code.
 #[derive(Clone)]
 pub struct VariableStorage<'a> {
-    pub variable_vals: HashMap<Ptr, ReturnValue>,
+    pub variable_vals: HashMap<Ptr, VariableSlot>,
     memory: &'a [ScratchObject],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct VariableSlot {
+    pub val: ReturnValue,
+    pub skip_nan: bool,
+}
+
+impl VariableSlot {
+    pub fn normal(val: ReturnValue) -> VariableSlot {
+        VariableSlot {
+            val,
+            skip_nan: false,
+        }
+    }
+
+    pub fn skip_nan(val: ReturnValue) -> VariableSlot {
+        VariableSlot {
+            val,
+            skip_nan: true,
+        }
+    }
 }
 
 impl<'a> VariableStorage<'a> {
@@ -53,7 +74,10 @@ impl<'a> VariableStorage<'a> {
             let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
             let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
 
-            variable_vals.insert(var, ReturnValue::Object([i1, i2, i3, i4]));
+            variable_vals.insert(
+                var,
+                VariableSlot::normal(ReturnValue::Object([i1, i2, i3, i4])),
+            );
         }
 
         Self {
@@ -79,7 +103,7 @@ impl<'a> VariableStorage<'a> {
             let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
             let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
 
-            *val = ReturnValue::Object([i1, i2, i3, i4]);
+            *val = VariableSlot::normal(ReturnValue::Object([i1, i2, i3, i4]));
         }
     }
 
@@ -91,7 +115,7 @@ impl<'a> VariableStorage<'a> {
         for (ptr, val) in &self.variable_vals {
             let ptr = ptr.constant(constants, builder, self.memory);
 
-            match val {
+            match &val.val {
                 ReturnValue::Num(value) => {
                     let id = constants.get_int(ID_NUMBER, builder);
                     builder.ins().store(MemFlags::new(), id, ptr, 0);
@@ -134,16 +158,8 @@ impl<'a> VariableStorage<'a> {
     }*/
 
     /// Returns the known type of a cached variable.
-    ///
-    /// If the value is still stored as a raw object loaded from memory,
-    /// `None` is returned because its type has not yet been inferred.
-    pub fn get_type(&self, ptr: Ptr) -> Option<VarType> {
-        self.variable_vals.get(&ptr).and_then(|val| match val {
-            ReturnValue::Num(_) => Some(VarType::Number),
-            ReturnValue::Bool(_) => Some(VarType::Bool),
-            ReturnValue::String(_) => Some(VarType::String),
-            ReturnValue::Object(_) => None,
-        })
+    pub fn get_type(&self, ptr: Ptr) -> VariableWrite {
+        self.variable_vals.get(&ptr).unwrap().into()
     }
 
     /// Stores a constant number in the local cache.
@@ -155,7 +171,13 @@ impl<'a> VariableStorage<'a> {
         constants: &mut ConstantMap,
     ) {
         let v = constants.get_float(num, builder);
-        self.set_retval(ptr, ReturnValue::Num(v));
+        self.set_retval(
+            ptr,
+            VariableSlot {
+                val: ReturnValue::Num(v),
+                skip_nan: !num.is_nan(),
+            },
+        );
     }
 
     /// Stores a constant boolean in the local cache.
@@ -167,7 +189,7 @@ impl<'a> VariableStorage<'a> {
         constants: &mut ConstantMap,
     ) {
         let v = constants.get_int(i64::from(num), builder);
-        self.set_retval(ptr, ReturnValue::Bool(v));
+        self.set_retval(ptr, VariableSlot::skip_nan(ReturnValue::Bool(v)));
     }
 
     /// Stores a constant string in the local cache.
@@ -189,19 +211,16 @@ impl<'a> VariableStorage<'a> {
         let i2 = constants.get_int(arr[1], builder);
         let i3 = constants.get_int(arr[2], builder);
 
-        self.set_retval(ptr, ReturnValue::Object([id, i1, i2, i3]));
+        self.set_retval(
+            ptr,
+            VariableSlot::normal(ReturnValue::Object([id, i1, i2, i3])),
+        );
     }
 
     /// Replaces the cached value of a variable.
-    pub fn set_retval(&mut self, ptr: Ptr, value: ReturnValue) {
-        let val = self.get_retval(ptr);
-        *val = value;
-    }
-
-    /// Returns a mutable reference to a cached variable.
     ///
     /// Panics if the variable was not included in the original [`Effects`].
-    fn get_retval(&mut self, ptr: Ptr) -> &mut ReturnValue {
+    pub fn set_retval(&mut self, ptr: Ptr, value: VariableSlot) {
         if !self.variable_vals.contains_key(&ptr) {
             panic!(
                 "Stack Cache: Variable {ptr:?} not found!\nOffsets: {:?}",
@@ -209,6 +228,6 @@ impl<'a> VariableStorage<'a> {
             );
         }
 
-        self.variable_vals.get_mut(&ptr).unwrap()
+        *self.variable_vals.get_mut(&ptr).unwrap() = value;
     }
 }

@@ -10,7 +10,8 @@ use cranelift::{
 
 use crate::{
     callbacks,
-    compiler::{Compiler, VarType},
+    compiler::{Compiler, VarTypeChecked},
+    config::IMPRECISE_DIVISION,
     data_types::ID_STRING,
     input_primitives::{Input, ReturnValue},
 };
@@ -93,50 +94,51 @@ impl Compiler<'_> {
             return self.constants.get_int((out == comp) as i64, builder);
         }
 
-        let var_checker = |ptr| match self.cache.variable_vals.get(&ptr)? {
-            ReturnValue::Num(_) => Some(VarType::Number),
-            ReturnValue::Bool(_) => Some(VarType::Bool),
-            ReturnValue::String(_) => Some(VarType::String),
-            ReturnValue::Object(_) => None,
+        let var_checker = |ptr| {
+            self.cache
+                .variable_vals
+                .get(&ptr)
+                .map(|n| n.into())
+                .unwrap()
         };
 
-        // Based on our smart (conservative) type analysis,
-        // `None` if can't be determined
-        if let (Some(at), Some(bt)) = (a.expected_type(var_checker), b.expected_type(var_checker)) {
-            // Primitive checks involving numbers/bools
-            match (at, bt) {
-                (VarType::Number, VarType::Number)
-                | (VarType::Number, VarType::Bool)
-                | (VarType::Bool, VarType::Number) => {
-                    let na = a.get_number(self, builder);
-                    let nb = b.get_number(self, builder);
-                    let res = builder.ins().fcmp(
-                        match comp {
-                            Ordering::Less => FloatCC::LessThan,
-                            Ordering::Equal => FloatCC::Equal,
-                            Ordering::Greater => FloatCC::GreaterThan,
-                        },
-                        na,
-                        nb,
-                    );
-                    return builder.ins().uextend(I64, res);
-                }
-                (VarType::Bool, VarType::Bool) => {
-                    let ba = a.get_bool(self, builder);
-                    let bb = b.get_bool(self, builder);
-                    let res = builder.ins().icmp(
-                        match comp {
-                            Ordering::Equal => IntCC::Equal,
-                            Ordering::Less => IntCC::UnsignedLessThan,
-                            Ordering::Greater => IntCC::UnsignedGreaterThan,
-                        },
-                        ba,
-                        bb,
-                    );
-                    return builder.ins().uextend(I64, res);
-                }
-                _ => {} // We'll deal with strings below
+        let at = a.expected_type(var_checker).ty;
+        let bt = b.expected_type(var_checker).ty;
+
+        // Primitive checks involving numbers/bools,
+        // based on our smart (conservative) type analysis
+        match (at, bt) {
+            (VarTypeChecked::Number, VarTypeChecked::Number)
+            | (VarTypeChecked::Number, VarTypeChecked::Bool)
+            | (VarTypeChecked::Bool, VarTypeChecked::Number) => {
+                let na = a.get_number(self, builder);
+                let nb = b.get_number(self, builder);
+                let res = builder.ins().fcmp(
+                    match comp {
+                        Ordering::Less => FloatCC::LessThan,
+                        Ordering::Equal => FloatCC::Equal,
+                        Ordering::Greater => FloatCC::GreaterThan,
+                    },
+                    na,
+                    nb,
+                );
+                return builder.ins().uextend(I64, res);
             }
+            (VarTypeChecked::Bool, VarTypeChecked::Bool) => {
+                let ba = a.get_bool(self, builder);
+                let bb = b.get_bool(self, builder);
+                let res = builder.ins().icmp(
+                    match comp {
+                        Ordering::Equal => IntCC::Equal,
+                        Ordering::Less => IntCC::UnsignedLessThan,
+                        Ordering::Greater => IntCC::UnsignedGreaterThan,
+                    },
+                    ba,
+                    bb,
+                );
+                return builder.ins().uextend(I64, res);
+            }
+            _ => {} // We'll deal with strings below
         }
 
         let obja = a.get_object(self, builder);
@@ -176,6 +178,13 @@ impl Compiler<'_> {
 
     pub fn op_div(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_number(self, builder);
+        if IMPRECISE_DIVISION {
+            if let Input::Obj(obj) = b {
+                let reciprocal = 1.0 / obj.convert_to_number();
+                let r = self.constants.get_float(reciprocal, builder);
+                return builder.ins().fmul(a, r);
+            }
+        }
         let b = b.get_number(self, builder);
         builder.ins().fdiv(a, b)
     }
@@ -224,25 +233,38 @@ impl Compiler<'_> {
         );
     }
 
-    pub fn op_modulo(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_number(self, builder);
-        let b = b.get_number(self, builder);
+    /// A Scratch-accurate modulo operation (complete with quirks).
+    pub fn op_modulo(
+        &mut self,
+        a_in: &Input,
+        b_in: &Input,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
+        // There is no fmod or frem instruction in cranelift bruh
+        let a = a_in.get_number(self, builder);
+        let b = b_in.get_number(self, builder);
 
         // let div = a / b;
         // let modulo = (div - floor(div)) * b;
 
-        let div = builder.ins().fdiv(a, b);
-
+        let div = if let (true, Input::Obj(objb)) = (IMPRECISE_DIVISION, b_in) {
+            let reciprocal = 1.0 / objb.convert_to_number();
+            let r = self.constants.get_float(reciprocal, builder);
+            builder.ins().fmul(a, r)
+        } else {
+            builder.ins().fdiv(a, b)
+        };
         let floor_div = self.floor_call(div, builder);
 
         let decimal_part = builder.ins().fsub(div, floor_div);
         builder.ins().fmul(decimal_part, b)
     }
 
-    /// Calls the rust [`f64::floor`] function.
     fn floor_call(&mut self, n: Value, builder: &mut FunctionBuilder<'_>) -> Value {
-        let ins = self.call_function(builder, f64::floor as *const (), &[F64], &[F64], &[n]);
-        builder.inst_results(ins)[0]
+        builder.ins().floor(n)
+
+        // let ins = self.call_function(builder, f64::floor as *const (), &[F64], &[F64], &[n]);
+        // builder.inst_results(ins)[0]
     }
 
     pub fn op_str_len(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>) -> ReturnValue {

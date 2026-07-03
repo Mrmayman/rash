@@ -16,7 +16,7 @@ use crate::{
     callbacks,
     constant_set::ConstantMap,
     data_types::ScratchObject,
-    effects::{CheckEffects, Effects},
+    effects::{CheckEffects, Effects, VariableWrite},
     graphics::{RunState, SpriteId},
     input_primitives::{Input, Ptr, ReturnValue},
     runtime::CustomBlockId,
@@ -142,38 +142,37 @@ impl Into<Option<VarType>> for VarTypeChecked {
 impl ScratchBlock {
     pub fn return_type(
         &self,
-        mut vartype: impl FnMut(Ptr) -> Option<VarType>,
-    ) -> Option<VarTypeChecked> {
+        mut vartype: impl FnMut(Ptr) -> VariableWrite,
+    ) -> Option<VariableWrite> {
         match self {
-            ScratchBlock::VarRead(ptr) => {
-                Some(vartype(*ptr).map(VarType::into).unwrap_or_default())
-            }
-            ScratchBlock::FunctionGetArg(_) => Some(VarTypeChecked::Object),
+            ScratchBlock::VarRead(ptr) => Some(vartype(*ptr)),
+            ScratchBlock::OpRandom(_, _)
+            | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpDiv(_, _) => Some(VariableWrite::normal(VarTypeChecked::Number)),
+            ScratchBlock::FunctionGetArg(_) => Some(VariableWrite::normal(VarTypeChecked::Object)),
+
             ScratchBlock::OpAdd(_, _)
             | ScratchBlock::OpSub(_, _)
             | ScratchBlock::OpMul(_, _)
-            | ScratchBlock::OpDiv(_, _)
-            | ScratchBlock::OpMod(_, _)
-            | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpRound(_)
             | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::ControlDaysSince2000
-            | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
+            | ScratchBlock::OpStrLen(_) => Some(VariableWrite::skip_nan(VarTypeChecked::Number)),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
-                Some(VarTypeChecked::String)
+                Some(VariableWrite::normal(VarTypeChecked::String))
             }
             ScratchBlock::OpBAnd(_, _)
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
             | ScratchBlock::OpStrContains(_, _)
-            | ScratchBlock::OpCmp(_, _, _) => Some(VarTypeChecked::Bool),
+            | ScratchBlock::OpCmp(_, _, _) => Some(VariableWrite::normal(VarTypeChecked::Bool)),
             ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
@@ -192,114 +191,6 @@ impl ScratchBlock {
             | ScratchBlock::ControlRepeatUntil(_, _)
             | ScratchBlock::LooksShown(_)
             | ScratchBlock::Log(_) => None,
-        }
-    }
-
-    pub fn affects_var(
-        &self,
-        var_ptr: Ptr,
-        variable_type_data: &HashMap<Ptr, VarType>,
-    ) -> Option<VarTypeChecked> {
-        match self {
-            ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _) => Some(VarTypeChecked::Object),
-            ScratchBlock::VarSet(ptr, input) => {
-                if var_ptr == *ptr {
-                    match input {
-                        Input::Obj(scratch_object) => Some(scratch_object.get_type().into()),
-                        Input::Block(scratch_block) => {
-                            scratch_block.return_type(|n| variable_type_data.get(&n).cloned())
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
-            ScratchBlock::VarChange(ptr, _) => {
-                if var_ptr == *ptr {
-                    Some(VarTypeChecked::Number)
-                } else {
-                    None
-                }
-            }
-            ScratchBlock::ControlIf(_, vec)
-            | ScratchBlock::ControlRepeat(_, vec)
-            | ScratchBlock::ControlRepeatUntil(_, vec) => vec
-                .iter()
-                .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                .next_back(),
-            ScratchBlock::ControlIfElse(_, then, else_block) => {
-                let then = then
-                    .iter()
-                    .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                    .next_back();
-                let else_block = else_block
-                    .iter()
-                    .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                    .next_back();
-
-                match (then, else_block) {
-                    (None, None) => None,
-                    (None, Some(n)) | (Some(n), None) => Some(n),
-                    (Some(a), Some(b)) => {
-                        if a == b {
-                            Some(a)
-                        } else {
-                            Some(VarTypeChecked::Object)
-                        }
-                    }
-                }
-            }
-            _ => None,
-        }
-    }
-
-    pub fn could_be_nan(&self) -> bool {
-        match self {
-            ScratchBlock::VarSet(_, _)
-            | ScratchBlock::VarChange(_, _)
-            | ScratchBlock::ControlIf(_, _)
-            | ScratchBlock::ControlIfElse(_, _, _)
-            | ScratchBlock::ControlRepeat(_, _)
-            | ScratchBlock::ControlRepeatUntil(_, _)
-            | ScratchBlock::OpAdd(_, _)
-            | ScratchBlock::OpSub(_, _)
-            | ScratchBlock::OpMul(_, _)
-            | ScratchBlock::OpStrJoin(_, _)
-            | ScratchBlock::OpStrLen(_)
-            | ScratchBlock::OpCmp(_, _, _)
-            | ScratchBlock::OpBAnd(_, _)
-            | ScratchBlock::OpBNot(_)
-            | ScratchBlock::OpBOr(_, _)
-            | ScratchBlock::OpMFloor(_)
-            | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpStrLetterOf(_, _)
-            | ScratchBlock::OpStrContains(_, _)
-            | ScratchBlock::OpRound(_)
-            | ScratchBlock::OpMSin(_)
-            | ScratchBlock::OpMCos(_)
-            | ScratchBlock::OpMTan(_)
-            | ScratchBlock::ScreenRefresh
-            | ScratchBlock::ControlStopThisScript
-            | ScratchBlock::MotionGoToXY(_, _)
-            | ScratchBlock::MotionChangeX(_)
-            | ScratchBlock::MotionChangeY(_)
-            | ScratchBlock::MotionSetX(_)
-            | ScratchBlock::MotionSetY(_)
-            | ScratchBlock::MotionGetX
-            | ScratchBlock::MotionGetY
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::Log(_)
-            | ScratchBlock::ControlDaysSince2000
-            | ScratchBlock::LooksShown(_)
-            | ScratchBlock::ControlForever(_) => false,
-            ScratchBlock::VarRead(_)
-            | ScratchBlock::OpDiv(_, _)
-            | ScratchBlock::OpMod(_, _)
-            | ScratchBlock::OpMSqrt(_)
-            | ScratchBlock::FunctionGetArg(_)
-            | ScratchBlock::OpRandom(_, _) => true,
         }
     }
 
@@ -367,7 +258,7 @@ pub enum VarType {
     String,
 }
 
-pub(crate) struct Compiler<'compiler> {
+pub struct Compiler<'compiler> {
     pub args_list: Vec<[Value; 4]>,
     pub constants: ConstantMap,
     pub code_block: Block,
@@ -439,7 +330,8 @@ impl<'a> Compiler<'a> {
         });
 
         // TODO: inter-function analysis
-        let program_analysis = code.effects(&mut |_| Effects::unknown(), &|_| None);
+        let program_analysis =
+            code.effects(&mut |_| Effects::unknown(), &|_| VariableWrite::default());
 
         Self {
             code_block: block,

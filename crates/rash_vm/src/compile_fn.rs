@@ -9,12 +9,11 @@ use cranelift::{
     prelude::{
         AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
         MemFlags, Signature,
-        isa::{self, CallConv, TargetIsa},
+        isa::{CallConv, TargetIsa},
         settings,
         types::I64,
     },
 };
-use target_lexicon::Triple;
 
 use crate::{
     compiler::{Compiler, ScratchBlock},
@@ -134,8 +133,7 @@ fn compile_ir(
 
     let code = ctx.compile(&**isa, &mut plane).unwrap();
 
-    // TODO: Implement arguments
-    ScratchThread::new(code.code_buffer(), id, is_screen_refresh)
+    ScratchThread::new(code, id, is_screen_refresh)
 }
 
 fn prepare_screen_refresh_points(
@@ -159,15 +157,15 @@ fn prepare_screen_refresh_points(
     builder.ins().return_(&[return_value]);
 }
 
-fn get_isa() -> Arc<dyn TargetIsa> {
+pub fn get_isa() -> Arc<dyn TargetIsa> {
     let mut builder = settings::builder();
     builder.set("opt_level", "speed").unwrap();
     let flags = settings::Flags::new(builder);
 
-    match isa::lookup(Triple::host()) {
-        Err(err) => panic!("Error looking up target: {err}"),
-        Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
-    }
+    let isa_builder = cranelift_native::builder()
+        .unwrap_or_else(|msg| panic!("host machine not supported: {msg}"));
+
+    isa_builder.finish(flags).unwrap()
 }
 
 fn create_function(isa: &dyn TargetIsa) -> Function {

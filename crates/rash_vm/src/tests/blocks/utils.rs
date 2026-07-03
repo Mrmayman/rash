@@ -7,29 +7,21 @@ use cranelift::{
         ir::{Function, UserFuncName},
     },
     prelude::{
-        AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature,
-        isa::{self, CallConv},
-        settings,
+        AbiParam, FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature, isa::CallConv,
         types::I64,
     },
 };
-use target_lexicon::Triple;
 
 use crate::{
+    compile_fn::get_isa,
     compiler::{Compiler, MEMORY, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,
+    runtime::prepare_buffer,
 };
 
 fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
-    let mut builder = settings::builder();
-    builder.set("opt_level", "speed").unwrap();
-    let flags = settings::Flags::new(builder);
-
-    let isa = match isa::lookup(Triple::host()) {
-        Err(err) => panic!("Error looking up target: {err}"),
-        Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
-    };
+    let isa = get_isa();
 
     let mut sig = Signature::new(CallConv::triple_default(isa.triple()));
     sig.params.push(AbiParam::new(I64));
@@ -81,12 +73,15 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     let code = ctx.compile(&*isa, &mut plane).unwrap();
 
+    let buf = code.code_buffer();
     let mut buffer = memmap2::MmapOptions::new()
-        .len(code.code_buffer().len())
+        .len(buf.len())
         .map_anon()
         .unwrap();
 
     buffer.copy_from_slice(code.code_buffer());
+
+    prepare_buffer(code, &buffer);
 
     // Machine code dump
     // let ptr = buffer.as_ptr();

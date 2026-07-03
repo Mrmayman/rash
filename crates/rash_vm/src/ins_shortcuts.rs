@@ -21,9 +21,15 @@ impl Compiler<'_> {
     }
 
     pub fn ins_drop_obj(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
-        let obj = match self.cache.variable_vals.get(&ptr).expect(&format!(
-            "variable {ptr:?} should have been stored in cache"
-        )) {
+        let obj = match &self
+            .cache
+            .variable_vals
+            .get(&ptr)
+            .expect(&format!(
+                "variable {ptr:?} should have been stored in cache"
+            ))
+            .val
+        {
             ReturnValue::Num(_) | ReturnValue::Bool(_) => {
                 return;
             }

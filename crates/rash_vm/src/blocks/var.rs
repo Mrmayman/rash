@@ -4,6 +4,7 @@ use crate::{
     compiler::Compiler,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ReturnValue},
+    variable_storage::VariableSlot,
 };
 
 impl Compiler<'_> {
@@ -15,6 +16,7 @@ impl Compiler<'_> {
             .expect(&format!(
                 "variable {ptr:?} should have been stored in cache"
             ))
+            .val
             .clone_in_code(self, builder)
     }
 
@@ -49,7 +51,15 @@ impl Compiler<'_> {
                     .expect("blocks inside other blocks (like an add operator in a set var block) should return something!");
 
                 self.ins_drop_obj(builder, ptr);
-                self.cache.set_retval(ptr, val);
+                self.cache.set_retval(
+                    ptr,
+                    VariableSlot {
+                        val: val,
+                        skip_nan: block
+                            .return_type(|n| self.cache.get_type(n))
+                            .is_some_and(|n| n.skip_nan),
+                    },
+                );
             }
         };
     }
@@ -59,6 +69,12 @@ impl Compiler<'_> {
         let old_value = self.var_read(builder, ptr).get_number(self, builder);
         let new_value = builder.ins().fadd(old_value, input);
 
-        self.cache.set_retval(ptr, ReturnValue::Num(new_value));
+        self.cache.set_retval(
+            ptr,
+            VariableSlot {
+                val: ReturnValue::Num(new_value),
+                skip_nan: true,
+            },
+        );
     }
 }

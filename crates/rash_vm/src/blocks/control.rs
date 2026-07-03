@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use cranelift::{
     codegen::ir::BlockArg,
     prelude::{FunctionBuilder, InstBuilder, IntCC, Value, types::I64},
@@ -7,9 +5,10 @@ use cranelift::{
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock, VarType, VarTypeChecked},
+    compiler::{Compiler, ScratchBlock},
     effects::{CheckEffects, Effects},
     input_primitives::{Input, Ptr, ReturnValue},
+    variable_storage::VariableSlot,
 };
 
 impl Compiler<'_> {
@@ -233,36 +232,6 @@ impl Compiler<'_> {
         );
     }
 
-    pub fn update_type_data_for_block(
-        &self,
-        variable_type_data: &mut HashMap<Ptr, VarType>,
-        code: &[ScratchBlock],
-    ) {
-        variable_type_data.clear();
-        for var in (0..self.memory.len()).map(Ptr) {
-            if let Some(var_type) = code
-                .iter()
-                .filter_map(|block| block.affects_var(var, variable_type_data))
-                .next_back()
-            {
-                match var_type {
-                    VarTypeChecked::Number => {
-                        variable_type_data.insert(var, VarType::Number);
-                    }
-                    VarTypeChecked::Bool => {
-                        variable_type_data.insert(var, VarType::Bool);
-                    }
-                    VarTypeChecked::String => {
-                        variable_type_data.insert(var, VarType::String);
-                    }
-                    VarTypeChecked::Object => {
-                        variable_type_data.remove(&var);
-                    }
-                }
-            }
-        }
-    }
-
     pub fn control_if(
         &mut self,
         condition: &Input,
@@ -308,37 +277,37 @@ impl Compiler<'_> {
     fn generate_params(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        final_params: &Vec<(Ptr, ReturnValue)>,
+        final_params: &Vec<(Ptr, VariableSlot)>,
     ) -> Vec<BlockArg> {
         let mut direct_params = Vec::new();
         for (ptr, param) in final_params {
-            match param {
+            match param.val {
                 ReturnValue::Num(_) => {
                     let val = self.cache.variable_vals.get(ptr).unwrap();
-                    let ReturnValue::Num(v) = val else {
+                    let ReturnValue::Num(v) = val.val else {
                         panic!("Not a number? Some type checking went wrong (val: {val:?})");
                     };
-                    direct_params.push((*v).into());
+                    direct_params.push(v.into());
                 }
                 ReturnValue::Bool(_) => {
                     let val = self.cache.variable_vals.get(ptr).unwrap();
-                    let ReturnValue::Bool(v) = val else {
+                    let ReturnValue::Bool(v) = val.val else {
                         panic!("Not a bool? Some type checking went wrong (val: {val:?})");
                     };
-                    direct_params.push((*v).into());
+                    direct_params.push(v.into());
                 }
                 ReturnValue::String(_) => {
                     let val = self.cache.variable_vals.get(ptr).unwrap();
-                    let ReturnValue::String([i1, i2, i3]) = val else {
+                    let ReturnValue::String([i1, i2, i3]) = val.val else {
                         panic!("Not a string? Some type checking went wrong (val: {val:?})");
                     };
-                    direct_params.push((*i1).into());
-                    direct_params.push((*i2).into());
-                    direct_params.push((*i3).into());
+                    direct_params.push(i1.into());
+                    direct_params.push(i2.into());
+                    direct_params.push(i3.into());
                 }
                 ReturnValue::Object(_) => {
                     let obj = self.cache.variable_vals.get(ptr).unwrap();
-                    let [i1, i2, i3, i4] = obj.get_object(builder, &mut self.constants);
+                    let [i1, i2, i3, i4] = obj.val.get_object(builder, &mut self.constants);
                     direct_params.push(i1.into());
                     direct_params.push(i2.into());
                     direct_params.push(i3.into());

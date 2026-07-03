@@ -4,6 +4,7 @@ use crate::ScratchObject;
 
 print_func!(
     "op.rs",
+    floor,
     sin,
     cos,
     tan,
@@ -15,6 +16,10 @@ print_func!(
     str_len,
     random,
 );
+
+pub extern "C" fn floor(value: f64) -> f64 {
+    value.floor()
+}
 
 pub extern "C" fn sin(value: f64) -> f64 {
     value.to_radians().sin()

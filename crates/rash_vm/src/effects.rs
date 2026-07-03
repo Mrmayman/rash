@@ -13,12 +13,59 @@ use crate::{
     compiler::{VarType, VarTypeChecked},
     input_primitives::ReturnValue,
     runtime::CustomBlockId,
+    variable_storage::VariableSlot,
 };
+
+#[derive(Default, Clone, Copy)]
+pub struct VariableWrite {
+    pub ty: VarTypeChecked,
+    pub skip_nan: bool,
+}
+
+impl VariableWrite {
+    pub fn normal(ty: VarTypeChecked) -> Self {
+        Self {
+            ty,
+            skip_nan: false,
+        }
+    }
+
+    pub fn skip_nan(ty: VarTypeChecked) -> Self {
+        Self { ty, skip_nan: true }
+    }
+}
+
+impl Into<VarTypeChecked> for VariableWrite {
+    fn into(self) -> VarTypeChecked {
+        self.ty
+    }
+}
+
+impl Into<Option<VarType>> for VariableWrite {
+    fn into(self) -> Option<VarType> {
+        self.ty.into()
+    }
+}
+
+impl From<&VariableSlot> for VariableWrite {
+    fn from(val: &VariableSlot) -> Self {
+        let ty = match val.val {
+            ReturnValue::Num(_) => VarTypeChecked::Number,
+            ReturnValue::Bool(_) => VarTypeChecked::Bool,
+            ReturnValue::String(_) => VarTypeChecked::String,
+            ReturnValue::Object(_) => VarTypeChecked::Object,
+        };
+        Self {
+            ty,
+            skip_nan: val.skip_nan,
+        }
+    }
+}
 
 pub struct Effects {
     pub reads: HashSet<Ptr>,
     pub reads_is_unknown: bool,
-    pub writes: HashMap<Ptr, VarTypeChecked>,
+    pub writes: HashMap<Ptr, VariableWrite>,
     pub writes_is_unknown: bool,
     pub yields: bool,
 
@@ -45,7 +92,7 @@ impl Effects {
         }
     }
 
-    pub fn with_write(ptr: Ptr, ty: VarTypeChecked) -> Self {
+    pub fn with_write(ptr: Ptr, ty: VariableWrite) -> Self {
         let mut effects = Effects::new();
         effects.writes = HashMap::from([(ptr, ty)]);
         effects
@@ -94,16 +141,20 @@ impl Effects {
         // Just intersect writes, but if the types don't match, set to unknown
         for (ptr, ty) in self.writes.iter_mut() {
             if let Some(other_ty) = other.writes.get(ptr) {
-                if ty != other_ty {
-                    *ty = VarTypeChecked::Object;
+                ty.skip_nan = ty.skip_nan && other_ty.skip_nan;
+                if ty.ty != other_ty.ty {
+                    ty.ty = VarTypeChecked::Object;
                 }
             } else if !other.may_not_happen {
-                *ty = VarTypeChecked::Object;
+                // Branch A wrote to the variable but
+                // branch B did not. Remember, this is a
+                // merge operator
+                *ty = VariableWrite::default();
             }
         }
         for ptr in other.writes.keys() {
             if !self.writes.contains_key(ptr) {
-                self.writes.insert(*ptr, VarTypeChecked::Object);
+                self.writes.insert(*ptr, VariableWrite::default());
             }
         }
     }
@@ -112,26 +163,43 @@ impl Effects {
         &self,
         builder: &mut FunctionBuilder,
         block: Block,
-        original_vals: &impl Fn(Ptr) -> VarTypeChecked,
-    ) -> Vec<(Ptr, ReturnValue)> {
+        original_vals: &impl Fn(Ptr) -> VariableWrite,
+    ) -> Vec<(Ptr, VariableSlot)> {
         let mut param_values = Vec::new();
 
         for (ptr, ty) in self.writes.iter() {
-            let ty = if original_vals(*ptr) == *ty {
-                *ty
+            let original = original_vals(*ptr);
+            let skip_nan = ty.skip_nan && original.skip_nan;
+            let ty = if original.ty == ty.ty {
+                VariableWrite {
+                    ty: ty.ty,
+                    skip_nan,
+                }
             } else {
                 // Downgrade if it diverges
-                VarTypeChecked::Object
+                VariableWrite::default()
             };
 
-            match ty {
+            match ty.ty {
                 VarTypeChecked::Number => {
                     let value = builder.append_block_param(block, F64);
-                    param_values.push((*ptr, ReturnValue::Num(value)));
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ReturnValue::Num(value),
+                            skip_nan,
+                        },
+                    ));
                 }
                 VarTypeChecked::Bool => {
                     let value = builder.append_block_param(block, I64);
-                    param_values.push((*ptr, ReturnValue::Bool(value)));
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ReturnValue::Bool(value),
+                            skip_nan,
+                        },
+                    ));
                 }
                 VarTypeChecked::String => {
                     let vals = [
@@ -139,7 +207,13 @@ impl Effects {
                         builder.append_block_param(block, I64),
                         builder.append_block_param(block, I64),
                     ];
-                    param_values.push((*ptr, ReturnValue::String(vals)));
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ReturnValue::String(vals),
+                            skip_nan,
+                        },
+                    ));
                 }
                 VarTypeChecked::Object => {
                     let vals = [
@@ -148,7 +222,13 @@ impl Effects {
                         builder.append_block_param(block, I64),
                         builder.append_block_param(block, I64),
                     ];
-                    param_values.push((*ptr, ReturnValue::Object(vals)));
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ReturnValue::Object(vals),
+                            skip_nan,
+                        },
+                    ));
                 }
             }
         }
@@ -179,7 +259,7 @@ pub trait CheckEffects {
     fn effects(
         &self,
         block_eff: &mut impl FnMut(CustomBlockId) -> Effects,
-        var_ty: &dyn Fn(Ptr) -> Option<VarType>,
+        var_ty: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Effects;
 }
 
@@ -187,17 +267,19 @@ impl CheckEffects for ScratchBlock {
     fn effects(
         &self,
         c: &mut impl FnMut(CustomBlockId) -> Effects,
-        v: &dyn Fn(Ptr) -> Option<VarType>,
+        v: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Effects {
         match self {
             ScratchBlock::VarSet(ptr, input) => {
-                let ty = input.expected_type(|ptr| v(ptr)).into();
-                Effects::with_write(*ptr, ty)
+                Effects::with_write(*ptr, input.expected_type(|ptr| v(ptr)))
             }
-            ScratchBlock::VarChange(ptr, _) => {
-                let ty = VarTypeChecked::Number;
-                Effects::with_write(*ptr, ty)
-            }
+            ScratchBlock::VarChange(ptr, _) => Effects::with_write(
+                *ptr,
+                VariableWrite {
+                    ty: VarTypeChecked::Number,
+                    skip_nan: true,
+                },
+            ),
             ScratchBlock::VarRead(ptr) => Effects::with_read(*ptr),
             ScratchBlock::MotionGoToXY(a, b)
             | ScratchBlock::OpAdd(a, b)
@@ -272,7 +354,7 @@ impl<T: CheckEffects> CheckEffects for Vec<T> {
     fn effects(
         &self,
         c: &mut impl FnMut(CustomBlockId) -> Effects,
-        v: &dyn Fn(Ptr) -> Option<VarType>,
+        v: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Effects {
         self.as_slice().effects(c, v)
     }
@@ -282,15 +364,21 @@ impl<T: CheckEffects> CheckEffects for &[T] {
     fn effects(
         &self,
         c: &mut impl FnMut(CustomBlockId) -> Effects,
-        v: &dyn Fn(Ptr) -> Option<VarType>,
+        v: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Effects {
         let mut effects = Effects::new();
         for item in *self {
             effects.sequence(item.effects(c, &|var| {
-                effects.writes.get(&var).and_then(|n| {
-                    let n: Option<VarType> = (*n).into();
-                    n.or_else(|| v(var))
-                })
+                effects
+                    .writes
+                    .get(&var)
+                    .map(|n| {
+                        if let VarTypeChecked::Object = n.ty {
+                            return v(var);
+                        }
+                        *n
+                    })
+                    .unwrap_or_default()
             }));
         }
         debug_assert!(
@@ -305,7 +393,7 @@ impl CheckEffects for Input {
     fn effects(
         &self,
         c: &mut impl FnMut(CustomBlockId) -> Effects,
-        v: &dyn Fn(Ptr) -> Option<VarType>,
+        v: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Effects {
         match self {
             Input::Block(block) => block.effects(c, v),

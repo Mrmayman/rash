@@ -22,6 +22,29 @@ pub use graphics::{
 pub use input_primitives::{Input, Ptr};
 pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};
 
+mod config {
+    /// Scratch has a special edge case for math with NaN.
+    /// Any operation with NaN will be treated as
+    /// an operation with 0.
+    ///
+    /// For example, `NaN + 1` will be `0 + 1`.
+    ///
+    /// This is a special case for Scratch, and is not
+    /// a standard behavior for most programming languages.
+    /// Enabling this check adds special behavior for NaN in the
+    /// compiled code, making it more correct but slower.
+    ///
+    /// # Performance
+    /// Pi benchmark:
+    /// - Without NaN check: `4.6 ms`
+    /// - With NaN check: `6.5 ms`
+    pub const ARITHMETIC_NAN_CHECK: bool = true;
+
+    /// Sacrifices some floating point precision for
+    /// slightly faster division in certain scenarios
+    pub const IMPRECISE_DIVISION: bool = false;
+}
+
 pub fn program_pi() -> Vec<ScratchBlock> {
     fn set_var(ptr: Ptr, input: impl Into<Input>) -> ScratchBlock {
         ScratchBlock::VarSet(ptr, input.into())
