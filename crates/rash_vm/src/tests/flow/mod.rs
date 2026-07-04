@@ -7,122 +7,112 @@
 // inside a test environment, so we just use
 // an explicit ScreenRefresh
 
-#[cfg(test)]
-mod tests {
-    use crate::{
-        compiler::{MEMORY, ScratchBlock},
-        graphics::{RunState, SpriteId},
-        input_primitives::Ptr,
-        runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
-    };
+use crate::{
+    compiler::{MEMORY, ScratchBlock},
+    graphics::{RunState, SpriteId},
+    input_primitives::Ptr,
+    runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
+};
 
-    use super::*;
+#[test]
+fn custom_block_screen_refresh() {
+    let memory = MEMORY.lock().unwrap();
 
-    /*
-    #[test]
-    fn custom_block_screen_refresh() {
-        let memory = MEMORY.lock().unwrap();
+    let mut builder = ProjectBuilder::new();
 
-        let mut builder = ProjectBuilder::new();
-
-        let mut sprite1 = SpriteBuilder::new(SpriteId(0));
-        sprite1.add_script(
-            Script::new_custom_block(
-                vec![ScratchBlock::ControlRepeat(
-                    3.0.into(),
-                    vec![
-                        ScratchBlock::VarChange(Ptr(3), ScratchBlock::FunctionGetArg(0).into()),
-                        ScratchBlock::ScreenRefresh,
-                    ],
-                )],
-                1,
-                CustomBlockId(1),
-                true,
-            ),
-            &memory,
-        );
-        sprite1.add_script(
-            Script::new_custom_block(
+    let mut sprite1 = SpriteBuilder::new(SpriteId(0));
+    sprite1.add_script(
+        Script::new_custom_block(
+            vec![ScratchBlock::ControlRepeat(
+                3.0.into(),
                 vec![
-                    ScratchBlock::VarSet(Ptr(3), 0.0.into()),
-                    ScratchBlock::ControlRepeat(
-                        5.0.into(),
-                        vec![
-                            ScratchBlock::FunctionCallScreenRefresh(
-                                CustomBlockId(1),
-                                vec![1.0.into()],
-                            ),
-                            ScratchBlock::ScreenRefresh,
-                        ],
-                    ),
+                    ScratchBlock::VarChange(Ptr(3), ScratchBlock::FunctionGetArg(0).into()),
+                    ScratchBlock::ScreenRefresh,
                 ],
-                0,
-                CustomBlockId(0),
-                true,
-            ),
-            &memory,
-        );
-        sprite1.add_script(
-            &Script::new_green_flag(vec![
+            )],
+            1,
+            CustomBlockId(1),
+            true,
+        ),
+        &memory,
+    );
+    sprite1.add_script(
+        Script::new_custom_block(
+            vec![
                 ScratchBlock::VarSet(Ptr(3), 0.0.into()),
-                ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
-            ]),
-            &memory,
-        );
-        builder.add_sprite(sprite1);
-        let mut runtime = builder.build(&memory);
-
-        let mut num_ticks = 1;
-        let mut graphics = RunState::default();
-        while !runtime.update(&mut graphics) {
-            num_ticks += 1;
-        }
-
-        assert_eq!(by_two(num_ticks), 21);
-        assert_eq!(memory[3].convert_to_number(), 15.0);
-    }*/
-
-    #[test]
-    fn nested_loop_screen_refresh() {
-        let memory = MEMORY.lock().unwrap();
-
-        let mut builder = ProjectBuilder::new();
-
-        let mut sprite1 = SpriteBuilder::new(SpriteId(0));
-        sprite1.add_script(
-            Script::new_green_flag(vec![
-                ScratchBlock::VarSet(Ptr(3), 0.5.into()),
                 ScratchBlock::ControlRepeat(
-                    3.0.into(),
+                    5.0.into(),
                     vec![
-                        ScratchBlock::ControlRepeat(
-                            4.0.into(),
-                            vec![
-                                ScratchBlock::VarChange(Ptr(3), 2.0.into()),
-                                ScratchBlock::ScreenRefresh,
-                            ],
-                        ),
+                        ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(1), vec![1.0.into()]),
                         ScratchBlock::ScreenRefresh,
                     ],
                 ),
-            ]),
-            &memory,
-        );
-        builder.add_sprite(sprite1);
-        let mut runtime = builder.build(&memory);
+            ],
+            0,
+            CustomBlockId(0),
+            true,
+        ),
+        &memory,
+    );
+    sprite1.add_script(
+        Script::new_green_flag(vec![
+            ScratchBlock::VarSet(Ptr(3), 0.0.into()),
+            ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
+        ]),
+        &memory,
+    );
+    builder.add_sprite(sprite1);
+    let mut runtime = builder.build(&memory);
 
-        let mut num_ticks = 1;
-        let mut graphics = RunState::default();
-        while !runtime.update(&mut graphics) {
-            num_ticks += 1;
-        }
-
-        assert_eq!(by_two(num_ticks), 16);
-        assert_eq!(memory[3].convert_to_number(), 24.5);
+    let mut num_ticks = 1;
+    let mut graphics = RunState::default();
+    while !runtime.update(&mut graphics) {
+        num_ticks += 1;
     }
+
+    assert_eq!(by_two(num_ticks), 21);
+    assert_eq!(memory[3].convert_to_number(), 15.0);
 }
 
-#[cfg(test)]
+#[test]
+fn nested_loop_screen_refresh() {
+    let memory = MEMORY.lock().unwrap();
+
+    let mut builder = ProjectBuilder::new();
+
+    let mut sprite1 = SpriteBuilder::new(SpriteId(0));
+    sprite1.add_script(
+        Script::new_green_flag(vec![
+            ScratchBlock::VarSet(Ptr(3), 0.5.into()),
+            ScratchBlock::ControlRepeat(
+                3.0.into(),
+                vec![
+                    ScratchBlock::ControlRepeat(
+                        4.0.into(),
+                        vec![
+                            ScratchBlock::VarChange(Ptr(3), 2.0.into()),
+                            ScratchBlock::ScreenRefresh,
+                        ],
+                    ),
+                    ScratchBlock::ScreenRefresh,
+                ],
+            ),
+        ]),
+        &memory,
+    );
+    builder.add_sprite(sprite1);
+    let mut runtime = builder.build(&memory);
+
+    let mut num_ticks = 1;
+    let mut graphics = RunState::default();
+    while !runtime.update(&mut graphics) {
+        num_ticks += 1;
+    }
+
+    assert_eq!(by_two(num_ticks), 16);
+    assert_eq!(memory[3].convert_to_number(), 24.5);
+}
+
 fn by_two(n: i32) -> i32 {
     if n % 2 == 0 {
         // If n is even, standard division works

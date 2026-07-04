@@ -32,7 +32,7 @@ impl Compiler<'_> {
         blocks: &[ScratchBlock],
     ) {
         let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
-        if effects.writes_is_unknown {
+        if effects.is_unknown {
             todo!("Gotta implement fallback behaviour");
         }
 
@@ -117,7 +117,7 @@ impl Compiler<'_> {
         // TODO: inter-function analysis
         let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
 
-        if effects.writes_is_unknown {
+        if effects.is_unknown {
             todo!("Gotta implement fallback behaviour");
         }
         let final_params =
@@ -170,7 +170,7 @@ impl Compiler<'_> {
         // TODO: inter-function analysis
         let effects = then.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
 
-        if effects.writes_is_unknown {
+        if effects.is_unknown {
             todo!("Gotta implement fallback behaviour");
         }
 
@@ -259,7 +259,7 @@ impl Compiler<'_> {
         let effects = then_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v))
             & else_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
 
-        if effects.writes_is_unknown {
+        if effects.is_unknown {
             todo!("Gotta implement fallback behaviour");
         }
 
@@ -316,7 +316,7 @@ impl Compiler<'_> {
 
         // TODO: inter-function analysis
         let effects = body.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
-        if effects.writes_is_unknown {
+        if effects.is_unknown {
             todo!("Gotta implement fallback behaviour");
         }
 

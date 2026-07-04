@@ -159,7 +159,10 @@ impl<'a> VariableStorage<'a> {
 
     /// Returns the known type of a cached variable.
     pub fn get_type(&self, ptr: Ptr) -> VariableWrite {
-        self.variable_vals.get(&ptr).unwrap().into()
+        self.variable_vals
+            .get(&ptr)
+            .map(|n| n.into())
+            .unwrap_or_default()
     }
 
     /// Stores a constant number in the local cache.

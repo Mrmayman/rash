@@ -16,6 +16,9 @@ use crate::{
     variable_storage::VariableSlot,
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Default, Clone, Copy)]
 pub struct VariableWrite {
     pub ty: VarTypeChecked,
@@ -64,9 +67,8 @@ impl From<&VariableSlot> for VariableWrite {
 
 pub struct Effects {
     pub reads: HashSet<Ptr>,
-    pub reads_is_unknown: bool,
     pub writes: HashMap<Ptr, VariableWrite>,
-    pub writes_is_unknown: bool,
+    pub is_unknown: bool,
     pub yields: bool,
 
     pub may_not_happen: bool,
@@ -76,18 +78,21 @@ impl Effects {
     pub fn new() -> Self {
         Effects {
             reads: HashSet::new(),
-            reads_is_unknown: false,
             writes: HashMap::new(),
-            writes_is_unknown: false,
+            is_unknown: false,
             yields: false,
             may_not_happen: false,
         }
     }
 
+    /// An [`Effects`] that represents that *anything* could happen.
+    ///
+    /// For example, if you do a screen refresh, the variables could change to
+    /// *anything* during that time (impossible to analyze),
+    /// so we use `unknown` to represent that.
     pub fn unknown() -> Self {
         Effects {
-            reads_is_unknown: true,
-            writes_is_unknown: true,
+            is_unknown: true,
             ..Self::new()
         }
     }
@@ -112,31 +117,22 @@ impl Effects {
 
         self.union_reads(&other);
 
-        if other.writes_is_unknown {
-            self.writes_is_unknown = true;
-        }
-        if other.yields {
-            self.yields = true;
-        }
         self.writes.extend(other.writes);
     }
 
     fn union_reads(&mut self, other: &Effects) {
-        if other.reads_is_unknown {
-            self.reads_is_unknown = true;
+        if other.is_unknown {
+            self.is_unknown = true;
         }
+        if other.yields {
+            self.yields = true;
+        }
+
         self.reads.extend(other.reads.iter().copied());
     }
 
     pub fn merge(&mut self, other: Effects) {
         self.union_reads(&other);
-
-        if other.writes_is_unknown {
-            self.writes_is_unknown = true;
-        }
-        if other.yields {
-            self.yields = true;
-        }
 
         // Just intersect writes, but if the types don't match, set to unknown
         for (ptr, ty) in &mut self.writes {
@@ -329,16 +325,13 @@ impl CheckEffects for ScratchBlock {
             // Early returns need some more work
             ScratchBlock::ControlStopThisScript => todo!(),
 
-            ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, inputs)
-            | ScratchBlock::FunctionCallScreenRefresh(custom_block_id, inputs) => {
+            // ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, inputs) |
+            ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, inputs) => {
                 inputs.effects(c, v) | c(*custom_block_id)
             }
-            ScratchBlock::ScreenRefresh => {
-                // Not doing Effects::unknown() here,
-                // because even though the variables could change to
-                // *anything* during this time, all invalidation
-                // is *already handled* after the refresh
-                let mut e = Effects::new();
+            // Screen refresh blocks could yield
+            ScratchBlock::FunctionCallScreenRefresh(_, _) | ScratchBlock::ScreenRefresh => {
+                let mut e = Effects::unknown();
                 e.yields = true;
                 e
             }
@@ -371,16 +364,9 @@ impl<T: CheckEffects> CheckEffects for &[T] {
         let mut effects = Effects::new();
         for item in *self {
             effects.sequence(item.effects(c, &|var| {
-                effects
-                    .writes
-                    .get(&var)
-                    .map(|n| {
-                        if let VarTypeChecked::Object = n.ty {
-                            return v(var);
-                        }
-                        *n
-                    })
-                    .unwrap_or_default()
+                // Check if variable has been written to within this scope.
+                // If not (unwrap_or_else), check globally outside of the scope.
+                effects.writes.get(&var).copied().unwrap_or_else(|| v(var))
             }));
         }
         debug_assert!(

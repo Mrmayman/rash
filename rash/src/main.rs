@@ -185,7 +185,7 @@ fn run_demo() {
         //     ScratchBlock::Log("Hello World".into()),
         //     ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
         // ]),
-        Script::new_green_flag(rash_vm::program_pi()),
+        Script::new_green_flag(rash_vm::builder::program_pi()),
         &memory,
     );
     let mut builder = ProjectBuilder::new();
