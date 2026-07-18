@@ -15,12 +15,12 @@ use cranelift::{
 use crate::{
     callbacks,
     constant_set::ConstantMap,
-    data_types::ScratchObject,
+    data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::{CheckEffects, Effects, VariableWrite},
     graphics::{RunState, SpriteId},
-    input_primitives::{Input, Ptr, ReturnValue},
+    input_primitives::{Input, Ptr, ScratchValue},
     runtime::CustomBlockId,
-    variable_storage::VariableStorage,
+    variable_storage::{GenericVarStore, SsaVarStore, VarStore},
 };
 
 mod display;
@@ -107,6 +107,17 @@ pub enum VarTypeChecked {
     String,
     #[default]
     Object,
+}
+
+impl VarTypeChecked {
+    pub fn get_id(&self) -> Option<i64> {
+        match self {
+            Self::Number => Some(ID_NUMBER),
+            Self::Bool => Some(ID_BOOL),
+            Self::String => Some(ID_STRING),
+            Self::Object => None,
+        }
+    }
 }
 
 impl From<VarType> for VarTypeChecked {
@@ -224,8 +235,8 @@ impl ScratchBlock {
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionGetArg(_)
-            | ScratchBlock::Log(_)
             | ScratchBlock::ControlDaysSince2000
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
@@ -241,9 +252,12 @@ impl ScratchBlock {
             }
             ScratchBlock::LooksShown(b) => *b, // Triggers refresh on show, not hide
 
+            // TODO: This actually depends on the function itself
+            // Remove from here eventually
+            ScratchBlock::FunctionCallScreenRefresh(_, _) => true,
+
             ScratchBlock::ScreenRefresh
-            | ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::Log(_)
             | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::MotionChangeX(_)
             | ScratchBlock::MotionChangeY(_)
@@ -270,7 +284,7 @@ pub struct Compiler<'compiler> {
     pub func_signatures: HashMap<Signature, SigRef>,
     pub program_analysis: Effects,
 
-    pub cache: VariableStorage<'compiler>,
+    pub cache: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
 
     /// Storing how many loops inside we are right now
@@ -336,10 +350,21 @@ impl<'a> Compiler<'a> {
         let program_analysis =
             code.effects(&mut |_| Effects::unknown(), &|_| VariableWrite::default());
 
+        let cache: Box<dyn VarStore> = if program_analysis.is_unknown {
+            Box::new(GenericVarStore::new(memory))
+        } else {
+            Box::new(SsaVarStore::new(
+                builder,
+                &program_analysis,
+                &mut constants,
+                memory,
+            ))
+        };
+
         Self {
             code_block,
             temp_slot4,
-            cache: VariableStorage::new(builder, &program_analysis, memory, &mut constants),
+            cache,
             program_analysis,
             constants,
             break_points: vec![code_block],
@@ -362,31 +387,31 @@ impl<'a> Compiler<'a> {
         &mut self,
         block: &ScratchBlock,
         builder: &mut FunctionBuilder<'_>,
-    ) -> Option<ReturnValue> {
+    ) -> Option<ScratchValue> {
         match block {
             ScratchBlock::VarSet(ptr, obj) => {
                 self.var_set(obj, builder, *ptr);
             }
             ScratchBlock::OpAdd(a, b) => {
-                return Some(ReturnValue::Num(self.op_add(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_add(a, b, builder)));
             }
             ScratchBlock::OpSub(a, b) => {
-                return Some(ReturnValue::Num(self.op_sub(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_sub(a, b, builder)));
             }
             ScratchBlock::OpMul(a, b) => {
-                return Some(ReturnValue::Num(self.op_mul(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_mul(a, b, builder)));
             }
             ScratchBlock::OpDiv(a, b) => {
-                return Some(ReturnValue::Num(self.op_div(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_div(a, b, builder)));
             }
             ScratchBlock::OpMod(a, b) => {
-                return Some(ReturnValue::Num(self.op_modulo(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_modulo(a, b, builder)));
             }
             ScratchBlock::VarRead(ptr) => {
                 return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
-                return Some(ReturnValue::Object(self.op_str_join(a, b, builder)));
+                return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));
             }
             ScratchBlock::Log(msg) => self.dbg_log(msg, builder),
             ScratchBlock::ControlRepeat(input, vec) => {
@@ -408,49 +433,49 @@ impl<'a> Compiler<'a> {
                 self.control_repeat_until(builder, input, vec);
             }
             ScratchBlock::OpCmp(a, b, ordering) => {
-                return Some(ReturnValue::Bool(self.op_cmp(a, b, builder, *ordering)));
+                return Some(ScratchValue::Bool(self.op_cmp(a, b, builder, *ordering)));
             }
             ScratchBlock::OpStrLen(input) => {
                 return Some(self.op_str_len(input, builder));
             }
             ScratchBlock::OpRandom(a, b) => return Some(self.op_random(a, b, builder)),
             ScratchBlock::OpBAnd(a, b) => {
-                return Some(ReturnValue::Bool(self.op_b_and(a, b, builder)));
+                return Some(ScratchValue::Bool(self.op_b_and(a, b, builder)));
             }
             ScratchBlock::OpBNot(a) => {
-                return Some(ReturnValue::Bool(self.op_b_not(a, builder)));
+                return Some(ScratchValue::Bool(self.op_b_not(a, builder)));
             }
             ScratchBlock::OpBOr(a, b) => {
-                return Some(ReturnValue::Bool(self.op_b_or(a, b, builder)));
+                return Some(ScratchValue::Bool(self.op_b_or(a, b, builder)));
             }
             ScratchBlock::OpMFloor(n) => return Some(self.op_m_floor(n, builder)),
             ScratchBlock::OpStrLetterOf(letter, string) => {
-                return Some(ReturnValue::Object(
+                return Some(ScratchValue::Object(
                     self.op_str_letter(letter, string, builder),
                 ));
             }
             ScratchBlock::OpStrContains(string, pattern) => {
-                return Some(ReturnValue::Bool(
+                return Some(ScratchValue::Bool(
                     self.op_str_contains(string, pattern, builder),
                 ));
             }
             ScratchBlock::OpRound(num) => {
-                return Some(ReturnValue::Num(self.op_round(num, builder)));
+                return Some(ScratchValue::Num(self.op_round(num, builder)));
             }
             ScratchBlock::OpMAbs(num) => {
-                return Some(ReturnValue::Num(self.op_m_abs(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_abs(num, builder)));
             }
             ScratchBlock::OpMSqrt(num) => {
-                return Some(ReturnValue::Num(self.op_m_sqrt(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_sqrt(num, builder)));
             }
             ScratchBlock::OpMSin(num) => {
-                return Some(ReturnValue::Num(self.op_m_sin(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_sin(num, builder)));
             }
             ScratchBlock::OpMCos(num) => {
-                return Some(ReturnValue::Num(self.op_m_cos(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_cos(num, builder)));
             }
             ScratchBlock::OpMTan(num) => {
-                return Some(ReturnValue::Num(self.op_m_tan(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_tan(num, builder)));
             }
             ScratchBlock::ScreenRefresh => {
                 self.screen_refresh(builder);
@@ -465,7 +490,9 @@ impl<'a> Compiler<'a> {
                 self.call_custom_block(custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
-                return Some(ReturnValue::Object(self.custom_block_get_arg(builder, idx)));
+                return Some(ScratchValue::Object(
+                    self.custom_block_get_arg(builder, idx),
+                ));
             }
             ScratchBlock::MotionGoToXY(x, y) => {
                 let x = x.get_number(self, builder);
@@ -545,7 +572,7 @@ impl<'a> Compiler<'a> {
                 );
 
                 let val = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(val));
+                return Some(ScratchValue::Num(val));
             }
             ScratchBlock::MotionGetY => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
@@ -559,7 +586,7 @@ impl<'a> Compiler<'a> {
                 );
 
                 let val = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(val));
+                return Some(ScratchValue::Num(val));
             }
             ScratchBlock::LooksShown(shown) => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
@@ -582,7 +609,7 @@ impl<'a> Compiler<'a> {
                     &[],
                 );
                 let val = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(val));
+                return Some(ScratchValue::Num(val));
             }
         }
         None
@@ -619,7 +646,7 @@ impl<'a> Compiler<'a> {
         for _ in 0..2 {
             // TODO: Hacky workaround for too-fast timing
             self.break_counter += 1;
-            self.cache.save(builder, &mut self.constants);
+            self.cache.save(builder, &mut self.constants, self.memory);
             let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
             builder.ins().return_(&[break_counter]);
@@ -629,7 +656,7 @@ impl<'a> Compiler<'a> {
             self.break_points.push(self.code_block);
             builder.switch_to_block(self.code_block);
 
-            self.cache.init(builder, &mut self.constants, self.memory);
+            self.cache.reinit(builder, &mut self.constants, self.memory);
         }
     }
 }

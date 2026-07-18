@@ -7,7 +7,7 @@ use crate::{
     callbacks,
     compiler::{Compiler, ScratchBlock},
     effects::{CheckEffects, Effects},
-    input_primitives::{Input, Ptr, ReturnValue},
+    input_primitives::{Input, Ptr, ScratchValue},
     variable_storage::VariableSlot,
 };
 
@@ -17,7 +17,7 @@ impl Compiler<'_> {
             self.call_stack_pop(builder);
         }
 
-        self.cache.save(builder, &mut self.constants);
+        self.cache.save(builder, &mut self.constants, self.memory);
         let minus_one = self.constants.get_int(-1, builder);
         builder.ins().return_(&[minus_one]);
         let new_block = builder.create_block();
@@ -32,9 +32,6 @@ impl Compiler<'_> {
         blocks: &[ScratchBlock],
     ) {
         let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
-        if effects.is_unknown {
-            todo!("Gotta implement fallback behaviour");
-        }
 
         let zero = self.constants.get_int(0, builder);
         let old_constants = self.constants.clone();
@@ -44,11 +41,9 @@ impl Compiler<'_> {
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let final_params_loop =
-            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr));
+        let final_params_loop = effects.generate_params(builder, loop_block, &*self.cache);
         let mut loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
-        let final_params_end =
-            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
+        let final_params_end = effects.generate_params(builder, end_block, &*self.cache);
 
         let entry_params = self.generate_params(builder, &final_params_loop);
         let mut entry_params2 = entry_params.clone();
@@ -66,7 +61,7 @@ impl Compiler<'_> {
 
         builder.switch_to_block(loop_block);
         self.code_block = loop_block;
-        self.cache.variable_vals.extend(final_params_loop.clone());
+        self.cache.extend(final_params_loop.clone());
 
         if effects.yields {
             self.constants.clear();
@@ -101,7 +96,7 @@ impl Compiler<'_> {
         );
 
         builder.switch_to_block(end_block);
-        self.cache.variable_vals.extend(final_params_end.clone());
+        self.cache.extend(final_params_end.clone());
         self.code_block = end_block;
         if effects.yields {
             self.constants.clear();
@@ -117,18 +112,14 @@ impl Compiler<'_> {
         // TODO: inter-function analysis
         let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
 
-        if effects.is_unknown {
-            todo!("Gotta implement fallback behaviour");
-        }
-        let final_params =
-            effects.generate_params(builder, loop_block, &|ptr| self.cache.get_type(ptr));
+        let final_params = effects.generate_params(builder, loop_block, &*self.cache);
 
         let entry_params = self.generate_params(builder, &final_params);
 
         builder.ins().jump(loop_block, &entry_params);
         self.code_block = loop_block;
         builder.switch_to_block(loop_block);
-        self.cache.variable_vals.extend(final_params.clone());
+        self.cache.extend(final_params.clone());
 
         for block in blocks {
             self.compile_block(block, builder);
@@ -170,14 +161,9 @@ impl Compiler<'_> {
         // TODO: inter-function analysis
         let effects = then.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
 
-        if effects.is_unknown {
-            todo!("Gotta implement fallback behaviour");
-        }
-
         let inside_block = builder.create_block();
         let end_block = builder.create_block();
-        let final_params =
-            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
+        let final_params = effects.generate_params(builder, end_block, &*self.cache);
 
         // Before the code runs...
         let direct_params = self.generate_params(builder, &final_params);
@@ -200,7 +186,7 @@ impl Compiler<'_> {
         self.code_block = end_block;
         builder.switch_to_block(end_block);
         self.constants = old_consts;
-        self.cache.variable_vals.extend(final_params);
+        self.cache.extend(final_params);
     }
 
     fn generate_params(
@@ -209,34 +195,35 @@ impl Compiler<'_> {
         final_params: &Vec<(Ptr, VariableSlot)>,
     ) -> Vec<BlockArg> {
         let mut direct_params = Vec::new();
+        if !self.cache.uses_block_params() {
+            return direct_params;
+        }
+
         for (ptr, param) in final_params {
+            let val = self.cache.get(*ptr, builder, &mut self.constants);
             match param.val {
-                ReturnValue::Num(_) => {
-                    let val = self.cache.variable_vals.get(ptr).unwrap();
-                    let ReturnValue::Num(v) = val.val else {
+                ScratchValue::Num(_) => {
+                    let ScratchValue::Num(v) = val.val else {
                         panic!("Not a number? Some type checking went wrong (val: {val:?})");
                     };
                     direct_params.push(v.into());
                 }
-                ReturnValue::Bool(_) => {
-                    let val = self.cache.variable_vals.get(ptr).unwrap();
-                    let ReturnValue::Bool(v) = val.val else {
+                ScratchValue::Bool(_) => {
+                    let ScratchValue::Bool(v) = val.val else {
                         panic!("Not a bool? Some type checking went wrong (val: {val:?})");
                     };
                     direct_params.push(v.into());
                 }
-                ReturnValue::String(_) => {
-                    let val = self.cache.variable_vals.get(ptr).unwrap();
-                    let ReturnValue::String([i1, i2, i3]) = val.val else {
+                ScratchValue::String(_) => {
+                    let ScratchValue::String([i1, i2, i3]) = val.val else {
                         panic!("Not a string? Some type checking went wrong (val: {val:?})");
                     };
                     direct_params.push(i1.into());
                     direct_params.push(i2.into());
                     direct_params.push(i3.into());
                 }
-                ReturnValue::Object(_) => {
-                    let obj = self.cache.variable_vals.get(ptr).unwrap();
-                    let [i1, i2, i3, i4] = obj.val.get_object(builder, &mut self.constants);
+                ScratchValue::Object(_) => {
+                    let [i1, i2, i3, i4] = val.val.get_object(builder, &mut self.constants);
                     direct_params.push(i1.into());
                     direct_params.push(i2.into());
                     direct_params.push(i3.into());
@@ -259,16 +246,11 @@ impl Compiler<'_> {
         let effects = then_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v))
             & else_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
 
-        if effects.is_unknown {
-            todo!("Gotta implement fallback behaviour");
-        }
-
         let then_block = builder.create_block();
         let else_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let final_params =
-            effects.generate_params(builder, end_block, &|ptr| self.cache.get_type(ptr));
+        let final_params = effects.generate_params(builder, end_block, &*self.cache);
 
         let condition = condition.get_bool(self, builder);
         builder
@@ -276,7 +258,7 @@ impl Compiler<'_> {
             .brif(condition, then_block, &[], else_block, &[]);
 
         let old_consts = self.constants.clone();
-        let old_cache = self.cache.clone();
+        let old_cache = self.cache.clone_box();
 
         builder.switch_to_block(then_block);
         self.code_block = then_block;
@@ -301,7 +283,7 @@ impl Compiler<'_> {
         self.code_block = end_block;
         builder.switch_to_block(end_block);
         self.constants = old_consts;
-        self.cache.variable_vals.extend(final_params);
+        self.cache.extend(final_params);
     }
 
     pub fn control_repeat_until(
@@ -316,17 +298,13 @@ impl Compiler<'_> {
 
         // TODO: inter-function analysis
         let effects = body.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
-        if effects.is_unknown {
-            todo!("Gotta implement fallback behaviour");
-        }
 
-        let final_params =
-            effects.generate_params(builder, condition_block, &|ptr| self.cache.get_type(ptr));
+        let final_params = effects.generate_params(builder, condition_block, &*self.cache);
 
         let entry_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &entry_params);
 
-        self.cache.variable_vals.extend(final_params.clone());
+        self.cache.extend(final_params.clone());
         builder.switch_to_block(condition_block);
         self.code_block = condition_block;
 
@@ -346,7 +324,7 @@ impl Compiler<'_> {
         builder.ins().jump(condition_block, &loop_params);
         builder.switch_to_block(end_block);
         self.code_block = end_block;
-        self.cache.variable_vals.extend(final_params);
+        self.cache.extend(final_params);
         self.constants = old_constants;
     }
 }

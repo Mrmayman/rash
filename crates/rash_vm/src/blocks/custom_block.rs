@@ -18,7 +18,7 @@ impl Compiler<'_> {
     ) {
         let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
 
-        self.cache.save(builder, &mut self.constants);
+        self.cache.save(builder, &mut self.constants, self.memory);
         let args: Vec<[Value; 4]> = args
             .iter()
             .map(|n| n.get_object(self, builder))
@@ -31,6 +31,8 @@ impl Compiler<'_> {
             key: None,
         });
         for [i1, i2, i3, i4] in args {
+            // This will later be moved into a Vec
+            // (inside the callback) and dropped
             builder.ins().stack_store(i1, stack_slot, 0);
             builder.ins().stack_store(i2, stack_slot, 8);
             builder.ins().stack_store(i3, stack_slot, 16);
@@ -38,7 +40,7 @@ impl Compiler<'_> {
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
-        if is_screen_refresh {
+        if is_screen_refresh && self.is_screen_refresh {
             let inst = self.call_function(
                 builder,
                 callbacks::custom_block::call_screen_refresh as *const (),
@@ -54,28 +56,26 @@ impl Compiler<'_> {
                 ],
             );
 
-            if self.is_screen_refresh {
-                let is_alive = builder.inst_results(inst)[0];
+            let is_paused = builder.inst_results(inst)[0];
 
-                let inside_block = builder.create_block();
-                let end_block = builder.create_block();
+            let inside_block = builder.create_block();
+            let end_block = builder.create_block();
 
-                builder
-                    .ins()
-                    .brif(is_alive, inside_block, &[], end_block, &[]);
+            builder
+                .ins()
+                .brif(is_paused, inside_block, &[], end_block, &[]);
 
-                builder.switch_to_block(inside_block);
-                self.break_counter += 1;
-                let break_counter = builder.ins().iconst(I64, self.break_counter as i64);
+            builder.switch_to_block(inside_block);
+            self.break_counter += 1;
+            let break_counter = builder.ins().iconst(I64, self.break_counter as i64);
 
-                builder.ins().return_(&[break_counter]);
+            builder.ins().return_(&[break_counter]);
 
-                self.break_points.push(end_block);
-                builder.switch_to_block(end_block);
+            self.break_points.push(end_block);
+            builder.switch_to_block(end_block);
 
-                self.constants.clear();
-                self.code_block = end_block;
-            }
+            self.constants.clear();
+            self.code_block = end_block;
         } else {
             self.call_function(
                 builder,
@@ -91,6 +91,6 @@ impl Compiler<'_> {
             );
         }
 
-        self.cache.init(builder, &mut self.constants, self.memory);
+        self.cache.reinit(builder, &mut self.constants, self.memory);
     }
 }

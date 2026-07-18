@@ -91,7 +91,7 @@ impl App {
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
+                power_preference: wgpu::PowerPreference::from_env().unwrap_or_default(),
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })

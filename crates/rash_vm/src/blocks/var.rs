@@ -3,17 +3,14 @@ use cranelift::prelude::{FunctionBuilder, InstBuilder};
 use crate::{
     compiler::Compiler,
     data_types::ScratchObject,
-    input_primitives::{Input, Ptr, ReturnValue},
+    input_primitives::{Input, Ptr, ScratchValue},
     variable_storage::VariableSlot,
 };
 
 impl Compiler<'_> {
-    pub fn var_read(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ReturnValue {
+    pub fn var_read(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ScratchValue {
         self.cache
-            .variable_vals
-            .get(&ptr)
-            .copied()
-            .unwrap_or_else(|| panic!("variable {ptr:?} should have been stored in cache"))
+            .get(ptr, builder, &mut self.constants)
             .val
             .clone_in_code(self, builder)
     }
@@ -49,7 +46,7 @@ impl Compiler<'_> {
                     .expect("blocks inside other blocks (like an add operator in a set var block) should return something!");
 
                 self.ins_drop_obj(builder, ptr);
-                self.cache.set_retval(
+                self.cache.store(
                     ptr,
                     VariableSlot {
                         val,
@@ -57,6 +54,8 @@ impl Compiler<'_> {
                             .return_type(|n| self.cache.get_type(n))
                             .is_some_and(|n| n.skip_nan),
                     },
+                    builder,
+                    &mut self.constants,
                 );
             }
         }
@@ -67,12 +66,14 @@ impl Compiler<'_> {
         let old_value = self.var_read(builder, ptr).get_number(self, builder);
         let new_value = builder.ins().fadd(old_value, input);
 
-        self.cache.set_retval(
+        self.cache.store(
             ptr,
             VariableSlot {
-                val: ReturnValue::Num(new_value),
+                val: ScratchValue::Num(new_value),
                 skip_nan: true,
             },
+            builder,
+            &mut self.constants,
         );
     }
 }

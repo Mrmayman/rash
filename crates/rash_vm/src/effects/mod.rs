@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cranelift::{
     codegen::ir::{
-        Block,
+        Block, InstBuilder,
         types::{F64, I64},
     },
     frontend::FunctionBuilder,
@@ -11,15 +11,15 @@ use cranelift::{
 use crate::{
     Input, Ptr, ScratchBlock,
     compiler::{VarType, VarTypeChecked},
-    input_primitives::ReturnValue,
+    input_primitives::ScratchValue,
     runtime::CustomBlockId,
-    variable_storage::VariableSlot,
+    variable_storage::{VarStore, VariableSlot},
 };
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct VariableWrite {
     pub ty: VarTypeChecked,
     pub skip_nan: bool,
@@ -50,13 +50,13 @@ impl From<VariableWrite> for Option<VarType> {
     }
 }
 
-impl From<&VariableSlot> for VariableWrite {
-    fn from(val: &VariableSlot) -> Self {
+impl From<VariableSlot> for VariableWrite {
+    fn from(val: VariableSlot) -> Self {
         let ty = match val.val {
-            ReturnValue::Num(_) => VarTypeChecked::Number,
-            ReturnValue::Bool(_) => VarTypeChecked::Bool,
-            ReturnValue::String(_) => VarTypeChecked::String,
-            ReturnValue::Object(_) => VarTypeChecked::Object,
+            ScratchValue::Num(_) => VarTypeChecked::Number,
+            ScratchValue::Bool(_) => VarTypeChecked::Bool,
+            ScratchValue::String(_) => VarTypeChecked::String,
+            ScratchValue::Object(_) => VarTypeChecked::Object,
         };
         Self {
             ty,
@@ -159,12 +159,15 @@ impl Effects {
         &self,
         builder: &mut FunctionBuilder,
         block: Block,
-        original_vals: &impl Fn(Ptr) -> VariableWrite,
+        cache: &dyn VarStore,
     ) -> Vec<(Ptr, VariableSlot)> {
         let mut param_values = Vec::new();
 
+        let izero = (!cache.uses_block_params()).then(|| builder.ins().iconst(I64, 0));
+        let fzero = (!cache.uses_block_params()).then(|| builder.ins().f64const(0.0));
+
         for (ptr, ty) in &self.writes {
-            let original = original_vals(*ptr);
+            let original = cache.get_type(*ptr);
             let skip_nan = ty.skip_nan && original.skip_nan;
             let ty = if original.ty == ty.ty {
                 VariableWrite {
@@ -178,50 +181,50 @@ impl Effects {
 
             match ty.ty {
                 VarTypeChecked::Number => {
-                    let value = builder.append_block_param(block, F64);
+                    let value = fzero.unwrap_or_else(|| builder.append_block_param(block, F64));
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ReturnValue::Num(value),
+                            val: ScratchValue::Num(value),
                             skip_nan,
                         },
                     ));
                 }
                 VarTypeChecked::Bool => {
-                    let value = builder.append_block_param(block, I64);
+                    let value = izero.unwrap_or_else(|| builder.append_block_param(block, I64));
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ReturnValue::Bool(value),
+                            val: ScratchValue::Bool(value),
                             skip_nan,
                         },
                     ));
                 }
                 VarTypeChecked::String => {
                     let vals = [
-                        builder.append_block_param(block, I64),
-                        builder.append_block_param(block, I64),
-                        builder.append_block_param(block, I64),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                     ];
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ReturnValue::String(vals),
+                            val: ScratchValue::String(vals),
                             skip_nan,
                         },
                     ));
                 }
                 VarTypeChecked::Object => {
                     let vals = [
-                        builder.append_block_param(block, I64),
-                        builder.append_block_param(block, I64),
-                        builder.append_block_param(block, I64),
-                        builder.append_block_param(block, I64),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                     ];
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ReturnValue::Object(vals),
+                            val: ScratchValue::Object(vals),
                             skip_nan,
                         },
                     ));

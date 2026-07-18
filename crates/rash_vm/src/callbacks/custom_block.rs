@@ -33,7 +33,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
         panic!("No custom block found with id {}", id.0)
     };
 
-    let args = unsafe { vec_from_raw(arg_buffer, script.num_args) };
+    let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
 
     let CustomBlockFunc::Compiled(script) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn call_screen_refresh(
 
     let is_screen_refresh = parent_is_screen_refresh && script.is_screen_refresh;
 
-    let args = unsafe { vec_from_raw(arg_buffer, script.num_args) };
+    let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
 
     let CustomBlockFunc::Compiled(script) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
@@ -90,7 +90,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     PauseStatus::Ended
 }
 
-unsafe fn vec_from_raw<T: Clone>(ptr: *const T, count: usize) -> Vec<T> {
+unsafe fn move_into_new_vec<T: Clone>(ptr: *const T, count: usize) -> Vec<T> {
     debug_assert!(!ptr.is_null());
     let mut vec = Vec::with_capacity(count);
 

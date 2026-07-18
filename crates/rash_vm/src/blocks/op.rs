@@ -13,7 +13,7 @@ use crate::{
     compiler::{Compiler, VarTypeChecked},
     config::IMPRECISE_DIVISION,
     data_types::ID_STRING,
-    input_primitives::{Input, ReturnValue},
+    input_primitives::{Input, ScratchValue},
 };
 
 impl Compiler<'_> {
@@ -94,13 +94,7 @@ impl Compiler<'_> {
             return self.constants.get_int((out == comp) as i64, builder);
         }
 
-        let var_checker = |ptr| {
-            self.cache
-                .variable_vals
-                .get(&ptr)
-                .map(|n| n.into())
-                .unwrap()
-        };
+        let var_checker = |ptr| self.cache.get_type(ptr);
 
         let at = a.expected_type(var_checker).ty;
         let bt = b.expected_type(var_checker).ty;
@@ -293,7 +287,7 @@ impl Compiler<'_> {
         // builder.inst_results(ins)[0]
     }
 
-    pub fn op_str_len(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>) -> ReturnValue {
+    pub fn op_str_len(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>) -> ScratchValue {
         let (input, is_const) = input.get_string(self, builder);
         let is_const = self.constants.get_int(i64::from(is_const), builder);
 
@@ -306,7 +300,7 @@ impl Compiler<'_> {
         );
         let res = builder.inst_results(inst)[0];
         let res = builder.ins().fcvt_from_sint(F64, res);
-        ReturnValue::Num(res)
+        ScratchValue::Num(res)
     }
 
     pub fn op_random(
@@ -314,7 +308,7 @@ impl Compiler<'_> {
         a: &Input,
         b: &Input,
         builder: &mut FunctionBuilder<'_>,
-    ) -> ReturnValue {
+    ) -> ScratchValue {
         let (a, a_is_decimal) = a.get_number_with_decimal_check(self, builder);
         let (b, b_is_decimal) = b.get_number_with_decimal_check(self, builder);
 
@@ -328,13 +322,13 @@ impl Compiler<'_> {
             &[a, b, is_decimal],
         );
         let res = builder.inst_results(inst)[0];
-        ReturnValue::Num(res)
+        ScratchValue::Num(res)
     }
 
-    pub fn op_m_floor(&mut self, n: &Input, builder: &mut FunctionBuilder<'_>) -> ReturnValue {
+    pub fn op_m_floor(&mut self, n: &Input, builder: &mut FunctionBuilder<'_>) -> ScratchValue {
         let n = n.get_number(self, builder);
         let result = self.floor_call(n, builder);
-        ReturnValue::Num(result)
+        ScratchValue::Num(result)
     }
 
     pub fn op_str_letter(

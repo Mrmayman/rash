@@ -58,7 +58,9 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         compiler.compile_block(block, &mut builder);
     }
 
-    compiler.cache.save(&mut builder, &mut compiler.constants);
+    compiler
+        .cache
+        .save(&mut builder, &mut compiler.constants, memory);
 
     builder.seal_all_blocks();
 

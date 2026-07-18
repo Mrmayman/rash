@@ -5,9 +5,9 @@ use cranelift::prelude::{
 
 use crate::{
     callbacks,
-    compiler::Compiler,
+    compiler::{Compiler, VarTypeChecked},
     data_types::ID_STRING,
-    input_primitives::{Ptr, ReturnValue},
+    input_primitives::{Ptr, ScratchValue},
 };
 
 impl Compiler<'_> {
@@ -21,21 +21,17 @@ impl Compiler<'_> {
     }
 
     pub fn ins_drop_obj(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
-        let obj = match &self
-            .cache
-            .variable_vals
-            .get(&ptr)
-            .unwrap_or_else(|| panic!("variable {ptr:?} should have been stored in cache"))
-            .val
-        {
-            ReturnValue::Num(_) | ReturnValue::Bool(_) => {
-                return;
-            }
-            ReturnValue::String([i2, i3, i4]) => {
+        if let VarTypeChecked::Number | VarTypeChecked::Bool = self.cache.get_type(ptr).ty {
+            return;
+        }
+
+        let obj = match &self.cache.get(ptr, builder, &mut self.constants).val {
+            ScratchValue::String([i2, i3, i4]) => {
                 let id = self.constants.get_int(ID_STRING, builder);
                 [id, *i2, *i3, *i4]
             }
-            ReturnValue::Object(obj) => *obj,
+            ScratchValue::Object(obj) => *obj,
+            _ => return,
         };
 
         self.call_function(
