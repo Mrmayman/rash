@@ -12,8 +12,6 @@ Note: Currently the interpreter cannot load SB3 files, this was for the old vers
 
 - `repeated sum.sb3` is for checking the performance of repeated addition.
 
-- `vartest.sb3` and `block test` - The purpose of these change frequently. Used to test blocks.
-
 # Made by someone else
 
 - `Pong 1 Sprite 1 Script.sb3` - https://scratch.mit.edu/projects/16088555.
