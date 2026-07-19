@@ -60,18 +60,14 @@ pub mod builder {
             set(PI, 0.0),
             set(D, 1.0),
             set(I, 0.0),
-            // A test of nested repeat loops
-            ScratchBlock::ControlRepeat(
-                1_000_000.0.into(),
-                // vec![ScratchBlock::ControlRepeat(
-                // 1000.0.into(),
+            c_repeat(
+                1_000_000.0,
                 vec![
                     // PI += ((8 * (I % 2)) - 4) / D
                     change(PI, fdiv(fsub(fmul(8.0, fmod(I, 2.0)), 4.0), D)),
                     change(D, 2.0),
                     change(I, 1.0),
                 ],
-                // )],
             ),
         ]
     }
@@ -88,6 +84,11 @@ pub mod builder {
         else_: Vec<ScratchBlock>,
     ) -> ScratchBlock {
         ScratchBlock::ControlIfElse(input.into(), then, else_)
+    }
+
+    #[must_use]
+    pub fn c_repeat(times: impl Into<Input>, blocks: Vec<ScratchBlock>) -> ScratchBlock {
+        ScratchBlock::ControlRepeat(times.into(), blocks)
     }
 
     #[must_use]

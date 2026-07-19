@@ -7,7 +7,7 @@ use utils::run_code;
 
 use crate::{
     Input, Ptr, ScratchBlock, ScratchObject,
-    builder::{c_if, c_if_else, fadd, fdiv, fmod, fmul, fsub},
+    builder::{c_if, c_if_else, c_repeat, fadd, fdiv, fmod, fmul, fsub},
     compiler::VarType,
 };
 
@@ -77,10 +77,10 @@ pub fn b_pi() {
 
 #[test]
 pub fn b_nested_repeat() {
-    let memory = run_code(&vec![ScratchBlock::ControlRepeat(
-        9.0.into(),
-        vec![ScratchBlock::ControlRepeat(
-            11.0.into(),
+    let memory = run_code(&vec![c_repeat(
+        9.0,
+        vec![c_repeat(
+            11.0,
             vec![set_var(
                 Ptr(0),
                 ScratchBlock::OpStrJoin(Ptr(0).into(), "H".into()),
@@ -222,8 +222,8 @@ pub fn b_if() {
 pub fn b_repeated_sum() {
     let memory = run_code(&vec![
         set_var(Ptr(7), fadd(Ptr(7), false)),
-        ScratchBlock::ControlRepeat(
-            100_000.0.into(),
+        c_repeat(
+            100_000.0,
             vec![
                 set_var(Ptr(7), fadd(Ptr(7), true)),
                 set_var(Ptr(7), fadd(Ptr(7), true)),
@@ -237,8 +237,8 @@ pub fn b_repeated_sum() {
 pub fn b_repeated_join_string() {
     let memory = run_code(&vec![
         set_var(Ptr(7), "hello "),
-        ScratchBlock::ControlRepeat(
-            100.0.into(),
+        c_repeat(
+            100.0,
             vec![
                 set_var(
                     Ptr(7),
@@ -261,8 +261,8 @@ pub fn b_random() {
         set_var(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
         set_var(Ptr(2), ScratchBlock::OpRandom("1".into(), "2".into())),
         set_var(Ptr(3), ScratchBlock::OpRandom("1.0".into(), "2".into())),
-        ScratchBlock::ControlRepeat(
-            100_000.0.into(),
+        c_repeat(
+            100_000.0,
             vec![set_var(
                 Ptr(4),
                 ScratchBlock::OpRandom(0.0.into(), 100.0.into()),
