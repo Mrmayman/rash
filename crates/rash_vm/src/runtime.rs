@@ -1,16 +1,11 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use cranelift::codegen::{
-    CompiledCode, FinalizedRelocTarget,
-    binemit::Reloc,
-    ir::{ExternalName, LibCall},
-};
+use cranelift::codegen::CompiledCode;
 use memmap2::Mmap;
 
 use crate::{
-    callbacks,
-    compile_fn::compile,
-    compiler::ScratchBlock,
+    compile_fn::{compile, prepare_buffer},
+    compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
     graphics::{CostumeData, CostumeHash, CostumeId, RunState, SpriteId, SpriteLoadData},
     input_primitives::STRINGS_TO_DROP,
@@ -425,7 +420,12 @@ impl ScratchThread {
     }
 
     #[must_use]
-    pub fn new(code: &CompiledCode, sprite_id: SpriteId, is_screen_refresh: bool) -> Self {
+    pub fn new(
+        code: &CompiledCode,
+        func_map: &FuncMap,
+        sprite_id: SpriteId,
+        is_screen_refresh: bool,
+    ) -> Self {
         let buf = code.code_buffer();
 
         let mut buffer = memmap2::MmapOptions::new()
@@ -435,7 +435,7 @@ impl ScratchThread {
 
         buffer.copy_from_slice(buf);
 
-        prepare_buffer(code, &buffer);
+        prepare_buffer(code, &buffer, func_map);
 
         let buffer = buffer.make_exec().unwrap();
 
@@ -500,90 +500,6 @@ impl ScratchThread {
 
         result.is_done()
     }
-}
-
-pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut) {
-    let start_ptr = buffer.as_ptr();
-    let end_ptr = unsafe { start_ptr.add(buffer.len()) };
-
-    for reloc in code.buffer.relocs() {
-        let target_addr: usize = match reloc.target {
-            FinalizedRelocTarget::ExternalName(ExternalName::LibCall(LibCall::FloorF64)) => {
-                callbacks::op::floor as *const () as usize
-            }
-            FinalizedRelocTarget::ExternalName(ExternalName::LibCall(other)) => {
-                panic!("unhandled libcall: {other:?}")
-            }
-            _ => continue, // user-defined funcs, handled separately
-        };
-
-        let offset = reloc.offset as usize;
-        assert!(
-            offset < buffer.len(),
-            "Relocation offset {offset} is out of mmap bounds!"
-        );
-        let at = unsafe { start_ptr.add(offset) };
-
-        // Safety: THIS SHIT IS COMPLETELY UNSAFE, you're on your own lol
-        match reloc.kind {
-            // A lot of this is lifted straight from Cranelift's own JIT backend
-            Reloc::X86CallPCRel4 | Reloc::X86PCRel4 => {
-                assert!(
-                    offset + 4 <= buffer.len(),
-                    "Not enough space for i32 relocation"
-                );
-                // Don't recompute this by hand, the +/-4 adjustment for
-                // "PC-relative to next instruction" is already folded into
-                // reloc.addend (it comes in as -4), so it's just:
-                let what = (target_addr as isize).wrapping_add(reloc.addend as isize);
-                let pcrel_long = what.wrapping_sub(at as isize);
-                let pcrel = i32::try_from(pcrel_long)
-                    .expect("x86 PC-relative call target out of +/-2GB range!");
-                unsafe { std::ptr::write_unaligned(at as *mut i32, pcrel) };
-            }
-            Reloc::Abs8 => {
-                assert!(
-                    offset + 8 <= buffer.len(),
-                    "Not enough space for u64 relocation"
-                );
-                let what = (target_addr as u64).wrapping_add(reloc.addend as u64);
-                unsafe { std::ptr::write_unaligned(at as *mut u64, what) };
-            }
-            Reloc::Arm64Call => {
-                assert!(
-                    offset + 4 <= buffer.len(),
-                    "Not enough space for ARM64 relocation"
-                );
-                let what = (target_addr as isize).wrapping_add(reloc.addend as isize);
-                let pc = at as isize;
-                // AArch64 PC-relative branches are relative to
-                // the branch instruction's own address — no
-                // +8 pipeline quirk like legacy A32/T32 has.
-                let byte_offset = what.wrapping_sub(pc);
-                assert_eq!(byte_offset & 0b11, 0, "misaligned arm64 call target");
-
-                let word_offset = byte_offset >> 2;
-                assert!(
-                    (-(1 << 25)..(1 << 25)).contains(&word_offset),
-                    "arm64 call target out of +/-128MB range"
-                );
-
-                unsafe {
-                    let instr = std::ptr::read_unaligned(at.cast::<u32>());
-                    let imm26 = (word_offset as u32) & 0x03FF_FFFF;
-                    let patched = (instr & 0xFC00_0000) | imm26; // keep opcode bits [31:26]
-                    std::ptr::write_unaligned(at as *mut u32, patched);
-                }
-            }
-            other => panic!("unhandled reloc kind {other:?} for a libcall"),
-        }
-    }
-
-    unsafe {
-        if !clear_cache::clear_cache(start_ptr, end_ptr) {
-            eprintln!("WARNING: Failed to clear_cache");
-        }
-    };
 }
 
 impl Drop for Runtime {

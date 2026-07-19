@@ -1,5 +1,5 @@
 use cranelift::{
-    codegen::ir::Inst,
+    codegen::ir::{Inst, UserExternalName},
     prelude::{AbiParam, FunctionBuilder, InstBuilder, Signature, Type, Value, isa::CallConv},
 };
 
@@ -12,6 +12,20 @@ pub mod var;
 
 impl Compiler<'_> {
     pub fn call_function(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        name: UserExternalName,
+        params: &[Type],
+        returns: &[Type],
+        arguments: &[Value],
+    ) -> Inst {
+        let func = self
+            .func_store
+            .get_function(self.call_conv, builder, name, params, returns);
+        builder.ins().call(func, arguments)
+    }
+
+    pub fn call_function_indirect(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         func: *const (),
@@ -28,11 +42,11 @@ impl Compiler<'_> {
             sig.returns.push(AbiParam::new(*ret));
         }
 
-        let sig = if let Some(sigref) = self.func_signatures.get(&sig) {
+        let sig = if let Some(sigref) = self.func_store.signatures.get(&sig) {
             *sigref
         } else {
             let r = builder.import_signature(sig.clone());
-            self.func_signatures.insert(sig.clone(), r);
+            self.func_store.signatures.insert(sig.clone(), r);
             r
         };
         builder.ins().call_indirect(sig, func, arguments)

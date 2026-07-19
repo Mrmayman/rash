@@ -4,8 +4,9 @@ use crate::{
     runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, Scripts},
 };
 
-print_func!(
+declare_module!(
     "custom_block.rs",
+    1,
     call_no_screen_refresh,
     call_screen_refresh
 );

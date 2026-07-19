@@ -383,7 +383,7 @@ impl ScratchValue {
             ScratchValue::Object(arr) => {
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number as *const (),
+                    callbacks::types::TO_NUMBER,
                     &[I64, I64, I64, I64],
                     &[F64],
                     &arr,
@@ -393,7 +393,7 @@ impl ScratchValue {
             ScratchValue::String(arr) => {
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number_from_string as *const (),
+                    callbacks::types::TO_NUMBER_FROM_STRING,
                     &[I64, I64, I64],
                     &[F64],
                     &arr,
@@ -415,7 +415,7 @@ impl ScratchValue {
 
                 compiler.call_function(
                     builder,
-                    callbacks::types::to_string_from_num as *const (),
+                    callbacks::types::TO_STRING_FROM_NUM,
                     &[F64, I64],
                     &[],
                     &[value, stack_ptr],
@@ -434,7 +434,7 @@ impl ScratchValue {
 
                 compiler.call_function(
                     builder,
-                    callbacks::types::to_string_from_bool as *const (),
+                    callbacks::types::TO_STRING_FROM_BOOL,
                     &[I64, I64],
                     &[],
                     &[value, stack_ptr],
@@ -525,7 +525,7 @@ fn obj_clone(
 ) -> ScratchValue {
     compiler.call_function(
         builder,
-        callbacks::types::clone_obj as *const (),
+        callbacks::types::CLONE_OBJ,
         &[I64, I64, I64, I64, I64],
         &[],
         &[i1, i2, i3, i4, compiler.temp_slot4.0],
@@ -547,7 +547,7 @@ fn obj_to_bool(
 ) -> Value {
     let ins = compiler.call_function(
         builder,
-        callbacks::types::to_bool as *const (),
+        callbacks::types::TO_BOOL,
         &[I64, I64, I64, I64],
         &[I64],
         &[i1, i2, i3, i4],
@@ -567,7 +567,7 @@ fn get_string_from_obj(
 
     compiler.call_function(
         builder,
-        callbacks::types::to_string as *const (),
+        callbacks::types::TO_STRING,
         &[I64, I64, I64, I64, I64],
         &[],
         &[i1, i2, i3, i4, stack_ptr],

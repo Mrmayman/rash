@@ -1,7 +1,8 @@
 use crate::data_types::{ScratchObject, string_to_number};
 
-print_func!(
+declare_module!(
     "types.rs",
+    5,
     to_bool,
     to_number,
     to_number_from_string,

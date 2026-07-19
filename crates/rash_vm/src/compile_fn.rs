@@ -2,9 +2,13 @@ use std::sync::Arc;
 
 use cranelift::{
     codegen::{
-        self,
+        self, CompiledCode, FinalizedRelocTarget,
+        binemit::Reloc,
         control::ControlPlane,
-        ir::{Function, StackSlotData, StackSlotKind, UserFuncName, types::I8},
+        ir::{
+            ExternalName, Function, LibCall, StackSlotData, StackSlotKind, UserExternalName,
+            UserFuncName, types::I8,
+        },
     },
     prelude::{
         AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
@@ -16,7 +20,8 @@ use cranelift::{
 };
 
 use crate::{
-    compiler::{Compiler, ScratchBlock},
+    callbacks,
+    compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,
     runtime::ScratchThread,
@@ -37,7 +42,8 @@ pub fn compile(
 
     let isa = get_isa();
 
-    let mut func = create_function(&*isa);
+    let (mut func, call_conv) = create_function(&*isa);
+    let func_map = declare_callbacks(&mut func);
     let mut func_ctx = FunctionBuilderContext::new();
     let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
 
@@ -97,6 +103,8 @@ pub fn compile(
         is_called_as_refresh,
         child_thread_ptr,
         temp_slot4,
+        func_map,
+        call_conv,
     );
 
     for block in script {
@@ -117,7 +125,34 @@ pub fn compile(
 
     println!("{}", func.display());
 
-    compile_ir(func, &isa, id, compiler.is_screen_refresh)
+    compile_ir(
+        func,
+        &compiler.func_store.func_map,
+        &isa,
+        id,
+        compiler.is_screen_refresh,
+    )
+}
+
+pub fn declare_callbacks(func: &mut Function) -> FuncMap {
+    fn import_module(
+        func: &mut Function,
+        func_map: &mut FuncMap,
+        items: &[(UserExternalName, *const ())],
+    ) {
+        for (name, _) in items {
+            let func_ref = func.declare_imported_user_function(name.clone());
+            func_map.insert(func_ref, name.clone());
+        }
+    }
+
+    let mut func_map = FuncMap::new();
+    import_module(func, &mut func_map, callbacks::custom_block::FUNCS);
+    import_module(func, &mut func_map, callbacks::env::FUNCS);
+    import_module(func, &mut func_map, callbacks::op::FUNCS);
+    import_module(func, &mut func_map, callbacks::repeat_stack::FUNCS);
+    import_module(func, &mut func_map, callbacks::types::FUNCS);
+    func_map
 }
 
 pub fn create_main_slot(
@@ -135,6 +170,7 @@ pub fn create_main_slot(
 
 fn compile_ir(
     func: Function,
+    func_map: &FuncMap,
     isa: &Arc<dyn TargetIsa>,
     id: SpriteId,
     is_screen_refresh: bool,
@@ -145,7 +181,7 @@ fn compile_ir(
 
     let code = ctx.compile(&**isa, &mut plane).unwrap();
 
-    ScratchThread::new(code, id, is_screen_refresh)
+    ScratchThread::new(code, func_map, id, is_screen_refresh)
 }
 
 fn prepare_screen_refresh_points(
@@ -180,8 +216,9 @@ pub fn get_isa() -> Arc<dyn TargetIsa> {
     isa_builder.finish(flags).unwrap()
 }
 
-fn create_function(isa: &dyn TargetIsa) -> Function {
-    let mut sig = Signature::new(CallConv::triple_default(isa.triple()));
+fn create_function(isa: &dyn TargetIsa) -> (Function, CallConv) {
+    let call_conv = CallConv::triple_default(isa.triple());
+    let mut sig = Signature::new(call_conv);
     sig.params.push(AbiParam::new(I64)); // Jump ID
     sig.params.push(AbiParam::new(I64)); // Repeat Stack
     sig.params.push(AbiParam::new(I64)); // Args pointer
@@ -190,5 +227,99 @@ fn create_function(isa: &dyn TargetIsa) -> Function {
     sig.params.push(AbiParam::new(I8)); // Is Screen Refresh?
     sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)
     sig.returns.push(AbiParam::new(I64));
-    Function::with_name_signature(UserFuncName::default(), sig)
+    (
+        Function::with_name_signature(UserFuncName::default(), sig),
+        call_conv,
+    )
+}
+
+pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: &FuncMap) {
+    let start_ptr = buffer.as_ptr();
+    let end_ptr = unsafe { start_ptr.add(buffer.len()) };
+
+    for reloc in code.buffer.relocs() {
+        let FinalizedRelocTarget::ExternalName(target_name) = &reloc.target else {
+            continue;
+        };
+        let target_addr: usize = match target_name {
+            ExternalName::LibCall(LibCall::FloorF64) => callbacks::op::floor as *const () as usize,
+            ExternalName::LibCall(other) => {
+                panic!("unhandled libcall: {other:?}")
+            }
+            ExternalName::User(name_ref) => {
+                let name = func_map.get_by_left(name_ref).unwrap();
+                let funcs = &callbacks::FUNCS;
+                let func = funcs.get(name).unwrap();
+                *func as usize
+            }
+            _ => panic!("unhandled external name: {target_name:?}"),
+        };
+
+        let offset = reloc.offset as usize;
+        assert!(
+            offset < buffer.len(),
+            "Relocation offset {offset} is out of mmap bounds!"
+        );
+        let at = unsafe { start_ptr.add(offset) };
+
+        // Safety: THIS SHIT IS COMPLETELY UNSAFE, you're on your own lol
+        match reloc.kind {
+            // A lot of this is lifted straight from Cranelift's own JIT backend
+            Reloc::X86CallPCRel4 | Reloc::X86PCRel4 => {
+                assert!(
+                    offset + 4 <= buffer.len(),
+                    "Not enough space for i32 relocation"
+                );
+                // Don't recompute this by hand, the +/-4 adjustment for
+                // "PC-relative to next instruction" is already folded into
+                // reloc.addend (it comes in as -4), so it's just:
+                let what = (target_addr as isize).wrapping_add(reloc.addend as isize);
+                let pcrel_long = what.wrapping_sub(at as isize);
+                let pcrel = i32::try_from(pcrel_long)
+                    .expect("x86 PC-relative call target out of +/-2GB range!");
+                unsafe { std::ptr::write_unaligned(at as *mut i32, pcrel) };
+            }
+            Reloc::Abs8 => {
+                assert!(
+                    offset + 8 <= buffer.len(),
+                    "Not enough space for u64 relocation"
+                );
+                let what = (target_addr as u64).wrapping_add(reloc.addend as u64);
+                unsafe { std::ptr::write_unaligned(at as *mut u64, what) };
+            }
+            Reloc::Arm64Call => {
+                assert!(
+                    offset + 4 <= buffer.len(),
+                    "Not enough space for ARM64 relocation"
+                );
+                let what = (target_addr as isize).wrapping_add(reloc.addend as isize);
+                let pc = at as isize;
+                // AArch64 PC-relative branches are relative to
+                // the branch instruction's own address — no
+                // +8 pipeline quirk like legacy A32/T32 has.
+                let byte_offset = what.wrapping_sub(pc);
+                assert_eq!(byte_offset & 0b11, 0, "misaligned arm64 call target");
+
+                let word_offset = byte_offset >> 2;
+                assert!(
+                    (-(1 << 25)..(1 << 25)).contains(&word_offset),
+                    "arm64 call target out of +/-128MB range"
+                );
+
+                unsafe {
+                    let instr = std::ptr::read_unaligned(at.cast::<u32>());
+                    let imm26 = (word_offset as u32) & 0x03FF_FFFF;
+                    let patched = (instr & 0xFC00_0000) | imm26; // keep opcode bits [31:26]
+                    std::ptr::write_unaligned(at as *mut u32, patched);
+                }
+            }
+            other => panic!("unhandled reloc kind {other:?} for a libcall"),
+        }
+    }
+
+    unsafe {
+        if !clear_cache::clear_cache(start_ptr, end_ptr) {
+            eprintln!("WARNING: Failed to clear_cache");
+        }
+    };
 }

@@ -36,7 +36,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::types::drop_obj as *const (),
+            callbacks::types::DROP_OBJ,
             &[I64, I64, I64, I64],
             &[],
             &obj,
@@ -53,7 +53,7 @@ impl Compiler<'_> {
     ) -> (Value, Value) {
         self.call_function(
             builder,
-            callbacks::types::to_number_with_decimal_check as *const (),
+            callbacks::types::TO_NUMBER_WITH_DECIMAL_CHECK,
             &[I64, I64, I64, I64, I64],
             &[],
             &[i1, i2, i3, i4, self.temp_slot4.0],

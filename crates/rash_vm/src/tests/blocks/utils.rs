@@ -13,20 +13,21 @@ use cranelift::{
 };
 
 use crate::{
-    compile_fn::{create_main_slot, get_isa},
+    compile_fn::{create_main_slot, declare_callbacks, get_isa, prepare_buffer},
     compiler::{Compiler, MEMORY, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,
-    runtime::prepare_buffer,
 };
 
 fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
     let isa = get_isa();
 
-    let mut sig = Signature::new(CallConv::triple_default(isa.triple()));
+    let call_conv = CallConv::triple_default(isa.triple());
+    let mut sig = Signature::new(call_conv);
     sig.params.push(AbiParam::new(I64));
     sig.returns.push(AbiParam::new(I64));
     let mut func = Function::with_name_signature(UserFuncName::default(), sig);
+    let func_map = declare_callbacks(&mut func);
 
     let mut func_ctx = FunctionBuilderContext::new();
     let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
@@ -52,6 +53,8 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
         zero,
         zero,
         temp_slot4,
+        func_map,
+        call_conv,
     );
 
     for block in program {
@@ -85,7 +88,7 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     buffer.copy_from_slice(code.code_buffer());
 
-    prepare_buffer(code, &buffer);
+    prepare_buffer(code, &buffer, &compiler.func_store.func_map);
 
     // Machine code dump
     // let ptr = buffer.as_ptr();

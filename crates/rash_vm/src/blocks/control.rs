@@ -134,7 +134,7 @@ impl Compiler<'_> {
     fn call_stack_pop(&mut self, builder: &mut FunctionBuilder<'_>) -> Value {
         let inst = self.call_function(
             builder,
-            callbacks::repeat_stack::stack_pop as *const (),
+            callbacks::repeat_stack::STACK_POP,
             &[I64],
             &[I64],
             &[self.loop_stack_ptr],
@@ -145,7 +145,7 @@ impl Compiler<'_> {
     fn call_stack_push(&mut self, builder: &mut FunctionBuilder<'_>, incremented: Value) {
         self.call_function(
             builder,
-            callbacks::repeat_stack::stack_push as *const (),
+            callbacks::repeat_stack::STACK_PUSH,
             &[I64, I64],
             &[],
             &[self.loop_stack_ptr, incremented],

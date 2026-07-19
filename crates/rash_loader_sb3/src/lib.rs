@@ -503,7 +503,7 @@ impl Block {
                     .current_custom_block
                     .as_ref()
                     .ok_or(RashError::blockdef_not_found("current_custom_block"))?;
-                println!("{:?}", ctx.custom_block_defs);
+                // println!("{:?}", ctx.custom_block_defs);
                 let blockdef = ctx
                     .custom_block_defs
                     .get(current_custom_block)

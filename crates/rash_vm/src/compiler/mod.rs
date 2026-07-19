@@ -4,8 +4,15 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use bimap::BiHashMap;
 use cranelift::{
-    codegen::ir::{SigRef, StackSlot},
+    codegen::{
+        ir::{
+            AbiParam, ExtFuncData, ExternalName, FuncRef, SigRef, StackSlot, Type,
+            UserExternalName, UserExternalNameRef,
+        },
+        isa::CallConv,
+    },
     prelude::{
         Block, FunctionBuilder, InstBuilder, Signature, Value,
         types::{F64, I64},
@@ -281,8 +288,9 @@ pub struct Compiler<'compiler> {
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
-    pub func_signatures: HashMap<Signature, SigRef>,
     pub program_analysis: Effects,
+    pub func_store: FunctionStore,
+    pub call_conv: CallConv,
 
     pub cache: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
@@ -337,6 +345,8 @@ impl<'a> Compiler<'a> {
         is_called_as_refresh: Value,
         child_thread_ptr: Value,
         temp_slot4: (Value, StackSlot),
+        func_map: FuncMap,
+        call_conv: CallConv,
     ) -> Self {
         let mut constants = ConstantMap::new();
 
@@ -367,8 +377,9 @@ impl<'a> Compiler<'a> {
             cache,
             program_analysis,
             constants,
+            call_conv,
             break_points: vec![code_block],
-            func_signatures: HashMap::new(),
+            func_store: FunctionStore::new(func_map),
             break_counter: 0,
             repeat_stack: 0,
             memory,
@@ -500,7 +511,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_go_to as *const (),
                     &[I64, I64, F64, F64],
@@ -513,7 +524,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_change_x as *const (),
                     &[I64, I64, F64],
@@ -526,7 +537,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_change_y as *const (),
                     &[I64, I64, F64],
@@ -539,7 +550,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_set_x as *const (),
                     &[I64, I64, F64],
@@ -552,7 +563,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_set_y as *const (),
                     &[I64, I64, F64],
@@ -563,7 +574,7 @@ impl<'a> Compiler<'a> {
             ScratchBlock::MotionGetX => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function(
+                let inst = self.call_function_indirect(
                     builder,
                     RunState::c_get_x as *const (),
                     &[I64, I64],
@@ -577,7 +588,7 @@ impl<'a> Compiler<'a> {
             ScratchBlock::MotionGetY => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function(
+                let inst = self.call_function_indirect(
                     builder,
                     RunState::c_get_y as *const (),
                     &[I64, I64],
@@ -592,7 +603,7 @@ impl<'a> Compiler<'a> {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
                 let shown = self.constants.get_int(*shown as i64, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_shown as *const (),
                     &[I64, I64, I64],
@@ -601,13 +612,8 @@ impl<'a> Compiler<'a> {
                 );
             }
             ScratchBlock::ControlDaysSince2000 => {
-                let inst = self.call_function(
-                    builder,
-                    callbacks::days_since_2000 as *const (),
-                    &[],
-                    &[F64],
-                    &[],
-                );
+                let inst =
+                    self.call_function(builder, callbacks::env::DAYS_SINCE_2000, &[], &[F64], &[]);
                 let val = builder.inst_results(inst)[0];
                 return Some(ScratchValue::Num(val));
             }
@@ -624,7 +630,7 @@ impl<'a> Compiler<'a> {
 
         self.call_function(
             builder,
-            callbacks::types::clone_obj as *const (),
+            callbacks::types::CLONE_OBJ,
             &[I64, I64, I64, I64, I64],
             &[],
             &[i1, i2, i3, i4, self.temp_slot4.0],
@@ -658,5 +664,64 @@ impl<'a> Compiler<'a> {
 
             self.cache.reinit(builder, &mut self.constants, self.memory);
         }
+    }
+}
+
+pub type FuncMap = BiHashMap<UserExternalNameRef, UserExternalName>;
+
+pub struct FunctionStore {
+    pub func_map: FuncMap,
+    pub signatures: HashMap<Signature, SigRef>,
+    definitions: HashMap<UserExternalName, FuncRef>,
+}
+
+impl FunctionStore {
+    pub fn new(func_map: FuncMap) -> Self {
+        Self {
+            func_map,
+            signatures: HashMap::new(),
+            definitions: HashMap::new(),
+        }
+    }
+
+    pub fn get_function(
+        &mut self,
+        call_conv: CallConv,
+        builder: &mut FunctionBuilder,
+        name: UserExternalName,
+        params: &[Type],
+        returns: &[Type],
+    ) -> FuncRef {
+        if let Some(func_ref) = self.definitions.get(&name) {
+            return *func_ref;
+        }
+
+        let mut sig = Signature::new(call_conv);
+        for param in params {
+            sig.params.push(AbiParam::new(*param));
+        }
+        for ret in returns {
+            sig.returns.push(AbiParam::new(*ret));
+        }
+
+        let signature = if let Some(sigref) = self.signatures.get(&sig) {
+            *sigref
+        } else {
+            let r = builder.import_signature(sig.clone());
+            self.signatures.insert(sig.clone(), r);
+            r
+        };
+
+        let func_ref = self.func_map.get_by_right(&name).unwrap();
+        let func = ExtFuncData {
+            name: ExternalName::User(*func_ref),
+            signature,
+            colocated: false,
+            patchable: false,
+        };
+        let func_ref = builder.import_function(func);
+        self.definitions.insert(name, func_ref);
+
+        func_ref
     }
 }

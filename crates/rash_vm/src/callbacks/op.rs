@@ -2,8 +2,9 @@ use rand::Rng;
 
 use crate::ScratchObject;
 
-print_func!(
+declare_module!(
     "op.rs",
+    3,
     floor,
     sin,
     cos,
@@ -45,6 +46,29 @@ pub extern "C" fn round(value: f64) -> f64 {
     } else {
         value.round()
     }
+}
+
+/// Callback to compare objects (Scratch-spec), returns i8-shaped value
+pub unsafe extern "C" fn cmp(
+    a1: i64,
+    a2: i64,
+    a3: i64,
+    a4: i64,
+    b1: i64,
+    b2: i64,
+    b3: i64,
+    b4: i64,
+) -> i64 {
+    // println!("{a1}, {a2}, {a3}, {a4}");
+    let a: ScratchObject = unsafe { std::mem::transmute([a1, a2, a3, a4]) };
+    // println!("{b1}, {b2}, {b3}, {b4}");
+    let b: ScratchObject = unsafe { std::mem::transmute([b1, b2, b3, b4]) };
+    // println!("{a:?}, {b:?}");
+    let r = a.scratch_cmp(&b) as i64;
+    // TODO: there's a memory lifetime bug in b
+    // This will be fixed when we migrate to SmolStr
+    std::mem::forget(b);
+    r
 }
 
 pub unsafe extern "C" fn str_contains(
@@ -166,29 +190,6 @@ pub unsafe extern "C" fn str_len(s: *mut String, is_const: i64) -> usize {
         }
     }
     len
-}
-
-/// Callback to compare objects (Scratch-spec), returns i8-shaped value
-pub unsafe extern "C" fn cmp(
-    a1: i64,
-    a2: i64,
-    a3: i64,
-    a4: i64,
-    b1: i64,
-    b2: i64,
-    b3: i64,
-    b4: i64,
-) -> i64 {
-    // println!("{a1}, {a2}, {a3}, {a4}");
-    let a: ScratchObject = unsafe { std::mem::transmute([a1, a2, a3, a4]) };
-    // println!("{b1}, {b2}, {b3}, {b4}");
-    let b: ScratchObject = unsafe { std::mem::transmute([b1, b2, b3, b4]) };
-    // println!("{a:?}, {b:?}");
-    let r = a.scratch_cmp(&b) as i64;
-    // TODO: there's a memory lifetime bug in b
-    // This will be fixed when we migrate to SmolStr
-    std::mem::forget(b);
-    r
 }
 
 /// Callback from JIT code to generate a random number.

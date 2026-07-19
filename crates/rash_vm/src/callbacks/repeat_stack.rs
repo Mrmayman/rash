@@ -1,4 +1,4 @@
-print_func!("repeat_stack.rs", stack_push, stack_pop);
+declare_module!("repeat_stack.rs", 4, stack_push, stack_pop);
 
 pub unsafe extern "C" fn stack_push(ptr: *mut Vec<i64>, val: i64) {
     debug_assert!(!ptr.is_null());

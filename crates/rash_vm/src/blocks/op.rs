@@ -19,37 +19,19 @@ use crate::{
 impl Compiler<'_> {
     pub fn op_m_tan(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(
-            builder,
-            callbacks::op::tan as *const (),
-            &[F64],
-            &[F64],
-            &[num],
-        );
+        let inst = self.call_function(builder, callbacks::op::TAN, &[F64], &[F64], &[num]);
         builder.inst_results(inst)[0]
     }
 
     pub fn op_m_cos(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(
-            builder,
-            callbacks::op::cos as *const (),
-            &[F64],
-            &[F64],
-            &[num],
-        );
+        let inst = self.call_function(builder, callbacks::op::COS, &[F64], &[F64], &[num]);
         builder.inst_results(inst)[0]
     }
 
     pub fn op_m_sin(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(
-            builder,
-            callbacks::op::sin as *const (),
-            &[F64],
-            &[F64],
-            &[num],
-        );
+        let inst = self.call_function(builder, callbacks::op::SIN, &[F64], &[F64], &[num]);
         builder.inst_results(inst)[0]
     }
 
@@ -139,7 +121,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op::cmp as *const (),
+            callbacks::op::CMP,
             &[I64; 8],
             &[I64],
             &[
@@ -225,7 +207,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::op::str_join as *const (),
+            callbacks::op::STR_JOIN,
             &[I64, I64, I64, I64, I64],
             &[],
             &[a, b, self.temp_slot4.0, a_is_const, b_is_const],
@@ -246,7 +228,7 @@ impl Compiler<'_> {
 
         self.call_function(
             builder,
-            callbacks::dbg_log as *const (),
+            callbacks::env::DBG_LOG,
             &[I64, I64],
             &[],
             &[a, a_is_const],
@@ -293,7 +275,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op::str_len as *const (),
+            callbacks::op::STR_LEN,
             &[I64, I64],
             &[I64],
             &[input, is_const],
@@ -316,7 +298,7 @@ impl Compiler<'_> {
 
         let inst = self.call_function(
             builder,
-            callbacks::op::random as *const (),
+            callbacks::op::RANDOM,
             &[F64, F64, I64],
             &[F64],
             &[a, b, is_decimal],
@@ -343,7 +325,7 @@ impl Compiler<'_> {
         let is_const = self.constants.get_int(i64::from(is_const), builder);
         self.call_function(
             builder,
-            callbacks::op::str_letter as *const (),
+            callbacks::op::STR_LETTER,
             &[I64, I64, F64, I64],
             &[],
             &[string, is_const, letter, self.temp_slot4.0],
@@ -370,7 +352,7 @@ impl Compiler<'_> {
 
         let ins = self.call_function(
             builder,
-            callbacks::op::str_contains as *const (),
+            callbacks::op::STR_CONTAINS,
             &[I64, I64, I64, I64],
             &[I64],
             &[string, string_is_const, pattern, pattern_is_const],
@@ -381,13 +363,7 @@ impl Compiler<'_> {
 
     pub fn op_round(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(
-            builder,
-            callbacks::op::round as *const (),
-            &[F64],
-            &[F64],
-            &[num],
-        );
+        let inst = self.call_function(builder, callbacks::op::ROUND, &[F64], &[F64], &[num]);
         builder.inst_results(inst)[0]
     }
 }
