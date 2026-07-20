@@ -11,12 +11,16 @@ use rash_vm::{
     runtime::{CustomBlockId, ProjectBuilder, Runtime, Script, SpriteBuilder},
 };
 
-use crate::error::{ErrExt, ErrorConvertPath};
+use crate::{
+    blocks::{control, op},
+    error::{ErrExt, ErrorConvertPath},
+    get::{get_variable_field, number, string},
+};
+use rash_loader_sb3_json as json;
 
 mod blocks;
 mod error;
-mod get_utils;
-pub mod json;
+mod get;
 
 pub type Res<T> = Result<T, error::Error>;
 
@@ -297,7 +301,7 @@ fn load_blocks(
         let mut id = hat_block.next.clone();
 
         let custom_block = if hat_block.opcode == "procedures_definition" {
-            let details = hat_block.get_custom_block_prototype()?;
+            let details = get::custom_block_prototype(hat_block)?;
             let details = sprite_json.blocks.get(details).unwrap();
             let JsonBlock::Block { block: details } = details else {
                 eprintln!("[error] Array block encountered");
@@ -328,7 +332,7 @@ fn load_blocks(
                 break;
             };
 
-            blocks.push(block.compile(&mut ctx).trace(&format!(
+            blocks.push(compile(block, &mut ctx).trace(&format!(
                 "ProjectLoader::build (sprite: {})",
                 sprite_json.name
             ))?);
@@ -368,163 +372,95 @@ fn load_blocks(
     Ok(())
 }
 
-impl Block {
-    pub fn compile(&self, ctx: &mut CompileContext) -> Res<ScratchBlock> {
-        match self.opcode.as_str() {
-            "data_setvariableto" => {
-                // self.fields.VARIABLE[1]
-                let variable_id = self.get_variable_field()?;
-                let variable_ptr = ctx.get_var(variable_id);
+pub fn compile(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
+    match b.opcode.as_str() {
+        "data_setvariableto" => {
+            // b.fields.VARIABLE[1]
+            let variable_id = get_variable_field(b)?;
+            let variable_ptr = ctx.get_var(variable_id);
 
-                let value = self
-                    .get_number_input(ctx, "VALUE")
-                    .trace("Block::compile.data_setvariableto")?;
+            let value = number(b, ctx, "VALUE").trace("Block::compile.data_setvariableto")?;
 
-                Ok(ScratchBlock::VarSet(variable_ptr, value))
-            }
-            "operator_add" => self.c_op_add(ctx),
-            "operator_subtract" => self.c_op_subtract(ctx),
-            "operator_multiply" => self.c_op_multiply(ctx),
-            "operator_divide" => self.c_op_divide(ctx),
-            "operator_random" => self.c_op_random(ctx),
-            "operator_join" => self.c_op_join(ctx),
-            "operator_letter_of" => self.c_op_str_letter_of(ctx),
-            "operator_contains" => self.c_op_str_contains(ctx),
-            "operator_length" => self.c_op_str_length(ctx),
-            "operator_mod" => self.c_op_mod(ctx),
-            "operator_round" => self.c_op_round(ctx),
-            "operator_gt" => self.c_op_cmp(ctx, Ordering::Greater),
-            "operator_lt" => self.c_op_cmp(ctx, Ordering::Less),
-            "operator_equals" => self.c_op_cmp(ctx, Ordering::Equal),
-            "operator_and" => Ok(self.c_op_and(ctx)),
-            "operator_or" => Ok(self.c_op_or(ctx)),
-            "operator_not" => self.c_op_not(ctx),
-            "operator_mathop" => self.c_op_mathop(ctx),
-            "data_changevariableby" => {
-                let variable = self.get_variable_field()?;
-                let value = self
-                    .get_number_input(ctx, "VALUE")
-                    .trace("Block::compile.data_changevariableby")?;
-                Ok(ScratchBlock::VarChange(ctx.get_var(variable), value))
-            }
-            "motion_gotoxy" => {
-                let x = self
-                    .get_number_input(ctx, "X")
-                    .trace("Block::compile.motion_gotoxy")?;
-                let y = self
-                    .get_number_input(ctx, "Y")
-                    .trace("Block::compile.motion_gotoxy")?;
-
-                Ok(ScratchBlock::MotionGoToXY(x, y))
-            }
-            "motion_setx" => {
-                let n = self
-                    .get_number_input(ctx, "X")
-                    .trace("Block::compile.motion_setx")?;
-                Ok(ScratchBlock::MotionSetX(n))
-            }
-            "motion_sety" => {
-                let n = self
-                    .get_number_input(ctx, "Y")
-                    .trace("Block::compile.motion_sety")?;
-                Ok(ScratchBlock::MotionSetY(n))
-            }
-            "motion_changexby" => {
-                let val = self
-                    .get_number_input(ctx, "DX")
-                    .trace("Block::compile.motion_changexby")?;
-                Ok(ScratchBlock::MotionChangeX(val))
-            }
-            "motion_changeyby" => {
-                let val = self
-                    .get_number_input(ctx, "DY")
-                    .trace("Block::compile.motion_changeyby")?;
-                Ok(ScratchBlock::MotionChangeY(val))
-            }
-            "looks_show" => Ok(ScratchBlock::LooksShown(true)),
-            "looks_hide" => Ok(ScratchBlock::LooksShown(false)),
-            "control_if" => self.c_cont_if(ctx),
-            "control_if_else" => self.c_cont_if_else(ctx),
-            "control_repeat" => self.c_cont_repeat(ctx),
-            "control_repeat_until" => self.c_cont_repeat_until(ctx),
-            "control_forever" => self.c_cont_forever(ctx),
-            "looks_say" => {
-                // TODO: implement this properly
-                let message = self
-                    .get_string_input(ctx, "MESSAGE")
-                    .trace("Block::compile.looks_say")?;
-                Ok(ScratchBlock::Log(message))
-            }
-            "sensing_dayssince2000" => Ok(ScratchBlock::ControlDaysSince2000),
-            "procedures_call" => {
-                let block = ctx.get_custom_block(self)?;
-
-                let args: Res<Vec<Input>> = block
-                    .args
-                    .iter()
-                    .map(|n| {
-                        self.get_number_input(ctx, n)
-                            .trace("Block::compile.procedures_call")
-                    })
-                    .collect();
-                let args = args?;
-
-                Ok(if block.is_screen_refresh {
-                    ScratchBlock::FunctionCallScreenRefresh(block.id, args)
-                } else {
-                    ScratchBlock::FunctionCallNoScreenRefresh(block.id, args)
-                })
-            }
-            "argument_reporter_string_number" => self.c_argument_reporter(ctx),
-            _ => {
-                println!("Unknown opcode: {}\n{self:#?}\n", self.opcode);
-                Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
-            }
+            Ok(ScratchBlock::VarSet(variable_ptr, value))
         }
-    }
+        "operator_add" => op::add(b, ctx),
+        "operator_subtract" => op::subtract(b, ctx),
+        "operator_multiply" => op::multiply(b, ctx),
+        "operator_divide" => op::divide(b, ctx),
+        "operator_random" => op::random(b, ctx),
+        "operator_join" => op::str_join(b, ctx),
+        "operator_letter_of" => op::str_letter_of(b, ctx),
+        "operator_contains" => op::str_contains(b, ctx),
+        "operator_length" => op::str_length(b, ctx),
+        "operator_mod" => op::modulo(b, ctx),
+        "operator_round" => op::round(b, ctx),
+        "operator_gt" => op::cmp(b, ctx, Ordering::Greater),
+        "operator_lt" => op::cmp(b, ctx, Ordering::Less),
+        "operator_equals" => op::cmp(b, ctx, Ordering::Equal),
+        "operator_and" => Ok(op::and(b, ctx)),
+        "operator_or" => Ok(op::or(b, ctx)),
+        "operator_not" => op::not(b, ctx),
+        "operator_mathop" => op::mathop(b, ctx),
+        "data_changevariableby" => {
+            let variable = get_variable_field(b)?;
+            let value = number(b, ctx, "VALUE").trace("Block::compile.data_changevariableby")?;
+            Ok(ScratchBlock::VarChange(ctx.get_var(variable), value))
+        }
+        "motion_gotoxy" => {
+            let x = number(b, ctx, "X").trace("Block::compile.motion_gotoxy")?;
+            let y = number(b, ctx, "Y").trace("Block::compile.motion_gotoxy")?;
 
-    fn c_argument_reporter(&self, ctx: &mut CompileContext<'_>) -> Res<ScratchBlock> {
-        let arg = self.fields.get("VALUE").ok_or(RashError::field_not_found(
-            "self(argument_reporter_string_number).fields.VALUE",
-        ))?;
-        match arg {
-            serde_json::Value::Array(values) => {
-                let arg_name = values
-                    .first()
-                    .ok_or(RashError::field_not_found(
-                        "self(argument_reporter_string_number).fields.VALUE[0]",
-                    ))?
-                    .as_str()
-                    .ok_or(RashError::field_not_found(
-                        "self(argument_reporter_string_number).fields.VALUE[0]: not string",
-                    ))?;
+            Ok(ScratchBlock::MotionGoToXY(x, y))
+        }
+        "motion_setx" => {
+            let n = number(b, ctx, "X").trace("Block::compile.motion_setx")?;
+            Ok(ScratchBlock::MotionSetX(n))
+        }
+        "motion_sety" => {
+            let n = number(b, ctx, "Y").trace("Block::compile.motion_sety")?;
+            Ok(ScratchBlock::MotionSetY(n))
+        }
+        "motion_changexby" => {
+            let val = number(b, ctx, "DX").trace("Block::compile.motion_changexby")?;
+            Ok(ScratchBlock::MotionChangeX(val))
+        }
+        "motion_changeyby" => {
+            let val = number(b, ctx, "DY").trace("Block::compile.motion_changeyby")?;
+            Ok(ScratchBlock::MotionChangeY(val))
+        }
+        "looks_show" => Ok(ScratchBlock::LooksShown(true)),
+        "looks_hide" => Ok(ScratchBlock::LooksShown(false)),
+        "control_if" => control::c_if(b, ctx),
+        "control_if_else" => control::c_if_else(b, ctx),
+        "control_repeat" => control::repeat(b, ctx),
+        "control_repeat_until" => control::repeat_until(b, ctx),
+        "control_forever" => control::forever(b, ctx),
+        "looks_say" => {
+            // TODO: implement this properly
+            let message = string(b, ctx, "MESSAGE").trace("Block::compile.looks_say")?;
+            Ok(ScratchBlock::Log(message))
+        }
+        "sensing_dayssince2000" => Ok(ScratchBlock::ControlDaysSince2000),
+        "procedures_call" => {
+            let block = ctx.get_custom_block(b)?;
 
-                let current_custom_block = ctx
-                    .current_custom_block
-                    .as_ref()
-                    .ok_or(RashError::blockdef_not_found("current_custom_block"))?;
-                // println!("{:?}", ctx.custom_block_defs);
-                let blockdef = ctx
-                    .custom_block_defs
-                    .get(current_custom_block)
-                    .ok_or(RashError::blockdef_not_found("blockdef"))?;
-                let name_to_id = blockdef
-                    .args_name_to_id
-                    .as_ref()
-                    .ok_or(RashError::blockdef_not_found("blockdef.name_to_id"))?;
-                let arg_id = name_to_id
-                    .get(arg_name)
-                    .ok_or(RashError::blockdef_not_found("blockdef.name_to_id.get"))?;
+            let args: Res<Vec<Input>> = block
+                .args
+                .iter()
+                .map(|n| number(b, ctx, n).trace("Block::compile.procedures_call"))
+                .collect();
+            let args = args?;
 
-                let position = blockdef
-                    .args
-                    .iter()
-                    .position(|n| n == arg_id)
-                    .ok_or(RashError::blockdef_not_found("blockdef.args"))?;
-
-                Ok(ScratchBlock::FunctionGetArg(position))
-            }
-            _ => todo!(),
+            Ok(if block.is_screen_refresh {
+                ScratchBlock::FunctionCallScreenRefresh(block.id, args)
+            } else {
+                ScratchBlock::FunctionCallNoScreenRefresh(block.id, args)
+            })
+        }
+        "argument_reporter_string_number" => blocks::argument_reporter(b, ctx),
+        _ => {
+            println!("Unknown opcode: {}\n{b:#?}\n", b.opcode);
+            Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
         }
     }
 }

@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 rash_vm.path = "../rash_vm"
+rash_loader_sb3_json.path = "../rash_loader_sb3_json"
 
 tempfile = "3"
-serde.workspace = true
 serde_json.workspace = true
 zip-extract = "0.2"
