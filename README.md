@@ -80,6 +80,9 @@ You can see the progress in implementing blocks in this [Google Docs spreadsheet
 - Compile and run Rash: `cargo run --release -- path/to/file.sb3`
 - To run the test suite, do: `cargo test`
 
+Env vars:
+- `RASH_PRINT_IR` to print the cranelift IR of the compiled code.
+
 # Contributing
 
 Feel free to submit any changes you make as a pull request, I'll be happy to review it.

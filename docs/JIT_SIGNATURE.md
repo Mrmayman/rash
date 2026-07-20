@@ -49,7 +49,7 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 - Can be `null` if you aren't calling any Custom Blocks.
 
 ## `*mut RunState`
-- Access to any sprite-specific data and global miscellanious state, especially for things like graphics.
+- Access to any sprite-specific data and global miscellaneous state, especially for things like graphics.
 - Can be `null` if this function doesn't do any graphical or audio operations.
 
 ## `bool`

@@ -72,7 +72,9 @@ fn run(program: &[ScratchBlock], memory: &[ScratchObject]) {
 
     builder.finalize();
 
-    println!("{}", func.display());
+    if std::env::var("RASH_PRINT_IR").is_ok_and(|n| n == "1" || n.eq_ignore_ascii_case("true")) {
+        println!("{}", func.display());
+    }
 
     let mut ctx = codegen::Context::for_function(func);
     let mut plane = ControlPlane::default();
