@@ -188,7 +188,7 @@ impl Renderer {
                         *id,
                         Costume::from_image(
                             costume,
-                            &device,
+                            device,
                             queue,
                             &img,
                             &sampler,
