@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 
 use crate::ScratchObject;
 
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn str_len(s: *mut String, is_const: i64) -> usize {
 ///   (eg: 3.1415) or round (eg: 3.0). If `is_decimal` is 1,
 ///   the number will be a decimal. Represented this way for simplicity.
 pub extern "C" fn random(a: f64, b: f64, is_decimal: i64) -> f64 {
-    let mut rng = rand::thread_rng();
-    let num = rng.gen_range(a..b);
+    let mut rng = rand::rng();
+    let num = rng.random_range(a..b);
     if is_decimal == 1 { num } else { num.round() }
 }
