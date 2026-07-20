@@ -5,7 +5,9 @@
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use cranelift::codegen::ir::UserExternalName;
+use cranelift::codegen::ir::{Function, UserExternalName};
+
+use crate::compiler::FuncMap;
 
 macro_rules! print_func {
     ($module:expr, $($fn:ident),+ $(,)?) => {
@@ -73,6 +75,7 @@ pub mod custom_block;
 pub mod env;
 pub mod op;
 pub mod repeat_stack;
+pub mod string;
 pub mod types;
 
 pub static FUNCS: LazyLock<HashMap<UserExternalName, usize>> = LazyLock::new(|| {
@@ -85,6 +88,7 @@ pub static FUNCS: LazyLock<HashMap<UserExternalName, usize>> = LazyLock::new(|| 
     funcs.extend(env::FUNCS.iter().map(m));
     funcs.extend(op::FUNCS.iter().map(m));
     funcs.extend(repeat_stack::FUNCS.iter().map(m));
+    funcs.extend(string::FUNCS.iter().map(m));
     funcs.extend(types::FUNCS.iter().map(m));
     funcs
 });
@@ -94,5 +98,28 @@ pub fn print_function_addresses() {
     env::print_function_addresses();
     op::print_function_addresses();
     repeat_stack::print_function_addresses();
+    string::print_function_addresses();
     types::print_function_addresses();
+}
+
+pub fn declare_callbacks(func: &mut Function) -> FuncMap {
+    fn import_module(
+        func: &mut Function,
+        func_map: &mut FuncMap,
+        items: &[(UserExternalName, *const ())],
+    ) {
+        for (name, _) in items {
+            let func_ref = func.declare_imported_user_function(name.clone());
+            func_map.insert(func_ref, name.clone());
+        }
+    }
+
+    let mut func_map = FuncMap::new();
+    import_module(func, &mut func_map, custom_block::FUNCS);
+    import_module(func, &mut func_map, env::FUNCS);
+    import_module(func, &mut func_map, op::FUNCS);
+    import_module(func, &mut func_map, repeat_stack::FUNCS);
+    import_module(func, &mut func_map, string::FUNCS);
+    import_module(func, &mut func_map, types::FUNCS);
+    func_map
 }

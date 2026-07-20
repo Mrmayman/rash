@@ -13,7 +13,8 @@ use cranelift::{
 };
 
 use crate::{
-    compile_fn::{create_main_slot, declare_callbacks, get_isa, prepare_buffer},
+    callbacks::declare_callbacks,
+    compile_fn::{create_main_slot, get_isa, prepare_buffer},
     compiler::{Compiler, MEMORY, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,

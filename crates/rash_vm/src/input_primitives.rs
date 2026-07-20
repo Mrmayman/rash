@@ -1,8 +1,3 @@
-use std::{
-    collections::HashSet,
-    sync::{LazyLock, Mutex},
-};
-
 use cranelift::{
     codegen::ir::MemFlags,
     prelude::{
@@ -10,6 +5,7 @@ use cranelift::{
         types::{F64, I64},
     },
 };
+use smol_str::SmolStr;
 
 use crate::{
     callbacks,
@@ -19,9 +15,6 @@ use crate::{
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::VariableWrite,
 };
-
-pub static STRINGS_TO_DROP: LazyLock<Mutex<HashSet<[i64; 3]>>> =
-    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
@@ -95,13 +88,19 @@ impl From<bool> for Input {
 
 impl From<String> for Input {
     fn from(s: String) -> Self {
-        Input::Obj(ScratchObject::String(s))
+        Input::Obj(ScratchObject::String(s.into()))
     }
 }
 
 impl From<&str> for Input {
     fn from(s: &str) -> Self {
-        Input::Obj(ScratchObject::String(s.to_owned()))
+        Input::Obj(ScratchObject::String(s.into()))
+    }
+}
+
+impl From<SmolStr> for Input {
+    fn from(s: SmolStr) -> Self {
+        Input::Obj(ScratchObject::String(s))
     }
 }
 
@@ -206,10 +205,9 @@ impl Input {
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-    ) -> (Value, bool) {
+    ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
-                // Create a stack slot to store the string
                 let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
                     StackSlotKind::ExplicitSlot,
                     3 * std::mem::size_of::<i64>() as u32,
@@ -217,27 +215,30 @@ impl Input {
                 ));
                 let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
-                // Transmute the String into a [i64; 3] array
-                // println!("Getting string {scratch_object:?}");
                 let string = scratch_object.convert_to_string();
 
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
-                STRINGS_TO_DROP.lock().unwrap().insert(bytes);
+                compiler
+                    .strings_to_drop
+                    .push(unsafe { std::mem::transmute(bytes) });
 
                 let val1 = compiler.constants.get_int(bytes[0], builder);
                 let val2 = compiler.constants.get_int(bytes[1], builder);
                 let val3 = compiler.constants.get_int(bytes[2], builder);
 
-                // Store the values in the stack slot
-                builder.ins().stack_store(val1, stack_slot, 0);
-                builder.ins().stack_store(val2, stack_slot, 8);
-                builder.ins().stack_store(val3, stack_slot, 16);
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_STR,
+                    &[I64, I64, I64, I64],
+                    &[],
+                    &[val1, val2, val3, stack_ptr],
+                );
 
-                (stack_ptr, true)
+                stack_ptr
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
-                (o.get_string(compiler, builder), false)
+                o.get_string(compiler, builder)
             }
         }
     }
@@ -272,14 +273,30 @@ impl Input {
                 let [i1, i2, i3, i4] =
                     unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
                 if is_string {
-                    STRINGS_TO_DROP.lock().unwrap().insert([i2, i3, i4]);
+                    compiler
+                        .strings_to_drop
+                        .push(unsafe { std::mem::transmute([i2, i3, i4]) });
                 }
 
                 let i1 = compiler.constants.get_int(i1, builder);
                 let i2 = compiler.constants.get_int(i2, builder);
                 let i3 = compiler.constants.get_int(i3, builder);
                 let i4 = compiler.constants.get_int(i4, builder);
-                [i1, i2, i3, i4]
+
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_OBJ,
+                    &[I64, I64, I64, I64, I64],
+                    &[],
+                    &[i1, i2, i3, i4, compiler.temp_slot4.0],
+                );
+
+                let o1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                let o2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let o3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                let o4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
+
+                [o1, o2, o3, o4]
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();

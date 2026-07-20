@@ -6,8 +6,7 @@ use cranelift::{
         binemit::Reloc,
         control::ControlPlane,
         ir::{
-            ExternalName, Function, LibCall, StackSlotData, StackSlotKind, UserExternalName,
-            UserFuncName, types::I8,
+            ExternalName, Function, LibCall, StackSlotData, StackSlotKind, UserFuncName, types::I8,
         },
     },
     prelude::{
@@ -18,9 +17,10 @@ use cranelift::{
         types::I64,
     },
 };
+use smol_str::SmolStr;
 
 use crate::{
-    callbacks,
+    callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
     graphics::SpriteId,
@@ -33,7 +33,7 @@ pub fn compile(
     id: SpriteId,
     num_args: usize,
     is_screen_refresh: bool,
-) -> ScratchThread {
+) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
         println!("{}", block.format(0));
@@ -127,34 +127,16 @@ pub fn compile(
         println!("{}", func.display());
     }
 
-    compile_ir(
-        func,
-        &compiler.func_store.func_map,
-        &isa,
-        id,
-        compiler.is_screen_refresh,
+    (
+        compile_ir(
+            func,
+            &compiler.func_store.func_map,
+            &isa,
+            id,
+            compiler.is_screen_refresh,
+        ),
+        compiler.strings_to_drop,
     )
-}
-
-pub fn declare_callbacks(func: &mut Function) -> FuncMap {
-    fn import_module(
-        func: &mut Function,
-        func_map: &mut FuncMap,
-        items: &[(UserExternalName, *const ())],
-    ) {
-        for (name, _) in items {
-            let func_ref = func.declare_imported_user_function(name.clone());
-            func_map.insert(func_ref, name.clone());
-        }
-    }
-
-    let mut func_map = FuncMap::new();
-    import_module(func, &mut func_map, callbacks::custom_block::FUNCS);
-    import_module(func, &mut func_map, callbacks::env::FUNCS);
-    import_module(func, &mut func_map, callbacks::op::FUNCS);
-    import_module(func, &mut func_map, callbacks::repeat_stack::FUNCS);
-    import_module(func, &mut func_map, callbacks::types::FUNCS);
-    func_map
 }
 
 pub fn create_main_slot(

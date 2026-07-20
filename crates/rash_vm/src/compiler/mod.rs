@@ -18,6 +18,7 @@ use cranelift::{
         types::{F64, I64},
     },
 };
+use smol_str::SmolStr;
 
 use crate::{
     callbacks,
@@ -290,7 +291,7 @@ pub struct Compiler<'compiler> {
     pub program_analysis: Effects,
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
-
+    pub strings_to_drop: Vec<SmolStr>,
     pub cache: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
 
@@ -389,6 +390,7 @@ impl<'a> Compiler<'a> {
             func_store: FunctionStore::new(func_map),
             break_counter: 0,
             repeat_stack: 0,
+            strings_to_drop: Vec::new(),
             memory,
             script_ptr,
             loop_stack_ptr,
@@ -719,7 +721,10 @@ impl FunctionStore {
             r
         };
 
-        let func_ref = self.func_map.get_by_right(&name).unwrap();
+        let Some(func_ref) = self.func_map.get_by_right(&name) else {
+            crate::print_function_addresses();
+            panic!("Function not found: {}", name);
+        };
         let func = ExtFuncData {
             name: ExternalName::User(*func_ref),
             signature,

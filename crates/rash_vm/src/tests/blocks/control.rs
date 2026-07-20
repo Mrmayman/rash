@@ -165,11 +165,7 @@ pub fn branch_if_else() {
             vec![set_var(Ptr(4), 1.0)],
             vec![set_var(Ptr(4), 0.0)],
         ),
-        c_if_else(
-            String::new(),
-            vec![set_var(Ptr(5), 0.0)],
-            vec![set_var(Ptr(5), 1.0)],
-        ),
+        c_if_else("", vec![set_var(Ptr(5), 0.0)], vec![set_var(Ptr(5), 1.0)]),
         c_if_else(
             "true",
             vec![set_var(Ptr(6), 1.0)],
@@ -213,7 +209,7 @@ pub fn branch_if() {
         c_if(true, vec![set_var(Ptr(2), 1.0)]),
         c_if(false, vec![set_var(Ptr(3), 1.0)]),
         c_if("hello", vec![set_var(Ptr(4), 1.0)]),
-        c_if(String::new(), vec![set_var(Ptr(5), 1.0)]),
+        c_if("", vec![set_var(Ptr(5), 1.0)]),
         c_if("true", vec![set_var(Ptr(6), 1.0)]),
         c_if("false", vec![set_var(Ptr(7), 1.0)]),
         // nested statements

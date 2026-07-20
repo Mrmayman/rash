@@ -23,6 +23,7 @@ pub use graphics::{
 };
 pub use input_primitives::{Input, Ptr};
 pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};
+use smol_str::SmolStr;
 
 mod config {
     /// Scratch has a special edge case for math with NaN.
@@ -125,4 +126,8 @@ pub mod builder {
     pub fn fmod(a: impl Into<Input>, b: impl Into<Input>) -> ScratchBlock {
         ScratchBlock::OpMod(a.into(), b.into())
     }
+}
+
+fn stat(s: &'static str) -> SmolStr {
+    SmolStr::new_static(s)
 }

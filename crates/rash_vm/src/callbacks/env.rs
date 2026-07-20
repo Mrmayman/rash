@@ -2,14 +2,12 @@ use colored::Colorize;
 
 declare_module!("env.rs", 2, dbg_log, days_since_2000);
 
-pub unsafe extern "C" fn dbg_log(msg: *mut String, is_const: i64) {
+pub unsafe extern "C" fn dbg_log(msg: *mut String) {
     let msg_val = unsafe { &mut *msg };
     if !msg_val.is_empty() {
         println!("{} {msg_val:?}", "[say]".bright_black());
     }
-    if is_const == 0 {
-        unsafe { msg.drop_in_place() };
-    }
+    unsafe { msg.drop_in_place() };
 }
 
 pub extern "C" fn days_since_2000() -> f64 {

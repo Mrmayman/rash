@@ -1,11 +1,12 @@
 use cranelift::prelude::FunctionBuilder;
+use smol_str::SmolStr;
 
 use crate::{
     ScratchObject,
     constant_set::ConstantMap,
     data_types::ID_STRING,
     effects::VariableWrite,
-    input_primitives::{Ptr, STRINGS_TO_DROP, ScratchValue},
+    input_primitives::{Ptr, ScratchValue},
 };
 
 mod ssa;
@@ -84,16 +85,17 @@ pub trait VarStore {
         );
     }
 
+    #[must_use]
     fn store_string(
         &mut self,
         ptr: Ptr,
         builder: &mut FunctionBuilder<'_>,
         string: &str,
         constants: &mut ConstantMap,
-    ) {
-        // Transmute the String into a [i64; 4] array
-        let arr: [i64; 3] = unsafe { std::mem::transmute(string.to_owned()) };
-        STRINGS_TO_DROP.lock().unwrap().insert(arr);
+    ) -> SmolStr {
+        // Transmute the SmolStr into a [i64; 3] array
+        let arr: [i64; 3] = unsafe { std::mem::transmute(SmolStr::from(string)) };
+
         let id = constants.get_int(ID_STRING, builder);
         let i1 = constants.get_int(arr[0], builder);
         let i2 = constants.get_int(arr[1], builder);
@@ -105,6 +107,8 @@ pub trait VarStore {
             builder,
             constants,
         );
+
+        unsafe { std::mem::transmute(arr) }
     }
 }
 

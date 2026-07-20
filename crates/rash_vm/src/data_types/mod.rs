@@ -15,8 +15,12 @@
 use std::cmp::Ordering;
 
 use colored::Colorize;
+use smol_str::{SmolStr, StrExt, ToSmolStr, format_smolstr};
 
-use crate::compiler::VarType;
+use crate::{compiler::VarType, stat};
+
+#[cfg(test)]
+mod tests;
 
 /// The enum variant data type used to represent dynamically typed
 /// objects in the interpreter.
@@ -24,10 +28,10 @@ use crate::compiler::VarType;
 /// There are a few methods to convert between the different types,
 /// that accurately mirror the behaviour of the Scratch programming language.
 #[repr(C)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum ScratchObject {
     Number(f64),
-    String(String),
+    String(SmolStr),
     Bool(bool),
 }
 
@@ -51,18 +55,6 @@ pub enum ScratchObject {
 pub const ID_NUMBER: i64 = 0;
 pub const ID_STRING: i64 = 1;
 pub const ID_BOOL: i64 = 2;
-
-// I know #[derive(Clone)] does the same thing.
-// But this made it faster
-impl Clone for ScratchObject {
-    fn clone(&self) -> Self {
-        match *self {
-            Self::Number(arg0) => Self::Number(arg0),
-            Self::String(ref arg0) => Self::String(arg0.to_owned()),
-            Self::Bool(arg0) => Self::Bool(arg0),
-        }
-    }
-}
 
 impl std::fmt::Debug for ScratchObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -98,10 +90,10 @@ impl ScratchObject {
     /// ```
     /// # use rash_vm::ScratchObject;
     /// assert_eq!(ScratchObject::Number(2.0).convert_to_number(), 2.0);
-    /// assert_eq!(ScratchObject::String("5".to_owned()).convert_to_number(), 5.0);
-    /// assert_eq!(ScratchObject::String("0x10".to_owned()).convert_to_number(), 16.0);
-    /// assert_eq!(ScratchObject::String("0b10".to_owned()).convert_to_number(), 2.0);
-    /// assert_eq!(ScratchObject::String("something".to_owned()).convert_to_number(), 0.0);
+    /// assert_eq!(ScratchObject::String("5".into()).convert_to_number(), 5.0);
+    /// assert_eq!(ScratchObject::String("0x10".into()).convert_to_number(), 16.0);
+    /// assert_eq!(ScratchObject::String("0b10".into()).convert_to_number(), 2.0);
+    /// assert_eq!(ScratchObject::String("something".into()).convert_to_number(), 0.0);
     /// assert_eq!(ScratchObject::Bool(true).convert_to_number(), 1.0);
     /// ```
     #[inline]
@@ -148,14 +140,14 @@ impl ScratchObject {
     /// assert_eq!(ScratchObject::Number(0.0).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::Number(-0.0).convert_to_bool(), true);
     /// assert_eq!(
-    ///     ScratchObject::String("true".to_owned()).convert_to_bool(),
+    ///     ScratchObject::String("true".into()).convert_to_bool(),
     ///     true
     /// );
-    /// assert_eq!(ScratchObject::String("something".to_owned()).convert_to_bool(), true);
-    /// assert_eq!(ScratchObject::String("false".to_owned()).convert_to_bool(), false);
-    /// assert_eq!(ScratchObject::String("0".to_owned()).convert_to_bool(), false);
-    /// assert_eq!(ScratchObject::String("0.0".to_owned()).convert_to_bool(), true);
-    /// assert_eq!(ScratchObject::String("".to_owned()).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::String("something".into()).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::String("false".into()).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::String("0".into()).convert_to_bool(), false);
+    /// assert_eq!(ScratchObject::String("0.0".into()).convert_to_bool(), true);
+    /// assert_eq!(ScratchObject::String("".into()).convert_to_bool(), false);
     /// assert_eq!(ScratchObject::Bool(true).convert_to_bool(), true);
     /// assert_eq!(ScratchObject::Bool(false).convert_to_bool(), false);
     /// ```
@@ -187,23 +179,12 @@ impl ScratchObject {
     /// ```
     #[inline]
     #[must_use]
-    pub fn convert_to_string(&self) -> String {
+    pub fn convert_to_string(&self) -> SmolStr {
         match self {
             ScratchObject::Number(num) => number_to_string(*num),
-            ScratchObject::String(s) => s.to_owned(),
-            ScratchObject::Bool(true) => "true".to_owned(),
-            ScratchObject::Bool(false) => "false".to_owned(),
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn convert_to_string_cow(&self) -> std::borrow::Cow<'_, str> {
-        match self {
-            ScratchObject::Number(num) => number_to_string(*num).into(),
-            ScratchObject::String(s) => s.into(),
-            ScratchObject::Bool(true) => "true".into(),
-            ScratchObject::Bool(false) => "false".into(),
+            ScratchObject::String(s) => s.clone(),
+            ScratchObject::Bool(true) => stat("true"),
+            ScratchObject::Bool(false) => stat("false"),
         }
     }
 
@@ -265,8 +246,8 @@ impl ScratchObject {
         }
 
         if cmp_str {
-            let s1 = a.convert_to_string_cow();
-            let s2 = b.convert_to_string_cow();
+            let s1 = a.convert_to_string();
+            let s2 = b.convert_to_string();
             return s1.cmp(&s2);
         }
 
@@ -276,37 +257,37 @@ impl ScratchObject {
 
 #[inline]
 #[must_use]
-pub fn number_to_string(num: f64) -> String {
+pub fn number_to_string(num: f64) -> SmolStr {
     // If number is bigger than this then represent as exponentials.
     const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
     // If number is smaller than this then represent as exponentials.
     const NEGATIVE_EXPONENTIAL_THRESHOLD: f64 = 2e-6;
 
     if num == 0.0 {
-        "0".to_owned()
+        stat("0")
     } else if num.is_infinite() {
         if num.is_sign_positive() {
-            "Infinity".to_owned()
+            stat("Infinity")
         } else {
-            "-Infinity".to_owned()
+            stat("-Infinity")
         }
     } else if num.abs() >= POSITIVE_EXPONENTIAL_THRESHOLD {
         // Number so big it is exponential
         // Eg: 1000000000000000000000 is 1e+21
-        let formatted = format!("{num:e}");
+        let formatted = format_smolstr!("{num:e}");
         if formatted.contains("e-") {
             formatted
         } else {
             // Rust formats it as 1e21, ignoring the plus
             // So we must add it ourselves to match Scratch
-            formatted.replace('e', "e+")
+            formatted.replace_smolstr("e", "e+")
         }
     } else if num.abs() < NEGATIVE_EXPONENTIAL_THRESHOLD {
         // Number so small it is exponential
         // Eg: 0.0000001 is 1e-7
-        format!("{num:e}")
+        format_smolstr!("{num:e}")
     } else {
-        num.to_string()
+        num.to_smolstr()
     }
 }
 
@@ -342,215 +323,4 @@ fn convert_base_literal(string: &str, base: u32) -> f64 {
         return 0.0;
     }
     f64::from(u32::from_str_radix(hex_number, base).unwrap_or_default())
-}
-
-/// Tests for checking the conversion between values of different types.
-///
-/// Based on
-/// https://github.com/scratchcpp/libscratchcpp/blob/5e1e3b62ae2e5198da2ca8f7d32890abbdf75b91/test/scratch_classes/value_test.cpp
-///
-/// Massive credit to adazem009
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn conversion_bool() {
-        assert_eq!(
-            ScratchObject::String("true".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("false".to_owned()).convert_to_bool(),
-            false
-        );
-        assert_eq!(
-            ScratchObject::String("False".to_owned()).convert_to_bool(),
-            false
-        );
-
-        assert_eq!(
-            ScratchObject::String("1".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("0".to_owned()).convert_to_bool(),
-            false
-        );
-
-        assert_eq!(
-            ScratchObject::String("1.0".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("0.0".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("-1".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("-1.0".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String("0e10".to_owned()).convert_to_bool(),
-            true
-        );
-        assert_eq!(
-            ScratchObject::String(String::new()).convert_to_bool(),
-            false
-        );
-
-        assert_eq!(ScratchObject::Number(1.0).convert_to_bool(), true);
-        assert_eq!(ScratchObject::Number(0.0).convert_to_bool(), false);
-        assert_eq!(ScratchObject::Number(f64::NAN).convert_to_bool(), false);
-    }
-
-    macro_rules! string_to_number {
-        ($(($input_str:expr, $expected:expr)),* $(,)?) => {
-            $(
-                assert_eq!(
-                    ScratchObject::String($input_str.to_owned()).convert_to_number(),
-                    $expected
-                );
-            )*
-        };
-    }
-
-    #[test]
-    fn conversion_number() {
-        string_to_number!(
-            ("2147483647", 2147483647.0),
-            ("-2147483647", -2147483647.0),
-            ("255.625", 255.625),
-            ("-255.625", -255.625),
-            ("0.15", 0.15),
-            ("-0.15", -0.15),
-            ("0", 0.0),
-            ("0.0", 0.0),
-            ("-0", -0.0),
-            ("-0.0", -0.0),
-            ("+.15", 0.15),
-            (".15", 0.15),
-            ("-.15", -0.15),
-            ("0+5", 0.0),
-            ("0-5", 0.0),
-            ("9432.4e-12", 9.4324e-9),
-            ("-9432.4e-12", -9.4324e-9),
-            ("9432.4e6", 9.4324e+9),
-            ("9432.4e+6", 9.4324e+9),
-            ("-9432.4e+6", -9.4324e+9),
-            ("1 2 3", 0.0),
-            ("false", 0.0),
-            ("true", 0.0),
-            // TODO: Infinity > 0, -Infinity < 0
-            ("NaN", 0.0),
-            ("something", 0.0),
-            // Hexadecimal
-            ("0xafe", 2814.0),
-            ("0xafe", 2814.0),
-            ("   0xafe", 2814.0),
-            ("0xafe   ", 2814.0),
-            ("   0xafe   ", 2814.0),
-            ("0x0afe", 2814.0),
-            ("0xBaCD", 47821.0),
-            ("0XBaCD", 47821.0),
-            ("0xAbG", 0.0),
-            ("0xabf.d", 0.0),
-            ("+0xa", 0.0),
-            ("-0xa", 0.0),
-            ("0x+a", 0.0),
-            ("0x-a", 0.0),
-            // Octal
-            ("0o506", 326.0),
-            ("   0o506", 326.0),
-            ("0o506", 326.0),
-            ("   0o506   ", 326.0),
-            ("0o0506", 326.0),
-            ("0O17206", 7814.0),
-            ("0o5783", 0.0),
-            ("0o573.2", 0.0),
-            ("+0o2", 0.0),
-            ("-0o2", 0.0),
-            ("0o+2", 0.0),
-            ("0o-2", 0.0),
-            // Binary
-            ("0b101101", 45.0),
-            ("   0b101101", 45.0),
-            ("0b101101   ", 45.0),
-            ("   0b101101   ", 45.0),
-            ("0b0101101", 45.0),
-            ("0B1110100110", 934.0),
-            ("0b100112001", 0.0),
-            ("0b10011001.1", 0.0),
-            ("+0b1", 0.0),
-            ("-0b1", 0.0),
-            ("0b+1", 0.0),
-            ("0b-1", 0.0),
-        );
-
-        assert_eq!(ScratchObject::Number(69.0).convert_to_number(), 69.0);
-        assert_eq!(ScratchObject::Bool(true).convert_to_number(), 1.0);
-        assert_eq!(ScratchObject::Bool(false).convert_to_number(), 0.0);
-
-        assert!(
-            ScratchObject::String("Infinity".to_owned())
-                .convert_to_number()
-                .is_sign_positive()
-        );
-        assert!(
-            ScratchObject::String("Infinity".to_owned())
-                .convert_to_number()
-                .is_infinite()
-        );
-
-        assert!(
-            ScratchObject::String("-Infinity".to_owned())
-                .convert_to_number()
-                .is_sign_negative()
-        );
-        assert!(
-            ScratchObject::String("-Infinity".to_owned())
-                .convert_to_number()
-                .is_infinite()
-        );
-    }
-
-    macro_rules! number_to_string {
-        ($(($input:expr, $expected:expr)),* $(,)?) => {
-            $(
-                assert_eq!(
-                    ScratchObject::Number($input).convert_to_string(),
-                    $expected
-                );
-            )*
-        };
-    }
-
-    #[test]
-    fn conversion_string() {
-        number_to_string!(
-            (0.0, "0"),
-            (-0.0, "0"),
-            (2.0, "2"),
-            (-2.0, "-2"),
-            (2.54, "2.54"),
-            (-2.54, "-2.54"),
-            (2550.625021000115, "2550.625021000115"),
-            (-2550.625021000115, "-2550.625021000115"),
-            (9.4324e+20, "943240000000000000000"),
-            (-2.591e-2, "-0.02591"),
-            (9.4324e+21, "9.4324e+21"),
-            (-2.591e-13, "-2.591e-13"),
-            (0.01, "0.01"),
-            (f64::INFINITY, "Infinity"),
-            (f64::NEG_INFINITY, "-Infinity"),
-            (f64::NAN, "NaN")
-        );
-
-        assert_eq!(ScratchObject::Bool(true).convert_to_string(), "true");
-        assert_eq!(ScratchObject::Bool(false).convert_to_string(), "false");
-    }
 }

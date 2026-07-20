@@ -205,19 +205,15 @@ impl Compiler<'_> {
         builder: &mut FunctionBuilder<'_>,
     ) -> [Value; 4] {
         // Get strings
-        let (a, a_is_const) = a.get_string(self, builder);
-        let (b, b_is_const) = b.get_string(self, builder);
-
-        // Call join_string function
-        let a_is_const = self.constants.get_int(i64::from(a_is_const), builder);
-        let b_is_const = self.constants.get_int(i64::from(b_is_const), builder);
+        let a = a.get_string(self, builder);
+        let b = b.get_string(self, builder);
 
         self.call_function(
             builder,
-            callbacks::op::STR_JOIN,
-            &[I64, I64, I64, I64, I64],
+            callbacks::string::JOIN,
+            &[I64, I64, I64],
             &[],
-            &[a, b, self.temp_slot4.0, a_is_const, b_is_const],
+            &[a, b, self.temp_slot4.0],
         );
         // Read resulting string
         let id = self.constants.get_int(ID_STRING, builder);
@@ -228,18 +224,8 @@ impl Compiler<'_> {
     }
 
     pub fn dbg_log(&mut self, msg: &Input, builder: &mut FunctionBuilder<'_>) {
-        // Get strings
-        let (a, a_is_const) = msg.get_string(self, builder);
-
-        let a_is_const = self.constants.get_int(i64::from(a_is_const), builder);
-
-        self.call_function(
-            builder,
-            callbacks::env::DBG_LOG,
-            &[I64, I64],
-            &[],
-            &[a, a_is_const],
-        );
+        let a = msg.get_string(self, builder);
+        self.call_function(builder, callbacks::env::DBG_LOG, &[I64], &[], &[a]);
     }
 
     /// A Scratch-accurate modulo operation (complete with quirks).
@@ -270,16 +256,9 @@ impl Compiler<'_> {
     }
 
     pub fn op_str_len(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>) -> ScratchValue {
-        let (input, is_const) = input.get_string(self, builder);
-        let is_const = self.constants.get_int(i64::from(is_const), builder);
+        let input = input.get_string(self, builder);
 
-        let inst = self.call_function(
-            builder,
-            callbacks::op::STR_LEN,
-            &[I64, I64],
-            &[I64],
-            &[input, is_const],
-        );
+        let inst = self.call_function(builder, callbacks::string::LEN, &[I64], &[I64], &[input]);
         let res = builder.inst_results(inst)[0];
         let res = builder.ins().fcvt_from_sint(F64, res);
         ScratchValue::Num(res)
@@ -319,16 +298,15 @@ impl Compiler<'_> {
         string: &Input,
         builder: &mut FunctionBuilder<'_>,
     ) -> [Value; 4] {
-        let (string, is_const) = string.get_string(self, builder);
+        let string = string.get_string(self, builder);
         let letter = letter.get_number(self, builder);
 
-        let is_const = self.constants.get_int(i64::from(is_const), builder);
         self.call_function(
             builder,
-            callbacks::op::STR_LETTER,
-            &[I64, I64, F64, I64],
+            callbacks::string::LETTER,
+            &[I64, F64, I64],
             &[],
-            &[string, is_const, letter, self.temp_slot4.0],
+            &[string, letter, self.temp_slot4.0],
         );
 
         let id = self.constants.get_int(ID_STRING, builder);
@@ -344,18 +322,15 @@ impl Compiler<'_> {
         pattern: &Input,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let (string, string_is_const) = string.get_string(self, builder);
-        let (pattern, pattern_is_const) = pattern.get_string(self, builder);
-
-        let string_is_const = self.constants.get_int(i64::from(string_is_const), builder);
-        let pattern_is_const = self.constants.get_int(i64::from(pattern_is_const), builder);
+        let string = string.get_string(self, builder);
+        let pattern = pattern.get_string(self, builder);
 
         let ins = self.call_function(
             builder,
-            callbacks::op::STR_CONTAINS,
-            &[I64, I64, I64, I64],
+            callbacks::string::CONTAINS,
+            &[I64, I64],
             &[I64],
-            &[string, string_is_const, pattern, pattern_is_const],
+            &[string, pattern],
         );
 
         builder.inst_results(ins)[0]

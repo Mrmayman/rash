@@ -1,8 +1,10 @@
+use smol_str::SmolStr;
+
 use crate::data_types::{ScratchObject, string_to_number};
 
 declare_module!(
     "types.rs",
-    5,
+    6,
     to_bool,
     to_number,
     to_number_from_string,
@@ -11,7 +13,8 @@ declare_module!(
     to_string_from_num,
     to_string_from_bool,
     drop_obj,
-    clone_obj
+    clone_obj,
+    clone_str
 );
 
 /// Converts a `ScratchObject` to a boolean.
@@ -119,7 +122,7 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
 ///   (represented this way for a predictable layout in JIT code,
 ///   can be `std::mem::transmute`d).
 /// - `out` - The pointer to the memory location to write the string to.
-pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut String) {
+pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut SmolStr) {
     let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
@@ -138,7 +141,7 @@ pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut
 }
 
 /// Converts an f64 to a String `ScratchObject`.
-pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut String) {
+pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut SmolStr) {
     let obj = ScratchObject::Number(i1);
     let string = obj.convert_to_string();
     unsafe { out.write(string) }
@@ -148,7 +151,7 @@ pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut String) {
 ///
 /// - If the boolean is true (1), the string will be "true".
 /// - If the boolean is false (0), the string will be "false".
-pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut String) {
+pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut SmolStr) {
     let obj = ScratchObject::Bool(i1 != 0);
     let string = obj.convert_to_string();
     unsafe { out.write(string) }
@@ -166,6 +169,13 @@ pub unsafe extern "C" fn drop_obj(i1: i64, i2: i64, i3: i64, i4: i64) {
 
 pub unsafe extern "C" fn clone_obj(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let new_obj = obj.clone();
+    std::mem::forget(obj);
+    unsafe { out.write(new_obj) };
+}
+
+pub unsafe extern "C" fn clone_str(i2: i64, i3: i64, i4: i64, out: *mut SmolStr) {
+    let obj: SmolStr = unsafe { std::mem::transmute([i2, i3, i4]) };
     let new_obj = obj.clone();
     std::mem::forget(obj);
     unsafe { out.write(new_obj) };

@@ -2,13 +2,13 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use cranelift::codegen::CompiledCode;
 use memmap2::Mmap;
+use smol_str::SmolStr;
 
 use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
     graphics::{CostumeData, CostumeHash, CostumeId, RunState, SpriteId, SpriteLoadData},
-    input_primitives::STRINGS_TO_DROP,
 };
 
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
@@ -198,6 +198,7 @@ impl ScriptKind {
 pub struct SpriteBuilder {
     id: SpriteId,
     scripts: Scripts,
+    strings_to_drop: Vec<SmolStr>,
 }
 
 impl SpriteBuilder {
@@ -206,6 +207,7 @@ impl SpriteBuilder {
         Self {
             id,
             scripts: Scripts::default(),
+            strings_to_drop: Vec::new(),
         }
     }
 
@@ -219,7 +221,7 @@ impl SpriteBuilder {
         match script.kind {
             ScriptKind::GreenFlag => {
                 // This is where all your magic happens :D
-                let thread = compile(
+                let (thread, strings_to_drop) = compile(
                     &script.blocks,
                     memory,
                     self.id,
@@ -227,6 +229,7 @@ impl SpriteBuilder {
                     script.kind.is_screen_refresh(),
                 );
 
+                self.strings_to_drop.extend(strings_to_drop);
                 self.scripts.green_flags.push(thread);
             }
             ScriptKind::CustomBlock {
@@ -263,7 +266,7 @@ impl ProjectBuilder {
     pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
         // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
-
+        self.runtime.strings_to_drop.extend(sprite.strings_to_drop);
         self.runtime.scripts.push(sprite.scripts);
     }
 
@@ -289,7 +292,7 @@ impl ProjectBuilder {
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
-            let thread = compile(
+            let (thread, strings_to_drop) = compile(
                 &scr.blocks,
                 memory,
                 script.sprite_id,
@@ -298,6 +301,7 @@ impl ProjectBuilder {
             );
 
             script.script = CustomBlockFunc::Compiled(thread);
+            self.runtime.strings_to_drop.extend(strings_to_drop);
         }
 
         self.runtime.init();
@@ -321,6 +325,7 @@ pub struct Runtime {
     pub costume_data: HashMap<CostumeId, CostumeData>,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
+    strings_to_drop: Vec<SmolStr>,
 }
 
 impl Runtime {
@@ -500,19 +505,5 @@ impl ScratchThread {
         self.jumped_point = result;
 
         result.is_done()
-    }
-}
-
-impl Drop for Runtime {
-    fn drop(&mut self) {
-        let mut strings_buf = STRINGS_TO_DROP.lock().unwrap();
-        let s = &mut *strings_buf;
-        let strings = std::mem::take(s);
-
-        for string in strings {
-            let _string: String = unsafe { std::mem::transmute(string) };
-            // println!("Dropping string {_string}");
-            // Drop string
-        }
     }
 }

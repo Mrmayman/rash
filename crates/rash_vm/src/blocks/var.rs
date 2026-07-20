@@ -35,8 +35,10 @@ impl Compiler<'_> {
                             // Fast for number-crunching but slow for string handling?
                             self.cache.store_f64(ptr, builder, num, &mut self.constants);
                         } else {
-                            self.cache
-                                .store_string(ptr, builder, string, &mut self.constants);
+                            let to_drop =
+                                self.cache
+                                    .store_string(ptr, builder, string, &mut self.constants);
+                            self.strings_to_drop.push(to_drop);
                         }
                     }
                 }
