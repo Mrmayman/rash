@@ -75,7 +75,6 @@ impl Compiler<'_> {
             builder.switch_to_block(end_block);
 
             self.constants.clear();
-            self.code_block = end_block;
         } else {
             self.call_function(
                 builder,

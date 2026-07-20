@@ -284,7 +284,6 @@ pub enum VarType {
 pub struct Compiler<'compiler> {
     pub args_list: Vec<[Value; 4]>,
     pub constants: ConstantMap,
-    pub code_block: Block,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
@@ -356,9 +355,18 @@ impl<'a> Compiler<'a> {
         }
         builder.switch_to_block(code_block);
 
-        // TODO: inter-function analysis
-        let program_analysis =
-            code.effects(&mut |_| Effects::unknown(), &|_| VariableWrite::default());
+        let mut other_eff: Option<Effects> = None;
+        let var_ty = &|_| VariableWrite::default();
+        let mut program_analysis = code.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
+            if let Some(other) = &mut other_eff {
+                other.merge(e, var_ty);
+            } else {
+                other_eff = Some(e)
+            }
+        });
+        if let Some(other_eff) = other_eff {
+            program_analysis.merge(other_eff, var_ty);
+        }
 
         let cache: Box<dyn VarStore> = if program_analysis.is_unknown {
             Box::new(GenericVarStore::new(memory))
@@ -372,7 +380,6 @@ impl<'a> Compiler<'a> {
         };
 
         Self {
-            code_block,
             temp_slot4,
             cache,
             program_analysis,
@@ -658,9 +665,9 @@ impl<'a> Compiler<'a> {
             builder.ins().return_(&[break_counter]);
             self.constants.clear();
 
-            self.code_block = builder.create_block();
-            self.break_points.push(self.code_block);
-            builder.switch_to_block(self.code_block);
+            let b = builder.create_block();
+            self.break_points.push(b);
+            builder.switch_to_block(b);
 
             self.cache.reinit(builder, &mut self.constants, self.memory);
         }

@@ -22,7 +22,6 @@ impl Compiler<'_> {
         builder.ins().return_(&[minus_one]);
         let new_block = builder.create_block();
         builder.switch_to_block(new_block);
-        self.code_block = new_block;
     }
 
     pub fn control_repeat(
@@ -31,7 +30,7 @@ impl Compiler<'_> {
         input: &Input,
         blocks: &[ScratchBlock],
     ) {
-        let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        let effects = self.effects(blocks);
 
         let zero = self.constants.get_int(0, builder);
         let old_constants = self.constants.clone();
@@ -60,7 +59,6 @@ impl Compiler<'_> {
         );
 
         builder.switch_to_block(loop_block);
-        self.code_block = loop_block;
         self.cache.extend(final_params_loop.clone());
 
         if effects.yields {
@@ -97,7 +95,6 @@ impl Compiler<'_> {
 
         builder.switch_to_block(end_block);
         self.cache.extend(final_params_end.clone());
-        self.code_block = end_block;
         if effects.yields {
             self.constants.clear();
         } else {
@@ -109,15 +106,13 @@ impl Compiler<'_> {
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
 
-        // TODO: inter-function analysis
-        let effects = blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        let effects = self.effects(blocks);
 
         let final_params = effects.generate_params(builder, loop_block, &*self.cache);
 
         let entry_params = self.generate_params(builder, &final_params);
 
         builder.ins().jump(loop_block, &entry_params);
-        self.code_block = loop_block;
         builder.switch_to_block(loop_block);
         self.cache.extend(final_params.clone());
 
@@ -128,7 +123,14 @@ impl Compiler<'_> {
         builder.ins().jump(loop_block, &loop_params);
 
         builder.switch_to_block(end_block);
-        self.code_block = end_block;
+    }
+
+    fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
+        blocks.effects(
+            &mut |_| Effects::unknown(), // TODO: inter-function analysis
+            &|v| self.cache.get_type(v),
+            &mut |_| {}, // We don't care if it returns early
+        )
     }
 
     fn call_stack_pop(&mut self, builder: &mut FunctionBuilder<'_>) -> Value {
@@ -158,8 +160,7 @@ impl Compiler<'_> {
         builder: &mut FunctionBuilder<'_>,
         then: &[ScratchBlock],
     ) {
-        // TODO: inter-function analysis
-        let effects = then.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        let effects = self.effects(then);
 
         let inside_block = builder.create_block();
         let end_block = builder.create_block();
@@ -174,7 +175,6 @@ impl Compiler<'_> {
             .brif(condition, inside_block, &[], end_block, &direct_params);
 
         builder.switch_to_block(inside_block);
-        self.code_block = inside_block;
         let old_consts = self.constants.clone();
         for block in then {
             self.compile_block(block, builder);
@@ -183,7 +183,6 @@ impl Compiler<'_> {
         // After the code runs...
         let end_params = self.generate_params(builder, &final_params);
         builder.ins().jump(end_block, &end_params);
-        self.code_block = end_block;
         builder.switch_to_block(end_block);
         self.constants = old_consts;
         self.cache.extend(final_params);
@@ -242,9 +241,9 @@ impl Compiler<'_> {
         then_blocks: &[ScratchBlock],
         else_blocks: &[ScratchBlock],
     ) {
-        // TODO: inter-function analysis
-        let effects = then_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v))
-            & else_blocks.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        let effects = self
+            .effects(then_blocks)
+            .or(self.effects(else_blocks), &|v| self.cache.get_type(v));
 
         let then_block = builder.create_block();
         let else_block = builder.create_block();
@@ -261,7 +260,6 @@ impl Compiler<'_> {
         let old_cache = self.cache.clone_box();
 
         builder.switch_to_block(then_block);
-        self.code_block = then_block;
         for block in then_blocks {
             self.compile_block(block, builder);
         }
@@ -272,7 +270,6 @@ impl Compiler<'_> {
         builder.switch_to_block(else_block);
         self.constants = old_consts.clone();
         self.cache = old_cache;
-        self.code_block = else_block;
         for block in else_blocks {
             self.compile_block(block, builder);
         }
@@ -280,7 +277,6 @@ impl Compiler<'_> {
         let else_params = self.generate_params(builder, &final_params);
         builder.ins().jump(end_block, &else_params);
 
-        self.code_block = end_block;
         builder.switch_to_block(end_block);
         self.constants = old_consts;
         self.cache.extend(final_params);
@@ -296,8 +292,7 @@ impl Compiler<'_> {
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
 
-        // TODO: inter-function analysis
-        let effects = body.effects(&mut |_| Effects::unknown(), &|v| self.cache.get_type(v));
+        let effects = self.effects(body);
 
         let final_params = effects.generate_params(builder, condition_block, &*self.cache);
 
@@ -306,7 +301,6 @@ impl Compiler<'_> {
 
         self.cache.extend(final_params.clone());
         builder.switch_to_block(condition_block);
-        self.code_block = condition_block;
 
         let condition = input.get_bool(self, builder);
         builder
@@ -314,7 +308,6 @@ impl Compiler<'_> {
             .brif(condition, end_block, &[], loop_block, &[]);
 
         builder.switch_to_block(loop_block);
-        self.code_block = loop_block;
         let old_constants = self.constants.clone();
 
         for block in body {
@@ -323,7 +316,6 @@ impl Compiler<'_> {
         let loop_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &loop_params);
         builder.switch_to_block(end_block);
-        self.code_block = end_block;
         self.cache.extend(final_params);
         self.constants = old_constants;
     }

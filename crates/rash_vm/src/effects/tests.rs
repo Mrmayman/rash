@@ -10,7 +10,19 @@ use crate::{
 
 #[must_use]
 fn eff<T: CheckEffects>(input: &T) -> Effects {
-    input.effects(&mut |_| Effects::unknown(), &|_| VariableWrite::default())
+    let mut other_effs: Option<Effects> = None;
+    let var_ty = &|_| VariableWrite::default();
+    let mut main_eff = input.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
+        if let Some(other_effs) = &mut other_effs {
+            other_effs.merge(e, var_ty);
+        } else {
+            other_effs = Some(e);
+        }
+    });
+    if let Some(other_effs) = other_effs {
+        main_eff.merge(other_effs, var_ty);
+    }
+    main_eff
 }
 
 const X: Ptr = Ptr(0);
@@ -199,4 +211,104 @@ fn screen_refresh_sets_unknown_and_yield() {
 
     assert!(e.is_unknown);
     assert!(e.yields);
+}
+
+#[test]
+fn stop_this_script_disagreeing_return_types_become_object() {
+    #[rustfmt::skip]
+    let blocks = vec![
+        c_if(true, vec![
+            set(X, 1.0),
+            ScratchBlock::ControlStopThisScript,
+        ]),
+
+        set(X, "final"),
+    ];
+
+    let e = eff(&blocks);
+
+    // Early return says X is Float, final return says X is String.
+    // Since both are possible outcomes, the resulting type must widen.
+    assert_eq!(e.writes.len(), 1);
+    assert_eq!(e.writes[&X].ty, VarTypeChecked::Object);
+}
+
+#[test]
+fn stop_this_script_agreeing_return_types_keep_correct_type() {
+    #[rustfmt::skip]
+    let blocks = vec![
+        c_if(true, vec![
+            set(X, "same"),
+            ScratchBlock::ControlStopThisScript,
+        ]),
+
+        set(X, "same"),
+    ];
+
+    let e = eff(&blocks);
+
+    // Both possible exits agree.
+    assert_eq!(e.writes.len(), 1);
+    assert_eq!(e.writes[&X].ty, VarTypeChecked::String);
+}
+
+#[test]
+fn stop_this_script_multiple_returns_stress() {
+    #[rustfmt::skip]
+    let blocks = vec![
+        set(X, 123.0),
+        set(Y, "initial"),
+
+        c_if(true, vec![
+            set(X, 1.0),
+
+            c_if(true, vec![
+                set(Y, "branch"),
+                ScratchBlock::ControlStopThisScript,
+            ]),
+
+            set(Z, true),
+
+            c_if(true, vec![
+                set(X, false), // conflicts with every other X write
+                ScratchBlock::ControlStopThisScript,
+            ]),
+        ]),
+
+        c_if(true, vec![
+            set(Y, "final"),
+
+            c_if(true, vec![
+                set(Z, "final conflict"),
+                ScratchBlock::ControlStopThisScript,
+            ]),
+        ]),
+
+        set(X, "final"),
+        set(Y, "final"),
+        set(Z, 999.0),
+    ];
+
+    let e = eff(&blocks);
+
+    assert_eq!(e.writes.len(), 3);
+
+    // X:
+    // - initial Float
+    // - nested early return Float
+    // - nested early return Bool
+    // - final String
+    assert_eq!(e.writes[&X].ty, VarTypeChecked::Object);
+
+    // Y:
+    // - initial String
+    // - early return String
+    // - final String
+    assert_eq!(e.writes[&Y].ty, VarTypeChecked::String);
+
+    // Z:
+    // - early path Bool
+    // - another early path String
+    // - final Float
+    assert_eq!(e.writes[&Z].ty, VarTypeChecked::Object);
 }
