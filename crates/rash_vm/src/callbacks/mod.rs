@@ -75,13 +75,17 @@ pub mod op;
 pub mod repeat_stack;
 pub mod types;
 
-pub const FUNCS: LazyLock<HashMap<UserExternalName, *const ()>> = LazyLock::new(|| {
+pub static FUNCS: LazyLock<HashMap<UserExternalName, usize>> = LazyLock::new(|| {
+    fn m((n, p): &(UserExternalName, *const ())) -> (UserExternalName, usize) {
+        (n.clone(), *p as usize)
+    }
+
     let mut funcs = HashMap::new();
-    funcs.extend(custom_block::FUNCS.iter().cloned());
-    funcs.extend(env::FUNCS.iter().cloned());
-    funcs.extend(op::FUNCS.iter().cloned());
-    funcs.extend(repeat_stack::FUNCS.iter().cloned());
-    funcs.extend(types::FUNCS.iter().cloned());
+    funcs.extend(custom_block::FUNCS.iter().map(m));
+    funcs.extend(env::FUNCS.iter().map(m));
+    funcs.extend(op::FUNCS.iter().map(m));
+    funcs.extend(repeat_stack::FUNCS.iter().map(m));
+    funcs.extend(types::FUNCS.iter().map(m));
     funcs
 });
 

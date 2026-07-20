@@ -57,14 +57,14 @@ impl RunState {
     /// `this` must point to a valid instance of `RunState`
     pub unsafe extern "C" fn c_get_x(this: *mut Self, id: SpriteId) -> f64 {
         debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).get_x(id) as f64
+        f64::from((unsafe { &mut *this }).get_x(id))
     }
 
     /// # Safety
     /// `this` must point to a valid instance of `RunState`
     pub unsafe extern "C" fn c_get_y(this: *mut Self, id: SpriteId) -> f64 {
         debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).get_y(id) as f64
+        f64::from((unsafe { &mut *this }).get_y(id))
     }
 
     pub fn get_x(&mut self, id: SpriteId) -> f32 {
@@ -103,7 +103,7 @@ impl RunState {
 
     pub fn shown(&mut self, id: SpriteId, shown: bool) {
         let state = self.sprites.get_mut(&id).unwrap();
-        state.graphics.shown = shown as i32;
+        state.graphics.shown = i32::from(shown);
     }
 
     /// # Safety

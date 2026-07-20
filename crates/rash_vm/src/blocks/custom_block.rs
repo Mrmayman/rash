@@ -11,7 +11,7 @@ use crate::{
 impl Compiler<'_> {
     pub fn call_custom_block(
         &mut self,
-        custom_block_id: &CustomBlockId,
+        custom_block_id: CustomBlockId,
         builder: &mut FunctionBuilder<'_>,
         args: &[Input],
         is_screen_refresh: bool,

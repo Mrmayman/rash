@@ -110,7 +110,7 @@ impl Effects {
         effects
     }
 
-    pub fn sequence(&mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
+    pub fn sequence(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
         if other.may_not_happen {
             self.merge(other, var_type);
             return;
@@ -118,11 +118,12 @@ impl Effects {
 
         self.union_reads(&other);
 
-        self.writes.extend(other.writes);
+        self.writes
+            .extend(other.writes.iter().map(|n| (*n.0, *n.1)));
     }
 
     pub fn then(mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
-        self.sequence(other, var_type);
+        self.sequence(&other, var_type);
         self
     }
 
@@ -137,7 +138,7 @@ impl Effects {
         self.reads.extend(other.reads.iter().copied());
     }
 
-    pub fn merge(&mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
+    pub fn merge(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
         self.union_reads(&other);
 
         // Just intersect writes, but if the types don't match, set to unknown
@@ -155,16 +156,16 @@ impl Effects {
             }
         }
         for ptr in other.writes.keys() {
-            if !self.writes.contains_key(ptr) {
-                if let VarTypeChecked::Object = var_type(*ptr).ty {
-                    self.writes.insert(*ptr, VariableWrite::default());
-                }
+            if !self.writes.contains_key(ptr)
+                && let VarTypeChecked::Object = var_type(*ptr).ty
+            {
+                self.writes.insert(*ptr, VariableWrite::default());
             }
         }
     }
 
     pub fn or(mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
-        self.merge(other, var_type);
+        self.merge(&other, var_type);
         self
     }
 
@@ -326,7 +327,7 @@ impl CheckEffects for ScratchBlock {
             ScratchBlock::ControlStopThisScript => {
                 // Propagate early-return upwards
                 e(Effects::new());
-                return Effects::new();
+                Effects::new()
             }
 
             // ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, inputs) |
@@ -379,7 +380,7 @@ impl<T: CheckEffects> CheckEffects for &[T] {
                 // If a function returns early, the thrown effect is propagated.
                 e(effects.clone().then(thrown_effect, var_ty));
             });
-            effects.sequence(other, var_ty);
+            effects.sequence(&other, var_ty);
         }
         debug_assert!(
             !effects.may_not_happen,

@@ -22,7 +22,7 @@ pub extern "C" fn days_since_2000() -> f64 {
         .expect("Time went backwards");
 
     let seconds = now.as_secs() as f64;
-    let millis = now.subsec_nanos() as f64 / 1_000_000_000.0;
+    let millis = f64::from(now.subsec_nanos()) / 1_000_000_000.0;
 
     let seconds_since_2000 = seconds + millis - SECONDS_1970_TO_2000;
     seconds_since_2000 / SECONDS_PER_DAY

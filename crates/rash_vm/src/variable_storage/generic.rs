@@ -86,11 +86,11 @@ impl VarStore for GenericVarStore {
         let old_var = self.variable_types.get(&ptr).copied().unwrap_or_default();
         let new_ty = value.val.into();
 
-        if old_var.ty != new_ty {
-            if let Some(id) = new_ty.get_id() {
-                let id = constants.get_int(id, builder);
-                builder.ins().store(MemFlags::new(), id, load_ptr, offset);
-            }
+        if old_var.ty != new_ty
+            && let Some(id) = new_ty.get_id()
+        {
+            let id = constants.get_int(id, builder);
+            builder.ins().store(MemFlags::new(), id, load_ptr, offset);
         }
 
         let mut store_val = |v, off| {

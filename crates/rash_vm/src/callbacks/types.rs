@@ -25,7 +25,7 @@ declare_module!(
 /// - `i64` - The boolean value of the `ScratchObject`
 ///   (represented as `i64` for predictable layout).
 pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -51,7 +51,7 @@ pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
 /// # Return
 /// - `f64` - The number value of the `ScratchObject`
 pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
     i4: i64,
     out: *mut DecimalCheck,
 ) {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
 ///   can be `std::mem::transmute`d).
 /// - `out` - The pointer to the memory location to write the string to.
 pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut String) {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {

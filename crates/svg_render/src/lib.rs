@@ -29,7 +29,7 @@ impl SvgRenderer {
             // Get file's absolute directory.
             resources_dir: std::fs::canonicalize(input)
                 .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf())),
+                .and_then(|p| p.parent().map(std::path::Path::to_path_buf)),
             ..Default::default()
         };
 

@@ -93,7 +93,7 @@ pub unsafe extern "C" fn str_contains(
             std::ptr::drop_in_place(substring);
         }
     }
-    contains as i64
+    i64::from(contains)
 }
 
 pub unsafe extern "C" fn str_letter(
@@ -135,7 +135,7 @@ fn get_char_at_index(index: f64, string: *mut String) -> Option<char> {
     string
         .encode_utf16()
         .nth(index)
-        .map(|n| char::from_u32(n as u32).unwrap_or('\u{FFFD}'))
+        .map(|n| char::from_u32(u32::from(n)).unwrap_or('\u{FFFD}'))
     // For example, the emoji "💀" is 4 "chars" in rust string,
     // but 2 chars in UTF-16 Scratch string.
 }

@@ -233,7 +233,7 @@ impl ScratchObject {
                         *cmp_str = true;
                     }
                 }
-                ScratchObject::Bool(b) => *n = *b as u8 as f64,
+                ScratchObject::Bool(b) => *n = f64::from(u8::from(*b)),
             }
         }
 

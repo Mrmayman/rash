@@ -73,7 +73,7 @@ impl Compiler<'_> {
         // Compile-time known value
         if let (Input::Obj(a), Input::Obj(b)) = (a, b) {
             let out = a.scratch_cmp(b); // Same logic run by the callback
-            return self.constants.get_int((out == comp) as i64, builder);
+            return self.constants.get_int(i64::from(out == comp), builder);
         }
 
         let var_checker = |ptr| self.cache.get_type(ptr);
@@ -116,8 +116,8 @@ impl Compiler<'_> {
             _ => {} // We'll deal with strings below
         }
 
-        let obja = a.get_object(self, builder);
-        let objb = b.get_object(self, builder);
+        let obj_first = a.get_object(self, builder);
+        let obj_second = b.get_object(self, builder);
 
         let inst = self.call_function(
             builder,
@@ -125,7 +125,14 @@ impl Compiler<'_> {
             &[I64; 8],
             &[I64],
             &[
-                obja[0], obja[1], obja[2], obja[3], objb[0], objb[1], objb[2], objb[3],
+                obj_first[0],
+                obj_first[1],
+                obj_first[2],
+                obj_first[3],
+                obj_second[0],
+                obj_second[1],
+                obj_second[2],
+                obj_second[3],
             ],
         );
         let r = builder.inst_results(inst)[0];
@@ -256,17 +263,10 @@ impl Compiler<'_> {
         } else {
             builder.ins().fdiv(a, b)
         };
-        let floor_div = self.floor_call(div, builder);
+        let floor_div = builder.ins().floor(div);
 
         let decimal_part = builder.ins().fsub(div, floor_div);
         builder.ins().fmul(decimal_part, b)
-    }
-
-    fn floor_call(&mut self, n: Value, builder: &mut FunctionBuilder<'_>) -> Value {
-        builder.ins().floor(n)
-
-        // let ins = self.call_function(builder, f64::floor as *const (), &[F64], &[F64], &[n]);
-        // builder.inst_results(ins)[0]
     }
 
     pub fn op_str_len(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>) -> ScratchValue {
@@ -309,7 +309,7 @@ impl Compiler<'_> {
 
     pub fn op_m_floor(&mut self, n: &Input, builder: &mut FunctionBuilder<'_>) -> ScratchValue {
         let n = n.get_number(self, builder);
-        let result = self.floor_call(n, builder);
+        let result = builder.ins().floor(n);
         ScratchValue::Num(result)
     }
 

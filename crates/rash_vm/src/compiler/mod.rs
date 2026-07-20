@@ -117,7 +117,7 @@ pub enum VarTypeChecked {
 }
 
 impl VarTypeChecked {
-    pub fn get_id(&self) -> Option<i64> {
+    pub fn get_id(self) -> Option<i64> {
         match self {
             Self::Number => Some(ID_NUMBER),
             Self::Bool => Some(ID_BOOL),
@@ -359,13 +359,13 @@ impl<'a> Compiler<'a> {
         let var_ty = &|_| VariableWrite::default();
         let mut program_analysis = code.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
             if let Some(other) = &mut other_eff {
-                other.merge(e, var_ty);
+                other.merge(&e, var_ty);
             } else {
-                other_eff = Some(e)
+                other_eff = Some(e);
             }
         });
         if let Some(other_eff) = other_eff {
-            program_analysis.merge(other_eff, var_ty);
+            program_analysis.merge(&other_eff, var_ty);
         }
 
         let cache: Box<dyn VarStore> = if program_analysis.is_unknown {
@@ -502,14 +502,14 @@ impl<'a> Compiler<'a> {
                 self.control_stop_this_script(builder);
             }
             ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, args) => {
-                self.call_custom_block(custom_block_id, builder, args, false);
+                self.call_custom_block(*custom_block_id, builder, args, false);
             }
             ScratchBlock::FunctionCallScreenRefresh(custom_block_id, args) => {
-                self.call_custom_block(custom_block_id, builder, args, true);
+                self.call_custom_block(*custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
                 return Some(ScratchValue::Object(
-                    self.custom_block_get_arg(builder, idx),
+                    self.custom_block_get_arg(builder, *idx),
                 ));
             }
             ScratchBlock::MotionGoToXY(x, y) => {
@@ -608,7 +608,7 @@ impl<'a> Compiler<'a> {
             }
             ScratchBlock::LooksShown(shown) => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
-                let shown = self.constants.get_int(*shown as i64, builder);
+                let shown = self.constants.get_int(i64::from(*shown), builder);
 
                 self.call_function_indirect(
                     builder,
@@ -631,9 +631,9 @@ impl<'a> Compiler<'a> {
     fn custom_block_get_arg(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        idx: &usize,
+        idx: usize,
     ) -> [Value; 4] {
-        let [i1, i2, i3, i4] = self.args_list[*idx];
+        let [i1, i2, i3, i4] = self.args_list[idx];
 
         self.call_function(
             builder,

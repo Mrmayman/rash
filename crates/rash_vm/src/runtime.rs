@@ -255,6 +255,7 @@ pub struct ProjectBuilder {
 }
 
 impl ProjectBuilder {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -488,12 +489,12 @@ impl ScratchThread {
         let result = unsafe {
             (self.func)(
                 self.jumped_point,
-                &mut self.stack_repeat,
+                &raw mut self.stack_repeat,
                 self.arguments.as_ptr(),
                 scripts,
                 state,
                 self.is_screen_refresh,
-                &mut *self.child_thread,
+                &raw mut *self.child_thread,
             )
         };
         self.jumped_point = result;
