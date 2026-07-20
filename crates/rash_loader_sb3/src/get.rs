@@ -4,7 +4,7 @@ use rash_vm::{
     error::{RashError, Trace},
 };
 
-use crate::{Res, compile, error::ErrExt};
+use crate::{Res, error::ErrExt, load_block};
 
 use super::{
     CompileContext,
@@ -16,17 +16,22 @@ pub fn substack(
     ctx: &mut CompileContext,
     substack_name: &str,
 ) -> Res<Vec<ScratchBlock>> {
+    const F: &str = "get::substack";
     let Some(substack) = b.inputs.get(substack_name) else {
         return Ok(Vec::new());
     };
-    let substack = substack.as_array().ok_or(RashError::field_not_found(
-        "b.inputs.{substack_name}: not array",
-    ))?;
+    let substack = substack
+        .as_array()
+        .ok_or(RashError::field_not_found(
+            "b.inputs.{substack_name}: not array",
+        ))
+        .trace(F)?;
     let Some(child_block_id) = substack
         .get(1)
         .ok_or(RashError::field_not_found(&format!(
             "b.inputs.{substack_name}[1]"
-        )))?
+        )))
+        .trace(F)?
         .as_str()
     else {
         return Ok(Vec::new());
@@ -40,14 +45,14 @@ pub fn substack(
             eprintln!("Array block encountered");
             break;
         };
-        compiled_blocks.push(compile(&block, ctx).trace("Block::compile_substack()")?);
+        compiled_blocks.push(load_block(&block, ctx).trace(F)?);
         id.clone_from(&block.next);
     }
     Ok(compiled_blocks)
 }
 
-pub fn get_variable_field(b: &Block) -> Res<&str> {
-    const F: &str = "Block::get_variable_field";
+pub fn variable_field(b: &Block) -> Res<&str> {
+    const F: &str = "get::variable_field";
     let variable_field = b
         .fields
         .get("VARIABLE")
@@ -68,6 +73,7 @@ pub fn get_variable_field(b: &Block) -> Res<&str> {
 }
 
 pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
+    const F: &str = "get::boolean";
     let Some(input) = b.inputs.get(name) else {
         return Ok(false.into());
     };
@@ -75,13 +81,12 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
         .as_array()
         .unwrap()
         .get(1)
-        .ok_or(RashError::field_not_found(&format!("b.inputs.{name}[1]")))?
+        .ok_or(RashError::field_not_found(&format!("b.inputs.{name}[1]")))
+        .trace(F)?
     {
         serde_json::Value::Null => false.into(),
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
-            JsonBlock::Block { block } => compile(&block, ctx)
-                .trace("Block::get_boolean_input")?
-                .into(),
+            JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),
             JsonBlock::Array(_) => todo!(),
         },
         serde_json::Value::Array(vec) => {
@@ -89,7 +94,8 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
                 .first()
                 .ok_or(RashError::field_not_found(&format!(
                     "b.inputs.{name}[1][0]"
-                )))?
+                )))
+                .trace(F)?
                 .as_i64()
                 .unwrap();
             match n {
@@ -103,7 +109,8 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
                     None => {
                         return Err(RashError::field_not_found(&format!(
                             "b.inputs.{name}[1][1]"
-                        )));
+                        )))
+                        .trace(F);
                     }
                     _ => panic!(),
                 },
@@ -127,7 +134,7 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
 }
 
 pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
-    const F: &str = "Block::get_number_input";
+    const F: &str = "get::number";
 
     let input = match b
         .inputs
@@ -143,7 +150,7 @@ pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     {
         serde_json::Value::Null => false.into(),
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
-            JsonBlock::Block { block } => compile(&block, ctx).trace(F)?.into(),
+            JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),
             JsonBlock::Array(_) => todo!(),
         },
         serde_json::Value::Array(vec) => {
@@ -200,19 +207,20 @@ pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
 }
 
 pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
+    const F: &str = "get::string";
     let input = match b
         .inputs
         .get(name)
-        .ok_or(RashError::field_not_found(&format!("b.inputs.{name}")))?
+        .ok_or(RashError::field_not_found(&format!("b.inputs.{name}")))
+        .trace(F)?
         .as_array()
         .unwrap()
         .get(1)
-        .ok_or(RashError::field_not_found(&format!("b.inputs.{name}[1]")))?
+        .ok_or(RashError::field_not_found(&format!("b.inputs.{name}[1]")))
+        .trace(F)?
     {
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
-            JsonBlock::Block { block } => compile(&block, ctx)
-                .trace("Block::get_string_input")?
-                .into(),
+            JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),
             JsonBlock::Array(_) => todo!(),
         },
         serde_json::Value::Array(vec) => {
@@ -220,7 +228,8 @@ pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
                 .first()
                 .ok_or(RashError::field_not_found(&format!(
                     "b.inputs.{name}[1][0]"
-                )))?
+                )))
+                .trace(F)?
                 .as_i64()
                 .unwrap();
             match n {
@@ -236,7 +245,8 @@ pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
                     None => {
                         return Err(RashError::field_not_found(&format!(
                             "b.inputs.{name}[1][1]"
-                        )));
+                        )))
+                        .trace(F);
                     }
                     _ => panic!(),
                 },

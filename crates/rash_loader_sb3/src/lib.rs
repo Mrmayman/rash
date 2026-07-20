@@ -14,7 +14,6 @@ use rash_vm::{
 use crate::{
     blocks::{control, op},
     error::{ErrExt, ErrorConvertPath},
-    get::{get_variable_field, number, string},
 };
 use rash_loader_sb3_json as json;
 
@@ -332,17 +331,13 @@ fn load_blocks(
                 break;
             };
 
-            blocks.push(compile(block, &mut ctx).trace(&format!(
+            blocks.push(load_block(block, &mut ctx).trace(&format!(
                 "ProjectLoader::build (sprite: {})",
                 sprite_json.name
             ))?);
 
             id = block.next.clone();
         }
-
-        // for block in &blocks {
-        //     println!("{}", block.format(0))
-        // }
 
         match hat_block.opcode.as_str() {
             "event_whenflagclicked" => {
@@ -352,7 +347,6 @@ fn load_blocks(
             "procedures_definition" => {
                 let custom_block = custom_block.unwrap();
 
-                println!("{custom_block:?}");
                 sprite.add_script(
                     Script::new_custom_block(
                         blocks,
@@ -372,14 +366,14 @@ fn load_blocks(
     Ok(())
 }
 
-pub fn compile(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
+pub fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
     match b.opcode.as_str() {
         "data_setvariableto" => {
             // b.fields.VARIABLE[1]
-            let variable_id = get_variable_field(b)?;
+            let variable_id = get::variable_field(b)?;
             let variable_ptr = ctx.get_var(variable_id);
 
-            let value = number(b, ctx, "VALUE").trace("Block::compile.data_setvariableto")?;
+            let value = get::number(b, ctx, "VALUE").trace("Block::compile.data_setvariableto")?;
 
             Ok(ScratchBlock::VarSet(variable_ptr, value))
         }
@@ -402,30 +396,31 @@ pub fn compile(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         "operator_not" => op::not(b, ctx),
         "operator_mathop" => op::mathop(b, ctx),
         "data_changevariableby" => {
-            let variable = get_variable_field(b)?;
-            let value = number(b, ctx, "VALUE").trace("Block::compile.data_changevariableby")?;
+            let variable = get::variable_field(b)?;
+            let value =
+                get::number(b, ctx, "VALUE").trace("Block::compile.data_changevariableby")?;
             Ok(ScratchBlock::VarChange(ctx.get_var(variable), value))
         }
         "motion_gotoxy" => {
-            let x = number(b, ctx, "X").trace("Block::compile.motion_gotoxy")?;
-            let y = number(b, ctx, "Y").trace("Block::compile.motion_gotoxy")?;
+            let x = get::number(b, ctx, "X").trace("Block::compile.motion_gotoxy")?;
+            let y = get::number(b, ctx, "Y").trace("Block::compile.motion_gotoxy")?;
 
             Ok(ScratchBlock::MotionGoToXY(x, y))
         }
         "motion_setx" => {
-            let n = number(b, ctx, "X").trace("Block::compile.motion_setx")?;
+            let n = get::number(b, ctx, "X").trace("Block::compile.motion_setx")?;
             Ok(ScratchBlock::MotionSetX(n))
         }
         "motion_sety" => {
-            let n = number(b, ctx, "Y").trace("Block::compile.motion_sety")?;
+            let n = get::number(b, ctx, "Y").trace("Block::compile.motion_sety")?;
             Ok(ScratchBlock::MotionSetY(n))
         }
         "motion_changexby" => {
-            let val = number(b, ctx, "DX").trace("Block::compile.motion_changexby")?;
+            let val = get::number(b, ctx, "DX").trace("Block::compile.motion_changexby")?;
             Ok(ScratchBlock::MotionChangeX(val))
         }
         "motion_changeyby" => {
-            let val = number(b, ctx, "DY").trace("Block::compile.motion_changeyby")?;
+            let val = get::number(b, ctx, "DY").trace("Block::compile.motion_changeyby")?;
             Ok(ScratchBlock::MotionChangeY(val))
         }
         "looks_show" => Ok(ScratchBlock::LooksShown(true)),
@@ -437,7 +432,7 @@ pub fn compile(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         "control_forever" => control::forever(b, ctx),
         "looks_say" => {
             // TODO: implement this properly
-            let message = string(b, ctx, "MESSAGE").trace("Block::compile.looks_say")?;
+            let message = get::string(b, ctx, "MESSAGE").trace("Block::compile.looks_say")?;
             Ok(ScratchBlock::Log(message))
         }
         "sensing_dayssince2000" => Ok(ScratchBlock::ControlDaysSince2000),
@@ -447,7 +442,7 @@ pub fn compile(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
             let args: Res<Vec<Input>> = block
                 .args
                 .iter()
-                .map(|n| number(b, ctx, n).trace("Block::compile.procedures_call"))
+                .map(|n| get::number(b, ctx, n).trace("Block::compile.procedures_call"))
                 .collect();
             let args = args?;
 
