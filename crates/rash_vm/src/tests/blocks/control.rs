@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::{
     Ptr, ScratchBlock,
-    builder::{c_if, c_if_else, c_repeat, fadd},
+    builder::{c_if, c_if_else, c_repeat, change, fadd},
     tests::blocks::{set_var, utils::run_code},
 };
 
@@ -104,6 +104,7 @@ pub fn stop_this_script_inside_nested_control_flow() {
 #[test]
 pub fn stop_this_script_only_skips_remaining_execution_path() {
     let memory = run_code(&vec![
+        set_var(Ptr(1), ""),
         c_if(
             true,
             vec![
@@ -277,4 +278,31 @@ pub fn repeated_join_string() {
         memory[7].convert_to_string(),
         "hello world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, world, "
     );
+}
+
+#[test]
+pub fn repeat_invalid_inputs() {
+    let memory = run_code(&vec![
+        set_var(Ptr(0), 0.0),
+        c_repeat(-1.0, vec![change(Ptr(0), 1.0)]),
+        set_var(Ptr(1), 0.0),
+        c_repeat(0.0, vec![change(Ptr(1), 1.0)]),
+        set_var(Ptr(2), 0.0),
+        c_repeat(f64::NEG_INFINITY, vec![change(Ptr(2), 1.0)]),
+        set_var(Ptr(3), 0.0),
+        c_repeat(f64::NAN, vec![change(Ptr(3), 1.0)]),
+        set_var(Ptr(4), 0.0),
+        c_repeat(0.1, vec![change(Ptr(4), 1.0)]),
+        set_var(Ptr(5), 0.0),
+        c_repeat(0.5, vec![change(Ptr(5), 1.0)]),
+        set_var(Ptr(6), 0.0),
+        c_repeat(0.9, vec![change(Ptr(6), 1.0)]),
+    ]);
+    assert_eq!(memory[0].convert_to_number(), 0.0);
+    assert_eq!(memory[1].convert_to_number(), 0.0);
+    assert_eq!(memory[2].convert_to_number(), 0.0);
+    assert_eq!(memory[3].convert_to_number(), 0.0);
+    assert_eq!(memory[4].convert_to_number(), 0.0);
+    assert_eq!(memory[5].convert_to_number(), 0.0);
+    assert_eq!(memory[6].convert_to_number(), 0.0);
 }

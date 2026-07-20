@@ -171,21 +171,22 @@ impl Input {
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let mut num = match self {
-            Input::Obj(scratch_object) => compiler
-                .constants
-                .get_int(scratch_object.convert_to_number() as i64, builder),
+        match self {
+            Input::Obj(scratch_object) => {
+                let num = scratch_object.convert_to_number();
+                compiler
+                    .constants
+                    .get_int(if num.is_nan() { 0 } else { num as i64 }, builder)
+            }
             Input::Block(scratch_block) => {
-                let number = compiler
+                let mut num = compiler
                     .compile_block(scratch_block, builder)
                     .unwrap()
                     .get_number(compiler, builder);
-                builder.ins().fcvt_to_sint(I64, number)
+                self.nan_check(compiler, builder, &mut num);
+                builder.ins().fcvt_to_sint(I64, num)
             }
-        };
-        self.nan_check(compiler, builder, &mut num);
-
-        num
+        }
     }
 
     fn nan_check(
