@@ -8,16 +8,19 @@ use crate::{
 
 #[test]
 pub fn nested_repeat() {
-    let memory = run_code(&vec![c_repeat(
-        9.0,
-        vec![c_repeat(
-            11.0,
-            vec![set_var(
-                Ptr(0),
-                ScratchBlock::OpStrJoin(Ptr(0).into(), "H".into()),
+    let memory = run_code(vec![
+        set_var(Ptr(0), 0.0),
+        c_repeat(
+            9.0,
+            vec![c_repeat(
+                11.0,
+                vec![set_var(
+                    Ptr(0),
+                    ScratchBlock::OpStrJoin(Ptr(0).into(), "H".into()),
+                )],
             )],
-        )],
-    )]);
+        ),
+    ]);
     assert_eq!(
         memory[0].convert_to_string(),
         "0HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
@@ -26,7 +29,7 @@ pub fn nested_repeat() {
 
 #[test]
 pub fn repeat_until() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(0), 0.0),
         ScratchBlock::ControlRepeatUntil(
             ScratchBlock::OpCmp(Ptr(0).into(), 10.0.into(), Ordering::Greater).into(),
@@ -46,7 +49,7 @@ pub fn repeat_until() {
 
 #[test]
 pub fn stop_this_script() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(0), 1.0),
         set_var(Ptr(1), 2.0),
         set_var(Ptr(2), "hello"),
@@ -63,7 +66,7 @@ pub fn stop_this_script() {
 
 #[test]
 pub fn stop_this_script_inside_if_prevents_following_code() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         c_if(
             true,
             vec![
@@ -80,7 +83,7 @@ pub fn stop_this_script_inside_if_prevents_following_code() {
 
 #[test]
 pub fn stop_this_script_inside_nested_control_flow() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         c_if(
             true,
             vec![
@@ -103,7 +106,7 @@ pub fn stop_this_script_inside_nested_control_flow() {
 
 #[test]
 pub fn stop_this_script_only_skips_remaining_execution_path() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(1), ""),
         c_if(
             true,
@@ -121,7 +124,7 @@ pub fn stop_this_script_only_skips_remaining_execution_path() {
 
 #[test]
 pub fn stop_this_script_multiple_possible_stops() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(0), "start"),
         c_if(
             true,
@@ -140,7 +143,7 @@ pub fn stop_this_script_multiple_possible_stops() {
 
 #[test]
 pub fn stop_this_script_does_not_rollback_state() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(0), 100.0),
         set_var(Ptr(0), 200.0),
         ScratchBlock::ControlStopThisScript,
@@ -153,7 +156,7 @@ pub fn stop_this_script_does_not_rollback_state() {
 
 #[test]
 pub fn branch_if_else() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         c_if_else(true, vec![set_var(Ptr(2), 1.0)], vec![set_var(Ptr(2), 0.0)]),
         c_if_else(
             false,
@@ -203,7 +206,19 @@ pub fn branch_if_else() {
 
 #[test]
 pub fn branch_if() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
+        set_var(Ptr(0), 0.0),
+        set_var(Ptr(1), 0.0),
+        set_var(Ptr(2), 0.0),
+        set_var(Ptr(3), 0.0),
+        set_var(Ptr(4), 0.0),
+        set_var(Ptr(5), 0.0),
+        set_var(Ptr(6), 0.0),
+        set_var(Ptr(7), 0.0),
+        set_var(Ptr(8), 0.0),
+        set_var(Ptr(9), 0.0),
+        set_var(Ptr(10), 0.0),
+        set_var(Ptr(11), 0.0),
         c_if(1.0, vec![set_var(Ptr(0), 1.0)]),
         c_if(0.0, vec![set_var(Ptr(1), 1.0)]),
         c_if(true, vec![set_var(Ptr(2), 1.0)]),
@@ -242,7 +257,7 @@ pub fn branch_if() {
 
 #[test]
 pub fn repeated_sum() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(7), fadd(Ptr(7), false)),
         c_repeat(
             100_000.0,
@@ -257,7 +272,7 @@ pub fn repeated_sum() {
 
 #[test]
 pub fn repeated_join_string() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(7), "hello "),
         c_repeat(
             100.0,
@@ -278,7 +293,7 @@ pub fn repeated_join_string() {
 
 #[test]
 pub fn repeat_invalid_inputs() {
-    let memory = run_code(&vec![
+    let memory = run_code(vec![
         set_var(Ptr(0), 0.0),
         c_repeat(-1.0, vec![change(Ptr(0), 1.0)]),
         set_var(Ptr(1), 0.0),
@@ -302,3 +317,31 @@ pub fn repeat_invalid_inputs() {
     assert_eq!(memory[5].convert_to_number(), 0.0);
     assert_eq!(memory[6].convert_to_number(), 0.0);
 }
+
+// #[test]
+// pub fn repeat_invalid_inputs_runtime() {
+//     let f = |n| fadd(n, 0.0);
+//     let memory = run_code(vec![
+//         set_var(Ptr(0), 0.0),
+//         c_repeat(f(-1.0), vec![change(Ptr(0), 1.0)]),
+//         set_var(Ptr(1), 0.0),
+//         c_repeat(f(0.0), vec![change(Ptr(1), 1.0)]),
+//         set_var(Ptr(2), 0.0),
+//         c_repeat(f(f64::NEG_INFINITY), vec![change(Ptr(2), 1.0)]),
+//         set_var(Ptr(3), 0.0),
+//         c_repeat(f(f64::NAN), vec![change(Ptr(3), 1.0)]),
+//         set_var(Ptr(4), 0.0),
+//         c_repeat(f(0.1), vec![change(Ptr(4), 1.0)]),
+//         set_var(Ptr(5), 0.0),
+//         c_repeat(f(0.5), vec![change(Ptr(5), 1.0)]),
+//         set_var(Ptr(6), 0.0),
+//         c_repeat(f(0.9), vec![change(Ptr(6), 1.0)]),
+//     ]);
+//     assert_eq!(memory[0].convert_to_number(), 0.0);
+//     assert_eq!(memory[1].convert_to_number(), 0.0);
+//     assert_eq!(memory[2].convert_to_number(), 0.0);
+//     assert_eq!(memory[3].convert_to_number(), 0.0);
+//     assert_eq!(memory[4].convert_to_number(), 0.0);
+//     assert_eq!(memory[5].convert_to_number(), 0.0);
+//     assert_eq!(memory[6].convert_to_number(), 0.0);
+// }
