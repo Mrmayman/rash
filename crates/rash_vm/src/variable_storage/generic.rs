@@ -20,7 +20,6 @@ use crate::{
 #[derive(Clone)]
 pub struct GenericVarStore {
     variable_types: HashMap<Ptr, VariableWrite>,
-    // Let's forget this till the next CVE
     memory: *const ScratchObject,
 }
 

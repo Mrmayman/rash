@@ -45,16 +45,9 @@ pub unsafe extern "C" fn cmp(
     b3: i64,
     b4: i64,
 ) -> i64 {
-    // println!("{a1}, {a2}, {a3}, {a4}");
     let a: ScratchObject = unsafe { std::mem::transmute([a1, a2, a3, a4]) };
-    // println!("{b1}, {b2}, {b3}, {b4}");
     let b: ScratchObject = unsafe { std::mem::transmute([b1, b2, b3, b4]) };
-    // println!("{a:?}, {b:?}");
-    let r = a.scratch_cmp(&b) as i64;
-    // TODO: there's a memory lifetime bug in b
-    // This will be fixed when we migrate to SmolStr
-    std::mem::forget(b);
-    r
+    a.scratch_cmp(&b) as i64
 }
 
 /// Callback from JIT code to generate a random number.

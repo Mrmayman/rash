@@ -9,7 +9,7 @@
    compiler_ignore2
    Memcheck:Value8
    ...
-   fun:_ZN7rash_vm8compiler8Compiler13compile_block17h0c8d0005c3df4f40E
+   fun:_ZN7rash_vm8compiler8Compiler13compile_block*
    ...
 }
 {
@@ -23,14 +23,14 @@
    compiler_ignore4
    Memcheck:Value8
    ...
-   fun:_ZN17cranelift_codegen7context7Context8optimize17h1afea7ce41876a74E
+   fun:_ZN17cranelift_codegen7context7Context8optimize*
    ...
 }
 {
    compiler_ignore5
    Memcheck:Cond
    ...
-   fun:_ZN17cranelift_codegen7context7Context7compile17h0526b75f9e86b767E
+   fun:_ZN17cranelift_codegen7context7Context7compile*
    ...
 }
 

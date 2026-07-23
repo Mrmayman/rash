@@ -229,13 +229,15 @@ impl Compiler<'_> {
     }
 
     /// A Scratch-accurate modulo operation (complete with quirks).
+    ///
+    /// There's no fmod or frem instruction in cranelift, let alone
+    /// a `rem_euclid` so we gotta make our own
     pub fn op_modulo(
         &mut self,
         a_in: &Input,
         b_in: &Input,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        // There is no fmod or frem instruction in cranelift bruh
         let a = a_in.get_number(self, builder);
         let b = b_in.get_number(self, builder);
 
