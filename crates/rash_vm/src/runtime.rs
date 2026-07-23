@@ -198,7 +198,7 @@ impl ScriptKind {
 pub struct SpriteBuilder {
     id: SpriteId,
     scripts: Scripts,
-    strings_to_drop: Vec<SmolStr>,
+    static_strings: Vec<SmolStr>,
 }
 
 impl SpriteBuilder {
@@ -207,7 +207,7 @@ impl SpriteBuilder {
         Self {
             id,
             scripts: Scripts::default(),
-            strings_to_drop: Vec::new(),
+            static_strings: Vec::new(),
         }
     }
 
@@ -221,7 +221,7 @@ impl SpriteBuilder {
         match script.kind {
             ScriptKind::GreenFlag => {
                 // This is where all your magic happens :D
-                let (thread, strings_to_drop) = compile(
+                let (thread, static_strings) = compile(
                     &script.blocks,
                     memory,
                     self.id,
@@ -229,7 +229,7 @@ impl SpriteBuilder {
                     script.kind.is_screen_refresh(),
                 );
 
-                self.strings_to_drop.extend(strings_to_drop);
+                self.static_strings.extend(static_strings);
                 self.scripts.green_flags.push(thread);
             }
             ScriptKind::CustomBlock {
@@ -266,7 +266,7 @@ impl ProjectBuilder {
     pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
         // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
-        self.runtime.strings_to_drop.extend(sprite.strings_to_drop);
+        self.runtime.static_strings.extend(sprite.static_strings);
         self.runtime.scripts.push(sprite.scripts);
     }
 
@@ -292,7 +292,7 @@ impl ProjectBuilder {
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
-            let (thread, strings_to_drop) = compile(
+            let (thread, static_strings) = compile(
                 &scr.blocks,
                 memory,
                 script.sprite_id,
@@ -301,7 +301,7 @@ impl ProjectBuilder {
             );
 
             script.script = CustomBlockFunc::Compiled(thread);
-            self.runtime.strings_to_drop.extend(strings_to_drop);
+            self.runtime.static_strings.extend(static_strings);
         }
 
         self.runtime.init();
@@ -325,7 +325,7 @@ pub struct Runtime {
     pub costume_data: HashMap<CostumeId, CostumeData>,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
-    strings_to_drop: Vec<SmolStr>,
+    static_strings: Vec<SmolStr>,
 }
 
 impl Runtime {

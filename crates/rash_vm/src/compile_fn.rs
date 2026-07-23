@@ -135,7 +135,7 @@ pub fn compile(
             id,
             compiler.is_screen_refresh,
         ),
-        compiler.strings_to_drop,
+        compiler.static_strings,
     )
 }
 

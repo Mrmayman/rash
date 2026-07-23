@@ -219,7 +219,7 @@ impl Input {
 
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
                 compiler
-                    .strings_to_drop
+                    .static_strings
                     .push(unsafe { std::mem::transmute(bytes) });
 
                 let val1 = compiler.constants.get_int(bytes[0], builder);
@@ -274,7 +274,7 @@ impl Input {
                     unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
                 if is_string {
                     compiler
-                        .strings_to_drop
+                        .static_strings
                         .push(unsafe { std::mem::transmute([i2, i3, i4]) });
                 }
 

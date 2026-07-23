@@ -291,7 +291,7 @@ pub struct Compiler<'compiler> {
     pub program_analysis: Effects,
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
-    pub strings_to_drop: Vec<SmolStr>,
+    pub static_strings: Vec<SmolStr>,
     pub cache: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
 
@@ -390,7 +390,7 @@ impl<'a> Compiler<'a> {
             func_store: FunctionStore::new(func_map),
             break_counter: 0,
             repeat_stack: 0,
-            strings_to_drop: Vec::new(),
+            static_strings: Vec::new(),
             memory,
             script_ptr,
             loop_stack_ptr,

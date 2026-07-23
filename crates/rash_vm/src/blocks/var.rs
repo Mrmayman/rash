@@ -38,7 +38,7 @@ impl Compiler<'_> {
                             let to_drop =
                                 self.cache
                                     .store_string(ptr, builder, string, &mut self.constants);
-                            self.strings_to_drop.push(to_drop);
+                            self.static_strings.push(to_drop);
                         }
                     }
                 }
