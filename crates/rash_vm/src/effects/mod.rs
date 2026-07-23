@@ -36,6 +36,17 @@ impl VariableWrite {
     pub fn skip_nan(ty: VarTypeChecked) -> Self {
         Self { ty, skip_nan: true }
     }
+
+    pub fn merge(self, other: Self) -> Self {
+        if self.ty == other.ty {
+            Self {
+                ty: self.ty,
+                skip_nan: self.skip_nan && other.skip_nan,
+            }
+        } else {
+            Self::default()
+        }
+    }
 }
 
 impl From<VariableWrite> for VarTypeChecked {
@@ -141,25 +152,49 @@ impl Effects {
     pub fn merge(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
         self.union_reads(other);
 
-        // Just intersect writes, but if the types don't match, set to unknown
+        // There are two scenarios we may be dealing with
+        //
+        //  1) other.may_not_happen:
+        //
+        //     [PreviousState(var_type)]
+        //           │
+        //           ▼
+        //        [self]
+        //        │    │
+        //        │  [other]
+        //        │    │
+        //        ▼    ▼
+        //     ┌──────────────┐
+        //     │    Result    │
+        //     └──────────────┘
+        //
+        //  2) !other.may_not_happen:
+        //
+        //     [PreviousState(var_type)]
+        //        │        │
+        //        ▼        ▼
+        //      [self]  [other]
+        //        │        │
+        //        ▼        ▼
+        //     ┌──────────────┐
+        //     │    Result    │
+        //     └──────────────┘
+
+        // 1. Process keys that exist in BOTH branches
         for (ptr, ty) in &mut self.writes {
             if let Some(other_ty) = other.writes.get(ptr) {
-                ty.skip_nan = ty.skip_nan && other_ty.skip_nan;
-                if ty.ty != other_ty.ty {
-                    ty.ty = VarTypeChecked::Object;
-                }
+                *ty = ty.merge(*other_ty);
             } else if !other.may_not_happen {
-                // Branch A wrote to the variable but
-                // branch B did not. Remember, this is a
-                // merge operator
-                *ty = VariableWrite::default();
+                // Written in `self`, but missing in guaranteed `other` path
+                *ty = ty.merge(var_type(*ptr));
             }
         }
-        for ptr in other.writes.keys() {
-            if !self.writes.contains_key(ptr)
-                && let VarTypeChecked::Object = var_type(*ptr).ty
-            {
-                self.writes.insert(*ptr, VariableWrite::default());
+
+        // 2. Process keys that exist ONLY in `other`
+        for (ptr, var) in &other.writes {
+            if !self.writes.contains_key(ptr) {
+                let old_var = var_type(*ptr);
+                self.writes.insert(*ptr, var.merge(old_var));
             }
         }
     }
