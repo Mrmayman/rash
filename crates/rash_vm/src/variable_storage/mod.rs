@@ -108,6 +108,15 @@ pub trait VarStore {
             constants,
         );
 
+        // # Safety
+        //
+        // The string is intentionally owned in two places:
+        //
+        // - The generated machine code.
+        // - The compiler's `static_strings`.
+        //
+        // Neither mutates the string, and both the machine code AND the strings
+        // are dropped with the `Runtime`, so there's no use-after-free.
         unsafe { std::mem::transmute(arr) }
     }
 }
