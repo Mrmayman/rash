@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Ptr, ScratchBlock,
-    builder::{c_if, fadd, fmul, set},
+    builder::{c_if, c_if_else, c_repeat, change, fadd, fmul, set},
     compiler::VarTypeChecked,
     effects::{CheckEffects, Effects, VariableWrite},
     runtime::CustomBlockId,
@@ -159,8 +159,8 @@ fn control_if_merges_reads_and_writes() {
 #[test]
 fn control_if_else_union_vs_intersection() {
     let blocks = vec![
-        ScratchBlock::ControlIfElse(true.into(), vec![set(X, 1.0)], vec![set(X, true)]),
-        ScratchBlock::ControlIfElse(true.into(), vec![set(Y, 1.0)], vec![set(Y, 2.0)]),
+        c_if_else(true, vec![set(X, 1.0)], vec![set(X, true)]),
+        c_if_else(true, vec![set(Y, 1.0)], vec![set(Y, 2.0)]),
     ];
 
     let e = eff(&blocks);
@@ -172,12 +172,28 @@ fn control_if_else_union_vs_intersection() {
 
 #[test]
 fn repeat_loop_marks_may_not_happen_logic() {
-    let blocks = vec![ScratchBlock::ControlRepeat(10.0.into(), vec![set(X, 1.0)])];
+    let blocks = vec![c_repeat(10.0, vec![set(X, 1.0)])];
 
     let e = eff(&blocks);
 
     assert!(!e.is_unknown);
     assert_eq!(e.writes[&X].ty, VarTypeChecked::Object);
+}
+
+#[test] // real bug btw
+fn repeat_loop_nested() {
+    let blocks = vec![c_repeat(10.0, vec![c_repeat(10.0, vec![change(X, 1.0)])])];
+
+    let e = blocks.effects(
+        &mut |_| Effects::unknown(),
+        // Let's say X was previously a number
+        &|_| VariableWrite::normal(VarTypeChecked::Number),
+        &mut |_| {},
+    );
+
+    assert!(!e.is_unknown);
+    assert_eq!(e.writes.len(), 1);
+    assert_eq!(e.writes[&X].ty, VarTypeChecked::Number);
 }
 
 #[test]
