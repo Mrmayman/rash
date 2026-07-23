@@ -233,8 +233,7 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
             ExternalName::User(name_ref) => {
                 let name = func_map.get_by_left(name_ref).unwrap();
                 let funcs = &callbacks::FUNCS;
-                let func = funcs.get(name).unwrap();
-                *func as usize
+                *funcs.get(name).unwrap()
             }
             _ => panic!("unhandled external name: {target_name:?}"),
         };
