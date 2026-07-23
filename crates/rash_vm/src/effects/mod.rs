@@ -116,7 +116,7 @@ impl Effects {
             return;
         }
 
-        self.union_reads(&other);
+        self.union_reads(other);
 
         self.writes
             .extend(other.writes.iter().map(|n| (*n.0, *n.1)));
@@ -139,7 +139,7 @@ impl Effects {
     }
 
     pub fn merge(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
-        self.union_reads(&other);
+        self.union_reads(other);
 
         // Just intersect writes, but if the types don't match, set to unknown
         for (ptr, ty) in &mut self.writes {

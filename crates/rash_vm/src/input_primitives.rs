@@ -220,7 +220,7 @@ impl Input {
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
                 compiler
                     .static_strings
-                    .push(unsafe { std::mem::transmute(bytes) });
+                    .push(unsafe { std::mem::transmute::<[i64; 3], smol_str::SmolStr>(bytes) });
 
                 let val1 = compiler.constants.get_int(bytes[0], builder);
                 let val2 = compiler.constants.get_int(bytes[1], builder);
@@ -275,7 +275,7 @@ impl Input {
                 if is_string {
                     compiler
                         .static_strings
-                        .push(unsafe { std::mem::transmute([i2, i3, i4]) });
+                        .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
                 }
 
                 let i1 = compiler.constants.get_int(i1, builder);

@@ -2,7 +2,7 @@
    compiler_ignore1
    Memcheck:Cond
    ...
-   fun:_ZN7rash_vm8compiler8Compiler13compile_block17h0c8d0005c3df4f40E
+   fun:_ZN7rash_vm8compiler8Compiler13compile_block*
    ...
 }
 {
@@ -16,7 +16,7 @@
    compiler_ignore3
    Memcheck:Cond
    ...
-   fun:_ZN17cranelift_codegen7context7Context8optimize17h1afea7ce41876a74E
+   fun:_ZN17cranelift_codegen7context7Context8optimize*
    ...
 }
 {
