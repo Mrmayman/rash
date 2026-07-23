@@ -21,11 +21,11 @@ impl Compiler<'_> {
     }
 
     pub fn ins_drop_obj(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
-        if let VarTypeChecked::Number | VarTypeChecked::Bool = self.cache.get_type(ptr).ty {
+        if let VarTypeChecked::Number | VarTypeChecked::Bool = self.vars.get_type(ptr).ty {
             return;
         }
 
-        let obj = match &self.cache.get(ptr, builder, &mut self.constants).val {
+        let obj = match &self.vars.get(ptr, builder, &mut self.constants).val {
             ScratchValue::String([i2, i3, i4]) => {
                 let id = self.constants.get_int(ID_STRING, builder);
                 [id, *i2, *i3, *i4]

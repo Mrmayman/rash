@@ -112,7 +112,7 @@ pub fn compile(
     }
 
     compiler
-        .cache
+        .vars
         .save(&mut builder, &mut compiler.constants, compiler.memory);
 
     let return_value = builder.ins().iconst(I64, -1);

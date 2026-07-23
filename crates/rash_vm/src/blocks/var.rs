@@ -9,7 +9,7 @@ use crate::{
 
 impl Compiler<'_> {
     pub fn var_read(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ScratchValue {
-        self.cache
+        self.vars
             .get(ptr, builder, &mut self.constants)
             .val
             .clone_in_code(self, builder)
@@ -21,11 +21,11 @@ impl Compiler<'_> {
                 self.ins_drop_obj(builder, ptr);
                 match obj {
                     ScratchObject::Number(num) => {
-                        self.cache
+                        self.vars
                             .store_f64(ptr, builder, *num, &mut self.constants);
                     }
                     ScratchObject::Bool(num) => {
-                        self.cache
+                        self.vars
                             .store_bool(ptr, builder, *num, &mut self.constants);
                     }
                     ScratchObject::String(string) => {
@@ -33,10 +33,10 @@ impl Compiler<'_> {
                         if ScratchObject::Number(num).convert_to_string() == *string {
                             // TODO: This is a very opinionated optimization
                             // Fast for number-crunching but slow for string handling?
-                            self.cache.store_f64(ptr, builder, num, &mut self.constants);
+                            self.vars.store_f64(ptr, builder, num, &mut self.constants);
                         } else {
                             let to_drop =
-                                self.cache
+                                self.vars
                                     .store_string(ptr, builder, string, &mut self.constants);
                             self.static_strings.push(to_drop);
                         }
@@ -48,12 +48,12 @@ impl Compiler<'_> {
                     .expect("blocks inside other blocks (like an add operator in a set var block) should return something!");
 
                 self.ins_drop_obj(builder, ptr);
-                self.cache.store(
+                self.vars.store(
                     ptr,
                     VariableSlot {
                         val,
                         skip_nan: block
-                            .return_type(|n| self.cache.get_type(n))
+                            .return_type(|n| self.vars.get_type(n))
                             .is_some_and(|n| n.skip_nan),
                     },
                     builder,
@@ -68,7 +68,7 @@ impl Compiler<'_> {
         let old_value = self.var_read(builder, ptr).get_number(self, builder);
         let new_value = builder.ins().fadd(old_value, input);
 
-        self.cache.store(
+        self.vars.store(
             ptr,
             VariableSlot {
                 val: ScratchValue::Num(new_value),

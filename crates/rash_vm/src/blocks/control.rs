@@ -17,7 +17,7 @@ impl Compiler<'_> {
             self.call_stack_pop(builder);
         }
 
-        self.cache.save(builder, &mut self.constants, self.memory);
+        self.vars.save(builder, &mut self.constants, self.memory);
         let minus_one = self.constants.get_int(-1, builder);
         builder.ins().return_(&[minus_one]);
         let new_block = builder.create_block();
@@ -40,15 +40,16 @@ impl Compiler<'_> {
 
         let zero = self.constants.get_int(0, builder);
         let old_constants = self.constants.clone();
+        let old_vars = self.vars.clone_box();
 
         let loop_value = input.get_number_int(self, builder);
 
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let final_params_loop = effects.generate_params(builder, loop_block, &*self.cache);
+        let final_params_loop = effects.generate_params(builder, loop_block, &*self.vars);
         let mut loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
-        let final_params_end = effects.generate_params(builder, end_block, &*self.cache);
+        let final_params_end = effects.generate_params(builder, end_block, &*self.vars);
 
         let entry_params = self.generate_params(builder, &final_params_loop);
         let mut entry_params2 = entry_params.clone();
@@ -72,7 +73,7 @@ impl Compiler<'_> {
         }
 
         builder.switch_to_block(loop_block);
-        self.cache.extend(final_params_loop.clone());
+        self.vars.extend(final_params_loop.clone());
 
         if effects.yields {
             self.constants.clear();
@@ -107,7 +108,8 @@ impl Compiler<'_> {
         );
 
         builder.switch_to_block(end_block);
-        self.cache.extend(final_params_end.clone());
+        self.vars = old_vars;
+        self.vars.extend(final_params_end.clone());
         if effects.yields {
             self.constants.clear();
         } else {
@@ -121,13 +123,13 @@ impl Compiler<'_> {
 
         let effects = self.effects(blocks);
 
-        let final_params = effects.generate_params(builder, loop_block, &*self.cache);
+        let final_params = effects.generate_params(builder, loop_block, &*self.vars);
 
         let entry_params = self.generate_params(builder, &final_params);
 
         builder.ins().jump(loop_block, &entry_params);
         builder.switch_to_block(loop_block);
-        self.cache.extend(final_params.clone());
+        self.vars.extend(final_params.clone());
 
         for block in blocks {
             self.compile_block(block, builder);
@@ -141,7 +143,7 @@ impl Compiler<'_> {
     fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
         blocks.effects(
             &mut |_| Effects::unknown(), // TODO: inter-function analysis
-            &|v| self.cache.get_type(v),
+            &|v| self.vars.get_type(v),
             &mut |_| {}, // We don't care if it returns early
         )
     }
@@ -177,7 +179,7 @@ impl Compiler<'_> {
 
         let inside_block = builder.create_block();
         let end_block = builder.create_block();
-        let final_params = effects.generate_params(builder, end_block, &*self.cache);
+        let final_params = effects.generate_params(builder, end_block, &*self.vars);
 
         // Before the code runs...
         let direct_params = self.generate_params(builder, &final_params);
@@ -188,6 +190,7 @@ impl Compiler<'_> {
             .brif(condition, inside_block, &[], end_block, &direct_params);
 
         builder.switch_to_block(inside_block);
+        let old_vars = self.vars.clone_box();
         let old_consts = self.constants.clone();
         for block in then {
             self.compile_block(block, builder);
@@ -198,7 +201,8 @@ impl Compiler<'_> {
         builder.ins().jump(end_block, &end_params);
         builder.switch_to_block(end_block);
         self.constants = old_consts;
-        self.cache.extend(final_params);
+        self.vars = old_vars;
+        self.vars.extend(final_params);
     }
 
     fn generate_params(
@@ -207,12 +211,12 @@ impl Compiler<'_> {
         final_params: &Vec<(Ptr, VariableSlot)>,
     ) -> Vec<BlockArg> {
         let mut direct_params = Vec::new();
-        if !self.cache.uses_block_params() {
+        if !self.vars.uses_block_params() {
             return direct_params;
         }
 
         for (ptr, param) in final_params {
-            let val = self.cache.get(*ptr, builder, &mut self.constants);
+            let val = self.vars.get(*ptr, builder, &mut self.constants);
             match param.val {
                 ScratchValue::Num(_) => {
                     let ScratchValue::Num(v) = val.val else {
@@ -256,13 +260,13 @@ impl Compiler<'_> {
     ) {
         let effects = self
             .effects(then_blocks)
-            .or(self.effects(else_blocks), &|v| self.cache.get_type(v));
+            .or(self.effects(else_blocks), &|v| self.vars.get_type(v));
 
         let then_block = builder.create_block();
         let else_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let final_params = effects.generate_params(builder, end_block, &*self.cache);
+        let final_params = effects.generate_params(builder, end_block, &*self.vars);
 
         let condition = condition.get_bool(self, builder);
         builder
@@ -270,7 +274,7 @@ impl Compiler<'_> {
             .brif(condition, then_block, &[], else_block, &[]);
 
         let old_consts = self.constants.clone();
-        let old_cache = self.cache.clone_box();
+        let old_vars = self.vars.clone_box();
 
         builder.switch_to_block(then_block);
         for block in then_blocks {
@@ -282,7 +286,7 @@ impl Compiler<'_> {
 
         builder.switch_to_block(else_block);
         self.constants = old_consts.clone();
-        self.cache = old_cache;
+        self.vars = old_vars.clone_box();
         for block in else_blocks {
             self.compile_block(block, builder);
         }
@@ -292,7 +296,8 @@ impl Compiler<'_> {
 
         builder.switch_to_block(end_block);
         self.constants = old_consts;
-        self.cache.extend(final_params);
+        self.vars = old_vars;
+        self.vars.extend(final_params);
     }
 
     pub fn control_repeat_until(
@@ -307,12 +312,13 @@ impl Compiler<'_> {
 
         let effects = self.effects(body);
 
-        let final_params = effects.generate_params(builder, condition_block, &*self.cache);
+        let final_params = effects.generate_params(builder, condition_block, &*self.vars);
 
         let entry_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &entry_params);
 
-        self.cache.extend(final_params.clone());
+        let old_vars = self.vars.clone_box();
+        self.vars.extend(final_params.clone());
         builder.switch_to_block(condition_block);
 
         let condition = input.get_bool(self, builder);
@@ -329,7 +335,8 @@ impl Compiler<'_> {
         let loop_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &loop_params);
         builder.switch_to_block(end_block);
-        self.cache.extend(final_params);
+        self.vars = old_vars;
+        self.vars.extend(final_params);
         self.constants = old_constants;
     }
 }

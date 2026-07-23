@@ -18,7 +18,7 @@ impl Compiler<'_> {
     ) {
         let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
 
-        self.cache.save(builder, &mut self.constants, self.memory);
+        self.vars.save(builder, &mut self.constants, self.memory);
         let args: Vec<[Value; 4]> = args
             .iter()
             .map(|n| n.get_object(self, builder))
@@ -90,6 +90,6 @@ impl Compiler<'_> {
             );
         }
 
-        self.cache.reinit(builder, &mut self.constants, self.memory);
+        self.vars.reinit(builder, &mut self.constants, self.memory);
     }
 }

@@ -292,7 +292,7 @@ pub struct Compiler<'compiler> {
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
     pub static_strings: Vec<SmolStr>,
-    pub cache: Box<dyn VarStore>,
+    pub vars: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
 
     /// Storing how many loops inside we are right now
@@ -369,7 +369,7 @@ impl<'a> Compiler<'a> {
             program_analysis.merge(&other_eff, var_ty);
         }
 
-        let cache: Box<dyn VarStore> = if program_analysis.is_unknown {
+        let vars: Box<dyn VarStore> = if program_analysis.is_unknown {
             Box::new(GenericVarStore::new(memory))
         } else {
             Box::new(SsaVarStore::new(
@@ -382,7 +382,7 @@ impl<'a> Compiler<'a> {
 
         Self {
             temp_slot4,
-            cache,
+            vars,
             program_analysis,
             constants,
             call_conv,
@@ -661,7 +661,7 @@ impl<'a> Compiler<'a> {
         for _ in 0..2 {
             // TODO: Hacky workaround for too-fast timing
             self.break_counter += 1;
-            self.cache.save(builder, &mut self.constants, self.memory);
+            self.vars.save(builder, &mut self.constants, self.memory);
             let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
             builder.ins().return_(&[break_counter]);
@@ -671,7 +671,7 @@ impl<'a> Compiler<'a> {
             self.break_points.push(b);
             builder.switch_to_block(b);
 
-            self.cache.reinit(builder, &mut self.constants, self.memory);
+            self.vars.reinit(builder, &mut self.constants, self.memory);
         }
     }
 }
