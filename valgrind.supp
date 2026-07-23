@@ -2,7 +2,7 @@
    compiler_ignore1
    Memcheck:Cond
    ...
-   fun:_ZN7rash_vm8compiler8Compiler13compile_block17h0c8d0005c3df4f40E
+   fun:_ZN7rash_vm8compiler8Compiler13compile_block*
    ...
 }
 {
