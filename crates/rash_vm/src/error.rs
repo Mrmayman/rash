@@ -10,13 +10,14 @@ impl<T: Display> Display for RashError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "rash error: {}", self.kind)?;
         for t in &self.trace {
-            write!(f, "\n  at {}", t)?;
+            write!(f, "\n  at {t}")?;
         }
         Ok(())
     }
 }
 
 pub trait Trace {
+    #[must_use]
     fn trace(self, t: &str) -> Self;
 }
 

@@ -1,0 +1,405 @@
+use std::collections::{HashMap, HashSet};
+
+use cranelift::{
+    codegen::ir::{
+        Block, InstBuilder,
+        types::{F64, I64},
+    },
+    frontend::FunctionBuilder,
+};
+
+use crate::{
+    Input, Ptr, ScratchBlock,
+    compiler::{VarType, VarTypeChecked},
+    input_primitives::ScratchValue,
+    runtime::CustomBlockId,
+    variable_storage::{VarStore, VariableSlot},
+};
+
+#[cfg(test)]
+mod tests;
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct VariableWrite {
+    pub ty: VarTypeChecked,
+    pub skip_nan: bool,
+}
+
+impl VariableWrite {
+    pub fn normal(ty: VarTypeChecked) -> Self {
+        Self {
+            ty,
+            skip_nan: false,
+        }
+    }
+
+    pub fn skip_nan(ty: VarTypeChecked) -> Self {
+        Self { ty, skip_nan: true }
+    }
+}
+
+impl From<VariableWrite> for VarTypeChecked {
+    fn from(val: VariableWrite) -> Self {
+        val.ty
+    }
+}
+
+impl From<VariableWrite> for Option<VarType> {
+    fn from(val: VariableWrite) -> Self {
+        val.ty.into()
+    }
+}
+
+impl From<VariableSlot> for VariableWrite {
+    fn from(val: VariableSlot) -> Self {
+        let ty = match val.val {
+            ScratchValue::Num(_) => VarTypeChecked::Number,
+            ScratchValue::Bool(_) => VarTypeChecked::Bool,
+            ScratchValue::String(_) => VarTypeChecked::String,
+            ScratchValue::Object(_) => VarTypeChecked::Object,
+        };
+        Self {
+            ty,
+            skip_nan: val.skip_nan,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Effects {
+    pub reads: HashSet<Ptr>,
+    pub writes: HashMap<Ptr, VariableWrite>,
+    pub is_unknown: bool,
+    pub yields: bool,
+
+    pub may_not_happen: bool,
+}
+
+impl Effects {
+    pub fn new() -> Self {
+        Effects {
+            reads: HashSet::new(),
+            writes: HashMap::new(),
+            is_unknown: false,
+            yields: false,
+            may_not_happen: false,
+        }
+    }
+
+    /// An [`Effects`] that represents that *anything* could happen.
+    ///
+    /// For example, if you do a screen refresh, the variables could change to
+    /// *anything* during that time (impossible to analyze),
+    /// so we use `unknown` to represent that.
+    pub fn unknown() -> Self {
+        Effects {
+            is_unknown: true,
+            ..Self::new()
+        }
+    }
+
+    pub fn with_write(ptr: Ptr, ty: VariableWrite) -> Self {
+        let mut effects = Effects::new();
+        effects.writes = HashMap::from([(ptr, ty)]);
+        effects
+    }
+
+    pub fn with_read(ptr: Ptr) -> Self {
+        let mut effects = Effects::new();
+        effects.reads = HashSet::from([ptr]);
+        effects
+    }
+
+    pub fn sequence(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
+        if other.may_not_happen {
+            self.merge(other, var_type);
+            return;
+        }
+
+        self.union_reads(other);
+
+        self.writes
+            .extend(other.writes.iter().map(|n| (*n.0, *n.1)));
+    }
+
+    pub fn then(mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
+        self.sequence(&other, var_type);
+        self
+    }
+
+    fn union_reads(&mut self, other: &Effects) {
+        if other.is_unknown {
+            self.is_unknown = true;
+        }
+        if other.yields {
+            self.yields = true;
+        }
+
+        self.reads.extend(other.reads.iter().copied());
+    }
+
+    pub fn merge(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
+        self.union_reads(other);
+
+        // Just intersect writes, but if the types don't match, set to unknown
+        for (ptr, ty) in &mut self.writes {
+            if let Some(other_ty) = other.writes.get(ptr) {
+                ty.skip_nan = ty.skip_nan && other_ty.skip_nan;
+                if ty.ty != other_ty.ty {
+                    ty.ty = VarTypeChecked::Object;
+                }
+            } else if !other.may_not_happen {
+                // Branch A wrote to the variable but
+                // branch B did not. Remember, this is a
+                // merge operator
+                *ty = VariableWrite::default();
+            }
+        }
+        for ptr in other.writes.keys() {
+            if !self.writes.contains_key(ptr)
+                && let VarTypeChecked::Object = var_type(*ptr).ty
+            {
+                self.writes.insert(*ptr, VariableWrite::default());
+            }
+        }
+    }
+
+    pub fn or(mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
+        self.merge(&other, var_type);
+        self
+    }
+
+    pub fn generate_params(
+        &self,
+        builder: &mut FunctionBuilder,
+        block: Block,
+        cache: &dyn VarStore,
+    ) -> Vec<(Ptr, VariableSlot)> {
+        let mut param_values = Vec::new();
+
+        let izero = (!cache.uses_block_params()).then(|| builder.ins().iconst(I64, 0));
+        let fzero = (!cache.uses_block_params()).then(|| builder.ins().f64const(0.0));
+
+        for (ptr, ty) in &self.writes {
+            let original = cache.get_type(*ptr);
+            let skip_nan = ty.skip_nan && original.skip_nan;
+            let ty = if original.ty == ty.ty {
+                VariableWrite {
+                    ty: ty.ty,
+                    skip_nan,
+                }
+            } else {
+                // Downgrade if it diverges
+                VariableWrite::default()
+            };
+
+            match ty.ty {
+                VarTypeChecked::Number => {
+                    let value = fzero.unwrap_or_else(|| builder.append_block_param(block, F64));
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ScratchValue::Num(value),
+                            skip_nan,
+                        },
+                    ));
+                }
+                VarTypeChecked::Bool => {
+                    let value = izero.unwrap_or_else(|| builder.append_block_param(block, I64));
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ScratchValue::Bool(value),
+                            skip_nan,
+                        },
+                    ));
+                }
+                VarTypeChecked::String => {
+                    let vals = [
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                    ];
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ScratchValue::String(vals),
+                            skip_nan,
+                        },
+                    ));
+                }
+                VarTypeChecked::Object => {
+                    let vals = [
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
+                    ];
+                    param_values.push((
+                        *ptr,
+                        VariableSlot {
+                            val: ScratchValue::Object(vals),
+                            skip_nan,
+                        },
+                    ));
+                }
+            }
+        }
+
+        param_values
+    }
+}
+
+pub trait CheckEffects {
+    fn effects(
+        &self,
+        block_eff: &mut impl FnMut(CustomBlockId) -> Effects,
+        var_ty: &dyn Fn(Ptr) -> VariableWrite,
+        early_ret: &mut dyn FnMut(Effects),
+    ) -> Effects;
+}
+
+impl CheckEffects for ScratchBlock {
+    fn effects(
+        &self,
+        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        v: &dyn Fn(Ptr) -> VariableWrite,
+        e: &mut dyn FnMut(Effects),
+    ) -> Effects {
+        match self {
+            ScratchBlock::VarSet(ptr, input) => Effects::with_write(*ptr, input.expected_type(v)),
+            ScratchBlock::VarChange(ptr, _) => Effects::with_write(
+                *ptr,
+                VariableWrite {
+                    ty: VarTypeChecked::Number,
+                    skip_nan: true,
+                },
+            ),
+            ScratchBlock::VarRead(ptr) => Effects::with_read(*ptr),
+            ScratchBlock::MotionGoToXY(a, b)
+            | ScratchBlock::OpAdd(a, b)
+            | ScratchBlock::OpSub(a, b)
+            | ScratchBlock::OpMul(a, b)
+            | ScratchBlock::OpDiv(a, b)
+            | ScratchBlock::OpStrJoin(a, b)
+            | ScratchBlock::OpMod(a, b)
+            | ScratchBlock::OpRandom(a, b)
+            | ScratchBlock::OpStrLetterOf(a, b)
+            | ScratchBlock::OpStrContains(a, b)
+            | ScratchBlock::OpBAnd(a, b)
+            | ScratchBlock::OpCmp(a, b, _)
+            | ScratchBlock::OpBOr(a, b) => a.effects(c, v, e).then(b.effects(c, v, e), v),
+
+            ScratchBlock::MotionChangeX(input)
+            | ScratchBlock::MotionChangeY(input)
+            | ScratchBlock::MotionSetX(input)
+            | ScratchBlock::MotionSetY(input)
+            | ScratchBlock::Log(input)
+            | ScratchBlock::OpRound(input)
+            | ScratchBlock::OpStrLen(input)
+            | ScratchBlock::OpBNot(input)
+            | ScratchBlock::OpMFloor(input)
+            | ScratchBlock::OpMAbs(input)
+            | ScratchBlock::OpMSqrt(input)
+            | ScratchBlock::OpMSin(input)
+            | ScratchBlock::OpMCos(input)
+            | ScratchBlock::OpMTan(input) => input.effects(c, v, e),
+
+            ScratchBlock::ControlRepeatUntil(input, blocks)
+            | ScratchBlock::ControlRepeat(input, blocks)
+            | ScratchBlock::ControlIf(input, blocks) => {
+                let mut final_effects = input.effects(c, v, e).then(blocks.effects(c, v, e), v);
+                // Setting input.effects to may_not_happen is fine,
+                // since input would be read-only and this only affects writes
+                final_effects.may_not_happen = true;
+                final_effects
+            }
+            ScratchBlock::ControlForever(blocks) => {
+                // It's guaranteed to run at least once
+                blocks.effects(c, v, e)
+            }
+            ScratchBlock::ControlIfElse(input, b1, b2) => {
+                let b1 = b1.effects(c, v, e);
+                let b2 = b2.effects(c, v, e);
+                input.effects(c, v, e).then(b1.or(b2, v), v)
+            }
+
+            ScratchBlock::ControlStopThisScript => {
+                // Propagate early-return upwards
+                e(Effects::new());
+                Effects::new()
+            }
+
+            // ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, inputs) |
+            ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, inputs) => {
+                inputs.effects(c, v, e).then(c(*custom_block_id), v)
+            }
+            // Screen refresh blocks could yield
+            ScratchBlock::FunctionCallScreenRefresh(_, _) | ScratchBlock::ScreenRefresh => {
+                let mut e = Effects::unknown();
+                e.yields = true;
+                e
+            }
+
+            ScratchBlock::FunctionGetArg(_)
+            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
+            | ScratchBlock::ControlDaysSince2000 => Effects::new(),
+        }
+    }
+}
+
+impl<T: CheckEffects> CheckEffects for Vec<T> {
+    fn effects(
+        &self,
+        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        v: &dyn Fn(Ptr) -> VariableWrite,
+        e: &mut dyn FnMut(Effects),
+    ) -> Effects {
+        self.as_slice().effects(c, v, e)
+    }
+}
+
+impl<T: CheckEffects> CheckEffects for &[T] {
+    fn effects(
+        &self,
+        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        v: &dyn Fn(Ptr) -> VariableWrite,
+        e: &mut dyn FnMut(Effects),
+    ) -> Effects {
+        let mut effects = Effects::new();
+        for item in *self {
+            let e2 = effects.clone();
+            let var_ty = &|var| {
+                // Check if variable has been written to within this scope.
+                // If not (unwrap_or_else), check globally outside of the scope.
+                e2.writes.get(&var).copied().unwrap_or_else(|| v(var))
+            };
+            let other = item.effects(c, var_ty, &mut |thrown_effect| {
+                // If a function returns early, the thrown effect is propagated.
+                e(effects.clone().then(thrown_effect, var_ty));
+            });
+            effects.sequence(&other, var_ty);
+        }
+        debug_assert!(
+            !effects.may_not_happen,
+            "Effects of a block list should not be may_not_happen"
+        );
+        effects
+    }
+}
+
+impl CheckEffects for Input {
+    fn effects(
+        &self,
+        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        v: &dyn Fn(Ptr) -> VariableWrite,
+        e: &mut dyn FnMut(Effects),
+    ) -> Effects {
+        match self {
+            Input::Block(block) => block.effects(c, v, e),
+            Input::Obj(_) => Effects::new(),
+        }
+    }
+}

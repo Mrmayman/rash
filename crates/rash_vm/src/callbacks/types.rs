@@ -1,26 +1,21 @@
-use crate::data_types::ScratchObject;
+use smol_str::SmolStr;
 
-pub fn print_function_addresses() {
-    fn print(name: &str, addr: *const ()) {
-        println!("{name:40} = {:#018x}", addr as usize);
-    }
+use crate::data_types::{ScratchObject, string_to_number};
 
-    println!("\n========");
-    println!("types.rs");
-    println!("========");
-
-    print("to_bool", to_bool as *const ());
-    print("to_number", to_number as *const ());
-    print(
-        "to_number_with_decimal_check",
-        to_number_with_decimal_check as *const (),
-    );
-    print("to_string", to_string as *const ());
-    print("to_string_from_num", to_string_from_num as *const ());
-    print("to_string_from_bool", to_string_from_bool as *const ());
-    print("drop_obj", drop_obj as *const ());
-    print("clone_obj", clone_obj as *const ());
-}
+declare_module!(
+    "types.rs",
+    6,
+    to_bool,
+    to_number,
+    to_number_from_string,
+    to_number_with_decimal_check,
+    to_string,
+    to_string_from_num,
+    to_string_from_bool,
+    drop_obj,
+    clone_obj,
+    clone_str
+);
 
 /// Converts a `ScratchObject` to a boolean.
 ///
@@ -33,7 +28,7 @@ pub fn print_function_addresses() {
 /// - `i64` - The boolean value of the `ScratchObject`
 ///   (represented as `i64` for predictable layout).
 pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -59,7 +54,7 @@ pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
 /// # Return
 /// - `f64` - The number value of the `ScratchObject`
 pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -71,6 +66,11 @@ pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
     debug_assert!(i1 >= 0);
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
     obj.convert_to_number()
+}
+
+pub unsafe extern "C" fn to_number_from_string(i1: i64, i2: i64, i3: i64) -> f64 {
+    let s: SmolStr = unsafe { std::mem::transmute([i1, i2, i3]) };
+    string_to_number(&s)
 }
 
 pub struct DecimalCheck {
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
     i4: i64,
     out: *mut DecimalCheck,
 ) {
-    let i1 = (i1 as i32) as i64;
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -121,8 +121,8 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
 ///   (represented this way for a predictable layout in JIT code,
 ///   can be `std::mem::transmute`d).
 /// - `out` - The pointer to the memory location to write the string to.
-pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut String) {
-    let i1 = (i1 as i32) as i64;
+pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut SmolStr) {
+    let i1 = i64::from(i1 as i32);
     #[cfg(debug_assertions)]
     {
         if !(0..4).contains(&i1) {
@@ -140,7 +140,7 @@ pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut
 }
 
 /// Converts an f64 to a String `ScratchObject`.
-pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut String) {
+pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut SmolStr) {
     let obj = ScratchObject::Number(i1);
     let string = obj.convert_to_string();
     unsafe { out.write(string) }
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut String) {
 ///
 /// - If the boolean is true (1), the string will be "true".
 /// - If the boolean is false (0), the string will be "false".
-pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut String) {
+pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut SmolStr) {
     let obj = ScratchObject::Bool(i1 != 0);
     let string = obj.convert_to_string();
     unsafe { out.write(string) }
@@ -161,15 +161,20 @@ pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut String) {
 ///
 /// Ran when a variable is set to a new value,
 /// dropping the old value.
-pub unsafe extern "C" fn drop_obj(i1: *mut ScratchObject) {
-    unsafe {
-        // println!("dropping obj {:?} at mem {:X}", *i1, i1 as usize);
-        std::ptr::drop_in_place(i1);
-    }
+pub unsafe extern "C" fn drop_obj(i1: i64, i2: i64, i3: i64, i4: i64) {
+    let _: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    // Dropped
 }
 
 pub unsafe extern "C" fn clone_obj(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {
     let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let new_obj = obj.clone();
+    std::mem::forget(obj);
+    unsafe { out.write(new_obj) };
+}
+
+pub unsafe extern "C" fn clone_str(i2: i64, i3: i64, i4: i64, out: *mut SmolStr) {
+    let obj: SmolStr = unsafe { std::mem::transmute([i2, i3, i4]) };
     let new_obj = obj.clone();
     std::mem::forget(obj);
     unsafe { out.write(new_obj) };

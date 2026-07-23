@@ -7,6 +7,7 @@ pub struct SvgRenderer {
 }
 
 impl SvgRenderer {
+    #[must_use]
     pub fn new() -> Self {
         let mut fonts = usvg_text_layout::fontdb::Database::new();
         fonts.load_system_fonts();
@@ -28,7 +29,7 @@ impl SvgRenderer {
             // Get file's absolute directory.
             resources_dir: std::fs::canonicalize(input)
                 .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf())),
+                .and_then(|p| p.parent().map(std::path::Path::to_path_buf)),
             ..Default::default()
         };
 

@@ -1,0 +1,44 @@
+{
+   compiler_ignore1
+   Memcheck:Cond
+   ...
+   fun:_ZN7rash_vm8compiler8Compiler13compile_block*
+   ...
+}
+{
+   compiler_ignore2
+   Memcheck:Value8
+   ...
+   fun:_ZN7rash_vm8compiler8Compiler13compile_block*
+   ...
+}
+{
+   compiler_ignore3
+   Memcheck:Cond
+   ...
+   fun:_ZN17cranelift_codegen7context7Context8optimize*
+   ...
+}
+{
+   compiler_ignore4
+   Memcheck:Value8
+   ...
+   fun:_ZN17cranelift_codegen7context7Context8optimize*
+   ...
+}
+{
+   compiler_ignore5
+   Memcheck:Cond
+   ...
+   fun:_ZN17cranelift_codegen7context7Context7compile*
+   ...
+}
+
+{
+   rust_stack_overflow_runtime
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:_RNvNtNtNtNtNtCs*_std3sys3pal4unix14stack_overflow11thread_info16set_current_info
+}

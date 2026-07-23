@@ -1,38 +1,20 @@
-use std::{collections::HashMap, sync::Mutex};
-
 use cranelift::{
-    codegen::ir::StackSlot,
+    codegen::ir::MemFlags,
     prelude::{
         FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
         types::{F64, I64},
     },
 };
+use smol_str::SmolStr;
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock, VarType},
+    compiler::{Compiler, ScratchBlock, VarTypeChecked},
+    config::ARITHMETIC_NAN_CHECK,
     constant_set::ConstantMap,
-    data_types::{ID_BOOL, ID_NUMBER, ScratchObject},
+    data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
+    effects::VariableWrite,
 };
-
-/// Scratch has a special edge case for math with NaN.
-/// Any operation with NaN will be treated as
-/// an operation with 0.
-///
-/// For example, `NaN + 1` will be `0 + 1`.
-///
-/// This is a special case for Scratch, and is not
-/// a standard behavior for most programming languages.
-/// Enabling this check adds special behavior for NaN in the
-/// compiled code, making it more correct but slower.
-///
-/// # Performance
-/// Pi benchmark:
-/// - Without NaN check: `4.6 ms`
-/// - With NaN check: `6.5 ms`
-const ARITHMETIC_NAN_CHECK: bool = true;
-
-pub static STRINGS_TO_DROP: Mutex<Vec<[i64; 3]>> = Mutex::new(Vec::new());
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);
@@ -77,6 +59,7 @@ pub enum Input {
 }
 
 impl Input {
+    #[must_use]
     pub fn format(&self, indent: usize) -> String {
         match self {
             Input::Obj(scratch_object) => format!("{scratch_object:?}"),
@@ -105,13 +88,19 @@ impl From<bool> for Input {
 
 impl From<String> for Input {
     fn from(s: String) -> Self {
-        Input::Obj(ScratchObject::String(s))
+        Input::Obj(ScratchObject::String(s.into()))
     }
 }
 
 impl From<&str> for Input {
     fn from(s: &str) -> Self {
-        Input::Obj(ScratchObject::String(s.to_owned()))
+        Input::Obj(ScratchObject::String(s.into()))
+    }
+}
+
+impl From<SmolStr> for Input {
+    fn from(s: SmolStr) -> Self {
+        Input::Obj(ScratchObject::String(s))
     }
 }
 
@@ -121,28 +110,57 @@ impl From<ScratchBlock> for Input {
     }
 }
 
+impl From<Ptr> for Input {
+    fn from(ptr: Ptr) -> Self {
+        Input::Block(Box::new(ScratchBlock::VarRead(ptr)))
+    }
+}
+
 impl Input {
+    pub(crate) fn could_be_nan(&self, vartype: impl FnMut(Ptr) -> VariableWrite) -> bool {
+        match self {
+            Input::Obj(obj) => obj.convert_to_number().is_nan(),
+            Input::Block(block) => block.return_type(vartype).is_none_or(|n| !n.skip_nan),
+        }
+    }
+
     pub(crate) fn get_number(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let (mut num, could_be_nan) = match self {
-            Input::Obj(scratch_object) => {
-                let o = scratch_object.convert_to_number();
-                (compiler.constants.get_float(o, builder), o.is_nan())
-            }
+        let mut num = match self {
+            Input::Obj(scratch_object) => compiler
+                .constants
+                .get_float(scratch_object.convert_to_number(), builder),
+            Input::Block(scratch_block) => compiler
+                .compile_block(scratch_block, builder)
+                .unwrap()
+                .get_number(compiler, builder),
+        };
+        self.nan_check(compiler, builder, &mut num);
+
+        num
+    }
+
+    pub(crate) fn get_number_negated(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
+        let mut num = match self {
+            Input::Obj(scratch_object) => compiler
+                .constants
+                .get_float(-scratch_object.convert_to_number(), builder),
             Input::Block(scratch_block) => {
-                let could_be_nan = scratch_block.could_be_nan();
-                let o = compiler.compile_block(scratch_block, builder).unwrap();
-                (o.get_number(compiler, builder), could_be_nan)
+                let v = compiler
+                    .compile_block(scratch_block, builder)
+                    .unwrap()
+                    .get_number(compiler, builder);
+                builder.ins().fneg(v)
             }
         };
-        if ARITHMETIC_NAN_CHECK && could_be_nan {
-            let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
-            let zero_value = compiler.constants.get_float(0.0, builder);
-            num = builder.ins().select(is_not_nan, num, zero_value);
-        }
+        self.nan_check(compiler, builder, &mut num);
 
         num
     }
@@ -152,38 +170,44 @@ impl Input {
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let (mut num, could_be_nan) = match self {
+        match self {
             Input::Obj(scratch_object) => {
-                let o = scratch_object.convert_to_number();
-                (compiler.constants.get_int(o as i64, builder), o.is_nan())
+                let num = scratch_object.convert_to_number();
+                compiler
+                    .constants
+                    .get_int(if num.is_nan() { 0 } else { num as i64 }, builder)
             }
             Input::Block(scratch_block) => {
-                let could_be_nan = scratch_block.could_be_nan();
-
-                let o = compiler.compile_block(scratch_block, builder).unwrap();
-                let get_number = o.get_number(compiler, builder);
-                let number = builder.ins().fcvt_to_sint(I64, get_number);
-
-                (number, could_be_nan)
+                let mut num = compiler
+                    .compile_block(scratch_block, builder)
+                    .unwrap()
+                    .get_number(compiler, builder);
+                self.nan_check(compiler, builder, &mut num);
+                builder.ins().fcvt_to_sint(I64, num)
             }
-        };
-        if ARITHMETIC_NAN_CHECK && could_be_nan {
-            let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, num, num);
-            let zero_value = compiler.constants.get_float(0.0, builder);
-            num = builder.ins().select(is_not_nan, num, zero_value);
         }
+    }
 
-        num
+    fn nan_check(
+        &self,
+        compiler: &mut Compiler<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        num: &mut Value,
+    ) {
+        if ARITHMETIC_NAN_CHECK && self.could_be_nan(|ptr| compiler.cache.get_type(ptr)) {
+            let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, *num, *num);
+            let zero_value = compiler.constants.get_float(0.0, builder);
+            *num = builder.ins().select(is_not_nan, *num, zero_value);
+        }
     }
 
     pub(crate) fn get_string(
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-    ) -> (Value, bool) {
+    ) -> Value {
         match self {
             Input::Obj(scratch_object) => {
-                // Create a stack slot to store the string
                 let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
                     StackSlotKind::ExplicitSlot,
                     3 * std::mem::size_of::<i64>() as u32,
@@ -191,27 +215,30 @@ impl Input {
                 ));
                 let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
-                // Transmute the String into a [i64; 3] array
-                // println!("Getting string {scratch_object:?}");
                 let string = scratch_object.convert_to_string();
 
                 let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
-                STRINGS_TO_DROP.lock().unwrap().push(bytes);
+                compiler
+                    .static_strings
+                    .push(unsafe { std::mem::transmute::<[i64; 3], smol_str::SmolStr>(bytes) });
 
                 let val1 = compiler.constants.get_int(bytes[0], builder);
                 let val2 = compiler.constants.get_int(bytes[1], builder);
                 let val3 = compiler.constants.get_int(bytes[2], builder);
 
-                // Store the values in the stack slot
-                builder.ins().stack_store(val1, stack_slot, 0);
-                builder.ins().stack_store(val2, stack_slot, 8);
-                builder.ins().stack_store(val3, stack_slot, 16);
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_STR,
+                    &[I64, I64, I64, I64],
+                    &[],
+                    &[val1, val2, val3, stack_ptr],
+                );
 
-                (stack_ptr, true)
+                stack_ptr
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
-                (o.get_string(compiler, builder), false)
+                o.get_string(compiler, builder)
             }
         }
     }
@@ -246,27 +273,40 @@ impl Input {
                 let [i1, i2, i3, i4] =
                     unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
                 if is_string {
-                    STRINGS_TO_DROP.lock().unwrap().push([i2, i3, i4]);
+                    compiler
+                        .static_strings
+                        .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
                 }
 
                 let i1 = compiler.constants.get_int(i1, builder);
                 let i2 = compiler.constants.get_int(i2, builder);
                 let i3 = compiler.constants.get_int(i3, builder);
                 let i4 = compiler.constants.get_int(i4, builder);
-                [i1, i2, i3, i4]
+
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_OBJ,
+                    &[I64, I64, I64, I64, I64],
+                    &[],
+                    &[i1, i2, i3, i4, compiler.temp_slot4.0],
+                );
+
+                let o1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                let o2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let o3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                let o4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
+
+                [o1, o2, o3, o4]
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
-                    ReturnValue::Object(arr) => arr,
-                    ReturnValue::ObjectPointer(_, slot) => {
-                        let i1 = builder.ins().stack_load(I64, slot, 0);
-                        let i2 = builder.ins().stack_load(I64, slot, 8);
-                        let i3 = builder.ins().stack_load(I64, slot, 16);
-                        let i4 = builder.ins().stack_load(I64, slot, 24);
+                    ScratchValue::Object(arr) => arr,
+                    ScratchValue::String([i2, i3, i4]) => {
+                        let i1 = compiler.constants.get_int(ID_STRING, builder);
                         [i1, i2, i3, i4]
                     }
-                    ReturnValue::Num(value) => {
+                    ScratchValue::Num(value) => {
                         let id = builder.ins().iconst(I64, ID_NUMBER);
                         let zero = compiler.constants.get_int(0, builder);
                         let value = builder.ins().bitcast(
@@ -276,7 +316,7 @@ impl Input {
                         );
                         [id, value, zero, zero]
                     }
-                    ReturnValue::Bool(value) => {
+                    ScratchValue::Bool(value) => {
                         let id = builder.ins().iconst(I64, ID_BOOL);
                         let zero = compiler.constants.get_int(0, builder);
                         [id, value, zero, zero]
@@ -301,76 +341,84 @@ impl Input {
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
-                    ReturnValue::Num(value) => (value, compiler.constants.get_int(0, builder)),
-                    ReturnValue::Object([i1, i2, i3, i4]) => {
+                    ScratchValue::Num(value) => (value, compiler.constants.get_int(0, builder)),
+                    ScratchValue::Object([i1, i2, i3, i4]) => {
                         compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
                     }
-                    ReturnValue::Bool(value) => (
+                    ScratchValue::String([i2, i3, i4]) => {
+                        let i1 = compiler.constants.get_int(ID_STRING, builder);
+                        compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                    }
+                    ScratchValue::Bool(value) => (
                         builder.ins().fcvt_from_sint(F64, value),
                         compiler.constants.get_int(1, builder),
                     ),
-                    ReturnValue::ObjectPointer(_value, slot) => {
-                        let i1 = builder.ins().stack_load(I64, slot, 0);
-                        let i2 = builder.ins().stack_load(I64, slot, 8);
-                        let i3 = builder.ins().stack_load(I64, slot, 16);
-                        let i4 = builder.ins().stack_load(I64, slot, 24);
-
-                        compiler.ins_call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
-                    }
                 }
             }
         }
     }
 
-    pub fn expected_type(&self, variable_type_data: &HashMap<Ptr, VarType>) -> Option<VarType> {
+    pub fn expected_type(&self, vartype: impl FnMut(Ptr) -> VariableWrite) -> VariableWrite {
         match self {
-            Input::Obj(o) => Some(o.get_type()),
+            Input::Obj(o) => VariableWrite {
+                ty: Some(o.get_type()).into(),
+                skip_nan: !o.convert_to_number().is_nan(),
+            },
             Input::Block(b) => b
-                .return_type(variable_type_data)
-                .and_then(|n| n.to_vartype()),
+                .return_type(vartype)
+                .expect("Shouldn't take return value of non-returning block"),
         }
     }
 }
 
-#[derive(Debug)]
-pub enum ReturnValue {
-    Num(Value),
-    Bool(Value),
-    Object([Value; 4]),
-    ObjectPointer(Value, StackSlot),
+impl From<ScratchValue> for VarTypeChecked {
+    fn from(value: ScratchValue) -> Self {
+        match value {
+            ScratchValue::Num(_) => VarTypeChecked::Number,
+            ScratchValue::Bool(_) => VarTypeChecked::Bool,
+            ScratchValue::String(_) => VarTypeChecked::String,
+            ScratchValue::Object(_) => VarTypeChecked::Object,
+        }
+    }
 }
 
-impl ReturnValue {
-    pub fn get_number(self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ScratchValue {
+    Num(Value),
+    Bool(Value),
+    String([Value; 3]),
+    Object([Value; 4]),
+}
+
+impl ScratchValue {
+    pub(crate) fn get_number(
+        self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
         match self {
-            ReturnValue::Num(value) => value,
-            ReturnValue::Object(arr) => {
+            ScratchValue::Num(value) => value,
+            ScratchValue::Object(arr) => {
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number as *const (),
+                    callbacks::types::TO_NUMBER,
                     &[I64, I64, I64, I64],
                     &[F64],
                     &arr,
                 );
                 builder.inst_results(num)[0]
             }
-            ReturnValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
-            ReturnValue::ObjectPointer(_value, slot) => {
-                let i1 = builder.ins().stack_load(I64, slot, 0);
-                let i2 = builder.ins().stack_load(I64, slot, 8);
-                let i3 = builder.ins().stack_load(I64, slot, 16);
-                let i4 = builder.ins().stack_load(I64, slot, 24);
-
-                // Convert the object to number
+            ScratchValue::String(arr) => {
                 let num = compiler.call_function(
                     builder,
-                    callbacks::types::to_number as *const (),
-                    &[I64, I64, I64, I64],
+                    callbacks::types::TO_NUMBER_FROM_STRING,
+                    &[I64, I64, I64],
                     &[F64],
-                    &[i1, i2, i3, i4],
+                    &arr,
                 );
                 builder.inst_results(num)[0]
             }
+            ScratchValue::Bool(value) => builder.ins().fcvt_from_sint(F64, value),
         }
     }
 
@@ -380,52 +428,47 @@ impl ReturnValue {
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
         match self {
-            ReturnValue::Num(value) => {
+            ScratchValue::Num(value) => {
                 let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
                 compiler.call_function(
                     builder,
-                    callbacks::types::to_string_from_num as *const (),
+                    callbacks::types::TO_STRING_FROM_NUM,
                     &[F64, I64],
                     &[],
                     &[value, stack_ptr],
                 );
                 stack_ptr
             }
-            ReturnValue::Object([i1, i2, i3, i4]) => {
+            ScratchValue::String([i2, i3, i4]) => {
+                let i1 = compiler.constants.get_int(ID_STRING, builder);
                 get_string_from_obj(builder, compiler, i1, i2, i3, i4)
             }
-            ReturnValue::Bool(value) => {
+            ScratchValue::Object([i1, i2, i3, i4]) => {
+                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
+            }
+            ScratchValue::Bool(value) => {
                 let stack_ptr = Compiler::ins_create_string_stack_slot(builder);
 
                 compiler.call_function(
                     builder,
-                    callbacks::types::to_string_from_bool as *const (),
+                    callbacks::types::TO_STRING_FROM_BOOL,
                     &[I64, I64],
                     &[],
                     &[value, stack_ptr],
                 );
                 stack_ptr
             }
-            ReturnValue::ObjectPointer(_value, slot) => {
-                // read 4 i64 from pointer
-                let i1 = builder.ins().stack_load(I64, slot, 0);
-                let i2 = builder.ins().stack_load(I64, slot, 8);
-                let i3 = builder.ins().stack_load(I64, slot, 16);
-                let i4 = builder.ins().stack_load(I64, slot, 24);
-
-                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
-            }
         }
     }
 
     pub fn is_bool(&self) -> bool {
-        matches!(self, ReturnValue::Bool(_))
+        matches!(self, ScratchValue::Bool(_))
     }
 
     fn get_bool(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
-            ReturnValue::Num(value) => {
+            ScratchValue::Num(value) => {
                 // (*n != 0.0 && !n.is_nan()) as i64
                 let zero = compiler.constants.get_float(0.0, builder);
                 let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
@@ -435,34 +478,99 @@ impl ReturnValue {
                 let zero = compiler.constants.get_int(0, builder);
                 builder.ins().select(res, one, zero)
             }
-            ReturnValue::Bool(value) => *value,
-            ReturnValue::Object([i1, i2, i3, i4]) => {
-                let ins = compiler.call_function(
-                    builder,
-                    callbacks::types::to_bool as *const (),
-                    &[I64, I64, I64, I64],
-                    &[I64],
-                    &[*i1, *i2, *i3, *i4],
-                );
-                builder.inst_results(ins)[0]
+            ScratchValue::Bool(value) => *value,
+            ScratchValue::String([i2, i3, i4]) => {
+                let i1 = compiler.constants.get_int(ID_STRING, builder);
+                obj_to_bool(compiler, builder, i1, *i2, *i3, *i4)
             }
-            ReturnValue::ObjectPointer(_value, stack_slot) => {
-                let i1 = builder.ins().stack_load(I64, *stack_slot, 0);
-                let i2 = builder.ins().stack_load(I64, *stack_slot, 8);
-                let i3 = builder.ins().stack_load(I64, *stack_slot, 16);
-                let i4 = builder.ins().stack_load(I64, *stack_slot, 24);
-
-                let ins = compiler.call_function(
-                    builder,
-                    callbacks::types::to_bool as *const (),
-                    &[I64, I64, I64, I64],
-                    &[I64],
-                    &[i1, i2, i3, i4],
-                );
-                builder.inst_results(ins)[0]
+            ScratchValue::Object([i1, i2, i3, i4]) => {
+                obj_to_bool(compiler, builder, *i1, *i2, *i3, *i4)
             }
         }
     }
+
+    pub fn clone_in_code(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> ScratchValue {
+        match self {
+            ScratchValue::Num(value) => ScratchValue::Num(*value),
+            ScratchValue::Bool(value) => ScratchValue::Bool(*value),
+            ScratchValue::String([i2, i3, i4]) => {
+                let i1 = compiler.constants.get_int(ID_STRING, builder);
+                obj_clone(compiler, builder, i1, *i2, *i3, *i4)
+            }
+            ScratchValue::Object([i1, i2, i3, i4]) => {
+                obj_clone(compiler, builder, *i1, *i2, *i3, *i4)
+            }
+        }
+    }
+
+    pub fn get_object(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        constants: &mut ConstantMap,
+    ) -> [Value; 4] {
+        match self {
+            ScratchValue::Num(n) => {
+                let n = builder.ins().bitcast(I64, MemFlags::new(), *n);
+                let id = constants.get_int(ID_NUMBER, builder);
+                let zero = constants.get_int(0, builder);
+                [id, n, zero, zero]
+            }
+            ScratchValue::Bool(n) => {
+                let id = constants.get_int(ID_BOOL, builder);
+                let zero = constants.get_int(0, builder);
+                [id, *n, zero, zero]
+            }
+            ScratchValue::String([i2, i3, i4]) => {
+                let i1 = constants.get_int(ID_STRING, builder);
+                [i1, *i2, *i3, *i4]
+            }
+            ScratchValue::Object(n) => *n,
+        }
+    }
+}
+
+fn obj_clone(
+    compiler: &mut Compiler<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    i1: Value,
+    i2: Value,
+    i3: Value,
+    i4: Value,
+) -> ScratchValue {
+    compiler.call_function(
+        builder,
+        callbacks::types::CLONE_OBJ,
+        &[I64, I64, I64, I64, I64],
+        &[],
+        &[i1, i2, i3, i4, compiler.temp_slot4.0],
+    );
+    let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+    let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+    let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+    let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
+    ScratchValue::Object([i1, i2, i3, i4])
+}
+
+fn obj_to_bool(
+    compiler: &mut Compiler<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    i1: Value,
+    i2: Value,
+    i3: Value,
+    i4: Value,
+) -> Value {
+    let ins = compiler.call_function(
+        builder,
+        callbacks::types::TO_BOOL,
+        &[I64, I64, I64, I64],
+        &[I64],
+        &[i1, i2, i3, i4],
+    );
+    builder.inst_results(ins)[0]
 }
 
 fn get_string_from_obj(
@@ -477,7 +585,7 @@ fn get_string_from_obj(
 
     compiler.call_function(
         builder,
-        callbacks::types::to_string as *const (),
+        callbacks::types::TO_STRING,
         &[I64, I64, I64, I64, I64],
         &[],
         &[i1, i2, i3, i4, stack_ptr],

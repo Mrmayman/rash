@@ -80,14 +80,24 @@ You can see the progress in implementing blocks in this [Google Docs spreadsheet
 - Compile and run Rash: `cargo run --release -- path/to/file.sb3`
 - To run the test suite, do: `cargo test`
 
+Env vars:
+- `RASH_PRINT_IR` to print the cranelift IR of the compiled code.
+- `RASH_PRINT_FUNCTIONS` to print IR IDs of the callback functions.
+- `RASH_PRINT_MEMORY` to print memory values after running.
+
 # Contributing
 
 Feel free to submit any changes you make as a pull request, I'll be happy to review it.
 
 # Benchmarks
 
-Pi calculation:
+Pi calculation (10,000,000 iterations):
 
-- Scratch: `621 ms`
-- Turbowarp: `13 ms`
-- Rash: `7 ms`
+| **Platform** | **Time** |
+| --- | --- |
+| Scratch | \~7 seconds |
+| [ScratchCPP](https://github.com/scratchcpp/scratchcpp-player/) | \~126 ms |
+| Turbowarp (Warp timer on) | \~112 ms |
+| Turbowarp | \~72 ms |
+| Rash | \~26.3 ms |
+| Rash (with lossy flags) | \~24.7 ms |

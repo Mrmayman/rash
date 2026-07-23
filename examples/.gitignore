@@ -1,2 +1,5 @@
 project.json
 block test.sb3
+flow test.sb3
+pi_simplified.sb3
+vartest.sb3

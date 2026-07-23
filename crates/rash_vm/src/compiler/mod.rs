@@ -4,22 +4,31 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use bimap::BiHashMap;
 use cranelift::{
-    codegen::ir::SigRef,
+    codegen::{
+        ir::{
+            AbiParam, ExtFuncData, ExternalName, FuncRef, SigRef, StackSlot, Type,
+            UserExternalName, UserExternalNameRef,
+        },
+        isa::CallConv,
+    },
     prelude::{
-        Block, FunctionBuilder, InstBuilder, Signature, StackSlotData, StackSlotKind, Value,
+        Block, FunctionBuilder, InstBuilder, Signature, Value,
         types::{F64, I64},
     },
 };
+use smol_str::SmolStr;
 
 use crate::{
     callbacks,
     constant_set::ConstantMap,
-    data_types::ScratchObject,
+    data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
+    effects::{CheckEffects, Effects, VariableWrite},
     graphics::{RunState, SpriteId},
-    input_primitives::{Input, Ptr, ReturnValue},
+    input_primitives::{Input, Ptr, ScratchValue},
     runtime::CustomBlockId,
-    stack_cache::StackCache,
+    variable_storage::{GenericVarStore, SsaVarStore, VarStore},
 };
 
 mod display;
@@ -99,22 +108,23 @@ pub enum ScratchBlock {
     Log(Input),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Default, Clone, Copy)]
 pub enum VarTypeChecked {
     Number,
     Bool,
     String,
-    Unknown,
+    #[default]
+    Object,
 }
 
 impl VarTypeChecked {
-    pub fn to_vartype(&self) -> Option<VarType> {
-        Some(match self {
-            VarTypeChecked::Number => VarType::Number,
-            VarTypeChecked::Bool => VarType::Bool,
-            VarTypeChecked::String => VarType::String,
-            VarTypeChecked::Unknown => return None,
-        })
+    pub fn get_id(self) -> Option<i64> {
+        match self {
+            Self::Number => Some(ID_NUMBER),
+            Self::Bool => Some(ID_BOOL),
+            Self::String => Some(ID_STRING),
+            Self::Object => None,
+        }
     }
 }
 
@@ -128,42 +138,61 @@ impl From<VarType> for VarTypeChecked {
     }
 }
 
+impl From<Option<VarType>> for VarTypeChecked {
+    fn from(value: Option<VarType>) -> Self {
+        match value {
+            Some(n) => n.into(),
+            None => Self::Object,
+        }
+    }
+}
+
+impl From<VarTypeChecked> for Option<VarType> {
+    fn from(val: VarTypeChecked) -> Self {
+        Some(match val {
+            VarTypeChecked::Number => VarType::Number,
+            VarTypeChecked::Bool => VarType::Bool,
+            VarTypeChecked::String => VarType::String,
+            VarTypeChecked::Object => return None,
+        })
+    }
+}
+
 impl ScratchBlock {
+    #[must_use]
     pub fn return_type(
         &self,
-        variable_type_data: &HashMap<Ptr, VarType>,
-    ) -> Option<VarTypeChecked> {
+        mut vartype: impl FnMut(Ptr) -> VariableWrite,
+    ) -> Option<VariableWrite> {
         match self {
-            ScratchBlock::VarRead(ptr) => match variable_type_data.get(ptr) {
-                Some(vartype) => Some((*vartype).into()),
-                None => Some(VarTypeChecked::Unknown),
-            },
-            ScratchBlock::FunctionGetArg(_) => Some(VarTypeChecked::Unknown),
+            ScratchBlock::VarRead(ptr) => Some(vartype(*ptr)),
+            ScratchBlock::OpRandom(_, _)
+            | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpDiv(_, _) => Some(VariableWrite::normal(VarTypeChecked::Number)),
+            ScratchBlock::FunctionGetArg(_) => Some(VariableWrite::normal(VarTypeChecked::Object)),
+
             ScratchBlock::OpAdd(_, _)
             | ScratchBlock::OpSub(_, _)
             | ScratchBlock::OpMul(_, _)
-            | ScratchBlock::OpDiv(_, _)
-            | ScratchBlock::OpMod(_, _)
-            | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpMFloor(_)
             | ScratchBlock::OpRound(_)
             | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::OpMSin(_)
             | ScratchBlock::OpMCos(_)
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::ControlDaysSince2000
-            | ScratchBlock::OpStrLen(_) => Some(VarTypeChecked::Number),
+            | ScratchBlock::OpStrLen(_) => Some(VariableWrite::skip_nan(VarTypeChecked::Number)),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
-                Some(VarTypeChecked::String)
+                Some(VariableWrite::normal(VarTypeChecked::String))
             }
             ScratchBlock::OpBAnd(_, _)
             | ScratchBlock::OpBNot(_)
             | ScratchBlock::OpBOr(_, _)
             | ScratchBlock::OpStrContains(_, _)
-            | ScratchBlock::OpCmp(_, _, _) => Some(VarTypeChecked::Bool),
+            | ScratchBlock::OpCmp(_, _, _) => Some(VariableWrite::normal(VarTypeChecked::Bool)),
             ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
             | ScratchBlock::ControlIf(_, _)
@@ -185,114 +214,7 @@ impl ScratchBlock {
         }
     }
 
-    pub fn affects_var(
-        &self,
-        var_ptr: Ptr,
-        variable_type_data: &HashMap<Ptr, VarType>,
-    ) -> Option<VarTypeChecked> {
-        match self {
-            ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _) => Some(VarTypeChecked::Unknown),
-            ScratchBlock::VarSet(ptr, input) => {
-                if var_ptr == *ptr {
-                    match input {
-                        Input::Obj(scratch_object) => Some(scratch_object.get_type().into()),
-                        Input::Block(scratch_block) => {
-                            scratch_block.return_type(variable_type_data)
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
-            ScratchBlock::VarChange(ptr, _) => {
-                if var_ptr == *ptr {
-                    Some(VarTypeChecked::Number)
-                } else {
-                    None
-                }
-            }
-            ScratchBlock::ControlIf(_, vec)
-            | ScratchBlock::ControlRepeat(_, vec)
-            | ScratchBlock::ControlRepeatUntil(_, vec) => vec
-                .iter()
-                .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                .next_back(),
-            ScratchBlock::ControlIfElse(_, then, else_block) => {
-                let then = then
-                    .iter()
-                    .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                    .next_back();
-                let else_block = else_block
-                    .iter()
-                    .filter_map(|n| n.affects_var(var_ptr, variable_type_data))
-                    .next_back();
-
-                match (then, else_block) {
-                    (None, None) => None,
-                    (None, Some(n)) | (Some(n), None) => Some(n),
-                    (Some(a), Some(b)) => {
-                        if a == b {
-                            Some(a)
-                        } else {
-                            Some(VarTypeChecked::Unknown)
-                        }
-                    }
-                }
-            }
-            _ => None,
-        }
-    }
-
-    pub fn could_be_nan(&self) -> bool {
-        match self {
-            ScratchBlock::VarSet(_, _)
-            | ScratchBlock::VarChange(_, _)
-            | ScratchBlock::ControlIf(_, _)
-            | ScratchBlock::ControlIfElse(_, _, _)
-            | ScratchBlock::ControlRepeat(_, _)
-            | ScratchBlock::ControlRepeatUntil(_, _)
-            | ScratchBlock::OpAdd(_, _)
-            | ScratchBlock::OpSub(_, _)
-            | ScratchBlock::OpMul(_, _)
-            | ScratchBlock::OpStrJoin(_, _)
-            | ScratchBlock::OpStrLen(_)
-            | ScratchBlock::OpCmp(_, _, _)
-            | ScratchBlock::OpBAnd(_, _)
-            | ScratchBlock::OpBNot(_)
-            | ScratchBlock::OpBOr(_, _)
-            | ScratchBlock::OpMFloor(_)
-            | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpStrLetterOf(_, _)
-            | ScratchBlock::OpStrContains(_, _)
-            | ScratchBlock::OpRound(_)
-            | ScratchBlock::OpMSin(_)
-            | ScratchBlock::OpMCos(_)
-            | ScratchBlock::OpMTan(_)
-            | ScratchBlock::ScreenRefresh
-            | ScratchBlock::ControlStopThisScript
-            | ScratchBlock::MotionGoToXY(_, _)
-            | ScratchBlock::MotionChangeX(_)
-            | ScratchBlock::MotionChangeY(_)
-            | ScratchBlock::MotionSetX(_)
-            | ScratchBlock::MotionSetY(_)
-            | ScratchBlock::MotionGetX
-            | ScratchBlock::MotionGetY
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::Log(_)
-            | ScratchBlock::ControlDaysSince2000
-            | ScratchBlock::LooksShown(_)
-            | ScratchBlock::ControlForever(_) => false,
-            ScratchBlock::VarRead(_)
-            | ScratchBlock::OpDiv(_, _)
-            | ScratchBlock::OpMod(_, _)
-            | ScratchBlock::OpMSqrt(_)
-            | ScratchBlock::FunctionGetArg(_)
-            | ScratchBlock::OpRandom(_, _) => true,
-        }
-    }
-
+    #[must_use]
     pub fn could_trigger_refresh(&self) -> bool {
         match self {
             ScratchBlock::VarSet(_, _)
@@ -321,8 +243,8 @@ impl ScratchBlock {
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionGetArg(_)
-            | ScratchBlock::Log(_)
             | ScratchBlock::ControlDaysSince2000
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
@@ -330,17 +252,20 @@ impl ScratchBlock {
             | ScratchBlock::ControlRepeatUntil(_, blocks)
             | ScratchBlock::ControlForever(blocks)
             | ScratchBlock::ControlRepeat(_, blocks) => {
-                blocks.iter().any(|n| n.could_trigger_refresh())
+                blocks.iter().any(ScratchBlock::could_trigger_refresh)
             }
             ScratchBlock::ControlIfElse(_, blocks_then, blocks_else) => {
-                blocks_then.iter().any(|n| n.could_trigger_refresh())
-                    || blocks_else.iter().any(|n| n.could_trigger_refresh())
+                blocks_then.iter().any(ScratchBlock::could_trigger_refresh)
+                    || blocks_else.iter().any(ScratchBlock::could_trigger_refresh)
             }
             ScratchBlock::LooksShown(b) => *b, // Triggers refresh on show, not hide
 
+            // TODO: This actually depends on the function itself
+            // Remove from here eventually
+            ScratchBlock::FunctionCallScreenRefresh(_, _) => true,
+
             ScratchBlock::ScreenRefresh
-            | ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::Log(_)
             | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::MotionChangeX(_)
             | ScratchBlock::MotionChangeY(_)
@@ -357,16 +282,18 @@ pub enum VarType {
     String,
 }
 
-pub(crate) struct Compiler<'compiler> {
-    pub variable_type_data: HashMap<Ptr, VarType>,
+pub struct Compiler<'compiler> {
     pub args_list: Vec<[Value; 4]>,
     pub constants: ConstantMap,
-    pub code_block: Block,
-    pub cache: StackCache,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
-    pub func_signatures: HashMap<Signature, SigRef>,
+    pub program_analysis: Effects,
+    pub func_store: FunctionStore,
+    pub call_conv: CallConv,
+    pub static_strings: Vec<SmolStr>,
+    pub cache: Box<dyn VarStore>,
+    pub temp_slot4: (Value, StackSlot),
 
     /// Storing how many loops inside we are right now
     /// while compiling the current code.
@@ -405,7 +332,7 @@ pub(crate) struct Compiler<'compiler> {
 
 impl<'a> Compiler<'a> {
     pub fn new(
-        block: Block,
+        jump_from_existing: bool,
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
@@ -417,16 +344,53 @@ impl<'a> Compiler<'a> {
         is_screen_refresh: bool,
         is_called_as_refresh: Value,
         child_thread_ptr: Value,
+        temp_slot4: (Value, StackSlot),
+        func_map: FuncMap,
+        call_conv: CallConv,
     ) -> Self {
+        let mut constants = ConstantMap::new();
+
+        let code_block = builder.create_block();
+        if jump_from_existing {
+            builder.ins().jump(code_block, &[]);
+        }
+        builder.switch_to_block(code_block);
+
+        let mut other_eff: Option<Effects> = None;
+        let var_ty = &|_| VariableWrite::default();
+        let mut program_analysis = code.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
+            if let Some(other) = &mut other_eff {
+                other.merge(&e, var_ty);
+            } else {
+                other_eff = Some(e);
+            }
+        });
+        if let Some(other_eff) = other_eff {
+            program_analysis.merge(&other_eff, var_ty);
+        }
+
+        let cache: Box<dyn VarStore> = if program_analysis.is_unknown {
+            Box::new(GenericVarStore::new(memory))
+        } else {
+            Box::new(SsaVarStore::new(
+                builder,
+                &program_analysis,
+                &mut constants,
+                memory,
+            ))
+        };
+
         Self {
-            variable_type_data: HashMap::new(),
-            constants: ConstantMap::new(),
-            code_block: block,
-            cache: StackCache::new(builder, code),
-            break_points: Vec::new(),
-            func_signatures: HashMap::new(),
+            temp_slot4,
+            cache,
+            program_analysis,
+            constants,
+            call_conv,
+            break_points: vec![code_block],
+            func_store: FunctionStore::new(func_map),
             break_counter: 0,
             repeat_stack: 0,
+            static_strings: Vec::new(),
             memory,
             script_ptr,
             loop_stack_ptr,
@@ -443,31 +407,31 @@ impl<'a> Compiler<'a> {
         &mut self,
         block: &ScratchBlock,
         builder: &mut FunctionBuilder<'_>,
-    ) -> Option<ReturnValue> {
+    ) -> Option<ScratchValue> {
         match block {
             ScratchBlock::VarSet(ptr, obj) => {
                 self.var_set(obj, builder, *ptr);
             }
             ScratchBlock::OpAdd(a, b) => {
-                return Some(ReturnValue::Num(self.op_add(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_add(a, b, builder)));
             }
             ScratchBlock::OpSub(a, b) => {
-                return Some(ReturnValue::Num(self.op_sub(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_sub(a, b, builder)));
             }
             ScratchBlock::OpMul(a, b) => {
-                return Some(ReturnValue::Num(self.op_mul(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_mul(a, b, builder)));
             }
             ScratchBlock::OpDiv(a, b) => {
-                return Some(ReturnValue::Num(self.op_div(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_div(a, b, builder)));
             }
             ScratchBlock::OpMod(a, b) => {
-                return Some(ReturnValue::Num(self.op_modulo(a, b, builder)));
+                return Some(ScratchValue::Num(self.op_modulo(a, b, builder)));
             }
             ScratchBlock::VarRead(ptr) => {
                 return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
-                return Some(ReturnValue::Object(self.op_str_join(a, b, builder)));
+                return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));
             }
             ScratchBlock::Log(msg) => self.dbg_log(msg, builder),
             ScratchBlock::ControlRepeat(input, vec) => {
@@ -480,7 +444,7 @@ impl<'a> Compiler<'a> {
                 self.var_change(input, builder, *ptr);
             }
             ScratchBlock::ControlIf(input, vec) => {
-                self.control_if_statement(input, builder, vec);
+                self.control_if(input, builder, vec);
             }
             ScratchBlock::ControlIfElse(condition, then_block, else_block) => {
                 self.control_if_else(condition, builder, then_block, else_block);
@@ -489,49 +453,49 @@ impl<'a> Compiler<'a> {
                 self.control_repeat_until(builder, input, vec);
             }
             ScratchBlock::OpCmp(a, b, ordering) => {
-                return Some(ReturnValue::Bool(self.op_cmp(a, b, builder, *ordering)));
+                return Some(ScratchValue::Bool(self.op_cmp(a, b, builder, *ordering)));
             }
             ScratchBlock::OpStrLen(input) => {
                 return Some(self.op_str_len(input, builder));
             }
             ScratchBlock::OpRandom(a, b) => return Some(self.op_random(a, b, builder)),
             ScratchBlock::OpBAnd(a, b) => {
-                return Some(ReturnValue::Bool(self.op_b_and(a, b, builder)));
+                return Some(ScratchValue::Bool(self.op_b_and(a, b, builder)));
             }
             ScratchBlock::OpBNot(a) => {
-                return Some(ReturnValue::Bool(self.op_b_not(a, builder)));
+                return Some(ScratchValue::Bool(self.op_b_not(a, builder)));
             }
             ScratchBlock::OpBOr(a, b) => {
-                return Some(ReturnValue::Bool(self.op_b_or(a, b, builder)));
+                return Some(ScratchValue::Bool(self.op_b_or(a, b, builder)));
             }
             ScratchBlock::OpMFloor(n) => return Some(self.op_m_floor(n, builder)),
             ScratchBlock::OpStrLetterOf(letter, string) => {
-                return Some(ReturnValue::Object(
+                return Some(ScratchValue::Object(
                     self.op_str_letter(letter, string, builder),
                 ));
             }
             ScratchBlock::OpStrContains(string, pattern) => {
-                return Some(ReturnValue::Bool(
+                return Some(ScratchValue::Bool(
                     self.op_str_contains(string, pattern, builder),
                 ));
             }
             ScratchBlock::OpRound(num) => {
-                return Some(ReturnValue::Num(self.op_round(num, builder)));
+                return Some(ScratchValue::Num(self.op_round(num, builder)));
             }
             ScratchBlock::OpMAbs(num) => {
-                return Some(ReturnValue::Num(self.op_m_abs(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_abs(num, builder)));
             }
             ScratchBlock::OpMSqrt(num) => {
-                return Some(ReturnValue::Num(self.op_m_sqrt(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_sqrt(num, builder)));
             }
             ScratchBlock::OpMSin(num) => {
-                return Some(ReturnValue::Num(self.op_m_sin(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_sin(num, builder)));
             }
             ScratchBlock::OpMCos(num) => {
-                return Some(ReturnValue::Num(self.op_m_cos(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_cos(num, builder)));
             }
             ScratchBlock::OpMTan(num) => {
-                return Some(ReturnValue::Num(self.op_m_tan(num, builder)));
+                return Some(ScratchValue::Num(self.op_m_tan(num, builder)));
             }
             ScratchBlock::ScreenRefresh => {
                 self.screen_refresh(builder);
@@ -540,13 +504,15 @@ impl<'a> Compiler<'a> {
                 self.control_stop_this_script(builder);
             }
             ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, args) => {
-                self.call_custom_block(custom_block_id, builder, args, false);
+                self.call_custom_block(*custom_block_id, builder, args, false);
             }
             ScratchBlock::FunctionCallScreenRefresh(custom_block_id, args) => {
-                self.call_custom_block(custom_block_id, builder, args, true);
+                self.call_custom_block(*custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
-                return Some(ReturnValue::Object(self.custom_block_get_arg(builder, idx)));
+                return Some(ScratchValue::Object(
+                    self.custom_block_get_arg(builder, *idx),
+                ));
             }
             ScratchBlock::MotionGoToXY(x, y) => {
                 let x = x.get_number(self, builder);
@@ -554,7 +520,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_go_to as *const (),
                     &[I64, I64, F64, F64],
@@ -567,7 +533,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_change_x as *const (),
                     &[I64, I64, F64],
@@ -580,7 +546,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_change_y as *const (),
                     &[I64, I64, F64],
@@ -593,7 +559,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_set_x as *const (),
                     &[I64, I64, F64],
@@ -606,7 +572,7 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_set_y as *const (),
                     &[I64, I64, F64],
@@ -617,7 +583,7 @@ impl<'a> Compiler<'a> {
             ScratchBlock::MotionGetX => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function(
+                let inst = self.call_function_indirect(
                     builder,
                     RunState::c_get_x as *const (),
                     &[I64, I64],
@@ -626,12 +592,12 @@ impl<'a> Compiler<'a> {
                 );
 
                 let val = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(val));
+                return Some(ScratchValue::Num(val));
             }
             ScratchBlock::MotionGetY => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function(
+                let inst = self.call_function_indirect(
                     builder,
                     RunState::c_get_y as *const (),
                     &[I64, I64],
@@ -640,13 +606,13 @@ impl<'a> Compiler<'a> {
                 );
 
                 let val = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(val));
+                return Some(ScratchValue::Num(val));
             }
             ScratchBlock::LooksShown(shown) => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
-                let shown = self.constants.get_int(*shown as i64, builder);
+                let shown = self.constants.get_int(i64::from(*shown), builder);
 
-                self.call_function(
+                self.call_function_indirect(
                     builder,
                     RunState::c_shown as *const (),
                     &[I64, I64, I64],
@@ -655,15 +621,10 @@ impl<'a> Compiler<'a> {
                 );
             }
             ScratchBlock::ControlDaysSince2000 => {
-                let inst = self.call_function(
-                    builder,
-                    callbacks::days_since_2000 as *const (),
-                    &[],
-                    &[F64],
-                    &[],
-                );
+                let inst =
+                    self.call_function(builder, callbacks::env::DAYS_SINCE_2000, &[], &[F64], &[]);
                 let val = builder.inst_results(inst)[0];
-                return Some(ReturnValue::Num(val));
+                return Some(ScratchValue::Num(val));
             }
         }
         None
@@ -672,28 +633,23 @@ impl<'a> Compiler<'a> {
     fn custom_block_get_arg(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        idx: &usize,
+        idx: usize,
     ) -> [Value; 4] {
-        let [i1, i2, i3, i4] = self.args_list[*idx];
-        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            4 * std::mem::size_of::<i64>() as u32,
-            0,
-        ));
-        let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
+        let [i1, i2, i3, i4] = self.args_list[idx];
 
         self.call_function(
             builder,
-            callbacks::types::clone_obj as *const (),
+            callbacks::types::CLONE_OBJ,
             &[I64, I64, I64, I64, I64],
             &[],
-            &[i1, i2, i3, i4, stack_ptr],
+            &[i1, i2, i3, i4, self.temp_slot4.0],
         );
 
-        let i1 = builder.ins().stack_load(I64, stack_slot, 0);
-        let i2 = builder.ins().stack_load(I64, stack_slot, 8);
-        let i3 = builder.ins().stack_load(I64, stack_slot, 16);
-        let i4 = builder.ins().stack_load(I64, stack_slot, 24);
+        let slot = self.temp_slot4.1;
+        let i1 = builder.ins().stack_load(I64, slot, 0);
+        let i2 = builder.ins().stack_load(I64, slot, 8);
+        let i3 = builder.ins().stack_load(I64, slot, 16);
+        let i4 = builder.ins().stack_load(I64, slot, 24);
         [i1, i2, i3, i4]
     }
 
@@ -702,8 +658,8 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        // TODO: Hacky workaround for too-fast timing
         for _ in 0..2 {
+            // TODO: Hacky workaround for too-fast timing
             self.break_counter += 1;
             self.cache.save(builder, &mut self.constants, self.memory);
             let break_counter = self.constants.get_int(self.break_counter as i64, builder);
@@ -711,11 +667,73 @@ impl<'a> Compiler<'a> {
             builder.ins().return_(&[break_counter]);
             self.constants.clear();
 
-            self.code_block = builder.create_block();
-            self.break_points.push(self.code_block);
-            builder.switch_to_block(self.code_block);
+            let b = builder.create_block();
+            self.break_points.push(b);
+            builder.switch_to_block(b);
 
-            self.cache.init(builder, &mut self.constants, self.memory);
+            self.cache.reinit(builder, &mut self.constants, self.memory);
         }
+    }
+}
+
+pub type FuncMap = BiHashMap<UserExternalNameRef, UserExternalName>;
+
+pub struct FunctionStore {
+    pub func_map: FuncMap,
+    pub signatures: HashMap<Signature, SigRef>,
+    definitions: HashMap<UserExternalName, FuncRef>,
+}
+
+impl FunctionStore {
+    pub fn new(func_map: FuncMap) -> Self {
+        Self {
+            func_map,
+            signatures: HashMap::new(),
+            definitions: HashMap::new(),
+        }
+    }
+
+    pub fn get_function(
+        &mut self,
+        call_conv: CallConv,
+        builder: &mut FunctionBuilder,
+        name: UserExternalName,
+        params: &[Type],
+        returns: &[Type],
+    ) -> FuncRef {
+        if let Some(func_ref) = self.definitions.get(&name) {
+            return *func_ref;
+        }
+
+        let mut sig = Signature::new(call_conv);
+        for param in params {
+            sig.params.push(AbiParam::new(*param));
+        }
+        for ret in returns {
+            sig.returns.push(AbiParam::new(*ret));
+        }
+
+        let signature = if let Some(sigref) = self.signatures.get(&sig) {
+            *sigref
+        } else {
+            let r = builder.import_signature(sig.clone());
+            self.signatures.insert(sig.clone(), r);
+            r
+        };
+
+        let Some(func_ref) = self.func_map.get_by_right(&name) else {
+            crate::print_function_addresses();
+            panic!("Function not found: {}", name);
+        };
+        let func = ExtFuncData {
+            name: ExternalName::User(*func_ref),
+            signature,
+            colocated: false,
+            patchable: false,
+        };
+        let func_ref = builder.import_function(func);
+        self.definitions.insert(name, func_ref);
+
+        func_ref
     }
 }

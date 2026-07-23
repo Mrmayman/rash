@@ -1,3 +1,3 @@
 #!/bin/env bash
 cargo build
-valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes target/debug/rash
+valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --gen-suppressions=all --suppressions=valgrind.supp target/debug/rash

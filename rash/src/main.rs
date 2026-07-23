@@ -3,8 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use rash_loader_sb3::ProjectLoader;
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{
-    MEMORY, ProjectBuilder, RunState, Runtime, ScratchBlock, ScratchObject, SpriteBuilder,
-    SpriteData, SpriteId, runtime::Script,
+    MEMORY, ProjectBuilder, RunState, Runtime, SpriteBuilder, SpriteData, SpriteId, runtime::Script,
 };
 use winit::{
     event::{Event, WindowEvent},
@@ -25,7 +24,7 @@ fn main() {
             return;
         } else if arg == "--demo" {
             run_demo();
-            print_memory();
+            rash_vm::print_memory();
             return;
         }
         PathBuf::from(arg)
@@ -40,7 +39,9 @@ fn main() {
         p
     };
 
-    // rash_vm::print_function_addresses();
+    if std::env::var("RASH_PRINT_FUNCTIONS").is_ok() {
+        rash_vm::print_function_addresses();
+    }
 
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
@@ -68,6 +69,10 @@ fn main() {
             _ => app.tick(event),
         })
         .unwrap();
+
+    if std::env::var("RASH_PRINT_MEMORY").is_ok() {
+        rash_vm::print_memory();
+    }
 }
 
 pub struct App {
@@ -91,7 +96,7 @@ impl App {
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
+                power_preference: wgpu::PowerPreference::from_env().unwrap_or_default(),
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -126,8 +131,8 @@ impl App {
 
         Ok(Self {
             renderer,
-            window,
             vm,
+            window,
             surface,
             device,
             queue,
@@ -181,39 +186,20 @@ fn run_demo() {
 
     let mut sprite = SpriteBuilder::new(SpriteId(0));
     sprite.add_script(
-        &Script::new_green_flag(vec![
-            ScratchBlock::Log("Hello World".into()),
-            ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
-        ]),
+        // Script::new_green_flag(vec![
+        //     ScratchBlock::Log("Hello World".into()),
+        //     ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
+        // ]),
+        Script::new_green_flag(rash_vm::builder::program_pi()),
         &memory,
     );
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
-    let mut vm = builder.build();
+    let mut vm = builder.build(&memory);
     let mut state = RunState {
         // We won't do any graphics operations here
         sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
     };
 
     while !vm.update(&mut state) {}
-}
-
-fn print_memory() {
-    let lock = rash_vm::MEMORY.lock().unwrap();
-
-    println!("MEMORY: {:X}", lock.as_ptr() as usize);
-
-    // Only print the changed values that aren't zero.
-    let print_until_idx = lock
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, n)| !matches!(**n, ScratchObject::Number(0.0)))
-        .map(|(i, _)| i);
-    if let Some(print_until_idx) = print_until_idx {
-        for (i, obj) in lock.iter().enumerate().take(print_until_idx + 1) {
-            println!("{i}: {obj:?}");
-        }
-    }
-    println!("...: {:?}", ScratchObject::Number(0.0));
 }

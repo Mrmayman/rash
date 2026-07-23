@@ -3,74 +3,123 @@
 //! These functions are called by JIT code to perform
 //! operations that are not possible in JIT code.
 
-use core::f64;
+use std::{collections::HashMap, sync::LazyLock};
 
-use crate::data_types::ScratchObject;
-use colored::Colorize;
+use cranelift::codegen::ir::{Function, UserExternalName};
+
+use crate::compiler::FuncMap;
+
+macro_rules! print_func {
+    ($module:expr, $($fn:ident),+ $(,)?) => {
+        pub(super) fn print_function_addresses() {
+            println!("\n========");
+            println!("{}", $module);
+            println!("========");
+
+            paste::paste! {
+                $(
+                    // println!(
+                    //     "{:20} {:20} = {:#018x}",
+                    //     [<$fn:upper>],
+                    //     stringify!($fn),
+                    //     $fn as *const () as usize,
+                    // );
+                    println!(
+                        "{:<6} {}",
+                        format!("{}", [<$fn:upper>]),
+                        stringify!($fn)
+                    );
+                )+
+            }
+        }
+    };
+}
+
+macro_rules! declare_module {
+    ($file:literal, $namespace:expr, $($func:ident),+ $(,)?) => {
+        paste::paste! {
+            print_func!(
+                $file,
+                $($func),*,
+            );
+
+            const fn name(n: u32) -> cranelift::codegen::ir::UserExternalName {
+                cranelift::codegen::ir::UserExternalName {
+                    namespace: $namespace,
+                    index: n,
+                }
+            }
+
+            pub const FUNCS: &[(cranelift::codegen::ir::UserExternalName, *const ())] = &[
+                $(
+                    ([<$func:upper>], $func as *const ()),
+                )*
+            ];
+
+            declare_module!(@consts 0; $($func),*);
+        }
+    };
+
+    (@consts $n:expr; ) => {};
+
+    (@consts $n:expr; $func:ident $(, $rest:ident)*) => {
+        paste::paste! {
+            pub const [<$func:upper>]: cranelift::codegen::ir::UserExternalName = name($n);
+        }
+
+        declare_module!(@consts ($n + 1); $($rest),*);
+    };
+}
 
 pub mod custom_block;
+pub mod env;
 pub mod op;
 pub mod repeat_stack;
+pub mod string;
 pub mod types;
 
+pub static FUNCS: LazyLock<HashMap<UserExternalName, usize>> = LazyLock::new(|| {
+    fn m((n, p): &(UserExternalName, *const ())) -> (UserExternalName, usize) {
+        (n.clone(), *p as usize)
+    }
+
+    let mut funcs = HashMap::new();
+    funcs.extend(custom_block::FUNCS.iter().map(m));
+    funcs.extend(env::FUNCS.iter().map(m));
+    funcs.extend(op::FUNCS.iter().map(m));
+    funcs.extend(repeat_stack::FUNCS.iter().map(m));
+    funcs.extend(string::FUNCS.iter().map(m));
+    funcs.extend(types::FUNCS.iter().map(m));
+    funcs
+});
+
 pub fn print_function_addresses() {
-    fn print(name: &str, addr: *const ()) {
-        println!("{name:25} = {:#018x}", addr as usize);
-    }
-
     custom_block::print_function_addresses();
-    repeat_stack::print_function_addresses();
-    types::print_function_addresses();
+    env::print_function_addresses();
     op::print_function_addresses();
-
-    println!("\n========");
-    println!("mod.rs");
-    println!("========");
-
-    print("var_read", var_read as *const ());
-    print("dbg_log", dbg_log as *const ());
-    print("op_days_since_2000", days_since_2000 as *const ());
+    repeat_stack::print_function_addresses();
+    string::print_function_addresses();
+    types::print_function_addresses();
 }
 
-/// Callback from JIT code to read a variable.
-///
-/// **Why can't you just directly read from memory?**
-/// Because, if it's a String, it has to be cloned otherwise
-/// there may be double frees and other memory issues.
-///
-/// # Arguments
-/// * `ptr` - The pointer to the variable (supplied from the
-///   MEMORY array beforehand by the compiler).
-/// * `dest` - The pointer to the destination memory location.
-///   (not a pointer to `ScratchObject` for simplicity sake)
-pub unsafe extern "C" fn var_read(ptr: *const ScratchObject, dest: *mut ScratchObject) {
-    // TODO: This is pointless, eliminate it.
-    let obj = unsafe { (*ptr).clone() };
-    unsafe { dest.write(obj) };
-}
-
-pub unsafe extern "C" fn dbg_log(msg: *mut String, is_const: i64) {
-    let msg_val = unsafe { &mut *msg };
-    if !msg_val.is_empty() {
-        println!("{} {msg_val:?}", "[say]".bright_black());
+pub fn declare_callbacks(func: &mut Function) -> FuncMap {
+    fn import_module(
+        func: &mut Function,
+        func_map: &mut FuncMap,
+        items: &[(UserExternalName, *const ())],
+    ) {
+        for (name, _) in items {
+            let func_ref = func.declare_imported_user_function(name.clone());
+            func_map.insert(func_ref, name.clone());
+        }
     }
-    if is_const == 0 {
-        unsafe { msg.drop_in_place() };
-    }
-}
 
-pub extern "C" fn days_since_2000() -> f64 {
-    // Seconds between Unix epoch (1970-01-01) and 2000-01-01 UTC
-    const SECONDS_1970_TO_2000: f64 = 946_684_800.0;
-    const SECONDS_PER_DAY: f64 = 86_400.0;
-
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("Time went backwards");
-
-    let seconds = now.as_secs() as f64;
-    let millis = now.subsec_nanos() as f64 / 1_000_000_000.0;
-
-    let seconds_since_2000 = seconds + millis - SECONDS_1970_TO_2000;
-    seconds_since_2000 / SECONDS_PER_DAY
+    let mut func_map = FuncMap::new();
+    import_module(func, &mut func_map, custom_block::FUNCS);
+    import_module(func, &mut func_map, env::FUNCS);
+    import_module(func, &mut func_map, op::FUNCS);
+    import_module(func, &mut func_map, repeat_stack::FUNCS);
+    import_module(func, &mut func_map, string::FUNCS);
+    import_module(func, &mut func_map, types::FUNCS);
+    func_map
 }
