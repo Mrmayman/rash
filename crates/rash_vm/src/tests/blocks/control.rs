@@ -191,6 +191,16 @@ pub fn branch_if_else() {
             vec![set_var(Ptr(9), 0.0)],
             vec![set_var(Ptr(9), 1.0)],
         ),
+        c_if_else(
+            true,
+            vec![set_var(Ptr(10), 0.0)],
+            vec![set_var(Ptr(11), 1.0)],
+        ),
+        c_if_else(
+            false,
+            vec![set_var(Ptr(10), 0.0)],
+            vec![set_var(Ptr(11), 1.0)],
+        ),
     ]);
     assert_eq!(memory[0].convert_to_number(), 1.0);
     assert_eq!(memory[1].convert_to_number(), 0.0);
@@ -202,6 +212,8 @@ pub fn branch_if_else() {
     assert_eq!(memory[7].convert_to_number(), 1.0);
     assert_eq!(memory[8].convert_to_number(), 1.0);
     assert_eq!(memory[9].convert_to_number(), 1.0);
+    assert_eq!(memory[10].convert_to_number(), 0.0);
+    assert_eq!(memory[11].convert_to_number(), 1.0);
 }
 
 #[test]
