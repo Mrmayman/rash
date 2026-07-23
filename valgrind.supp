@@ -16,7 +16,7 @@
    compiler_ignore3
    Memcheck:Cond
    ...
-   fun:_ZN17cranelift_codegen7context7Context8optimize17h1afea7ce41876a74E
+   fun:_ZN17cranelift_codegen7context7Context8optimize*
    ...
 }
 {
