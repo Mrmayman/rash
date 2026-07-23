@@ -1,6 +1,4 @@
-This directory contains a bunch of tests for the interpreter.
-
-Note: Currently the interpreter cannot load SB3 files, this was for the old version which could load them. Anyway keeping this here as I may add SB3 loading in the future.
+This directory contains a bunch of example projects to test on. Do note that most of these are unsupported/broken in Rash currently.
 
 # Made by me
 
@@ -8,7 +6,9 @@ Note: Currently the interpreter cannot load SB3 files, this was for the old vers
 
 - `mc23pre66.sb3` is the same project, after 2 years of development. It is a 2d Minecraft clone with complexity somewhat close to Paper Minecraft.
 
-- `pi calculator.sb3` is a benchmark for calculating pi.
+- `pi.sb3` is a benchmark for calculating pi.
+
+- `pi functions.sb3` is the same benchmark, but with repeated function calls inside a hot loop.
 
 - `repeated sum.sb3` is for checking the performance of repeated addition.
 

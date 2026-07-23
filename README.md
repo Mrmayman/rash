@@ -95,7 +95,7 @@ Pi calculation (10,000,000 iterations):
 
 | **Platform** | **Time** |
 | --- | --- |
-| Scratch | \~7 seconds |
+| Scratch | \~6770 ms (6.8s) |
 | [ScratchCPP](https://github.com/scratchcpp/scratchcpp-player/) | \~126 ms |
 | Turbowarp (Warp timer on) | \~112 ms |
 | Turbowarp | \~72 ms |
