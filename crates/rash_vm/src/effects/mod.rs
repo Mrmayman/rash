@@ -173,15 +173,15 @@ impl Effects {
         &self,
         builder: &mut FunctionBuilder,
         block: Block,
-        cache: &dyn VarStore,
+        vars: &dyn VarStore,
     ) -> Vec<(Ptr, VariableSlot)> {
         let mut param_values = Vec::new();
 
-        let izero = (!cache.uses_block_params()).then(|| builder.ins().iconst(I64, 0));
-        let fzero = (!cache.uses_block_params()).then(|| builder.ins().f64const(0.0));
+        let izero = (!vars.uses_block_params()).then(|| builder.ins().iconst(I64, 0));
+        let fzero = (!vars.uses_block_params()).then(|| builder.ins().f64const(0.0));
 
         for (ptr, ty) in &self.writes {
-            let original = cache.get_type(*ptr);
+            let original = vars.get_type(*ptr);
             let skip_nan = ty.skip_nan && original.skip_nan;
             let ty = if original.ty == ty.ty {
                 VariableWrite {

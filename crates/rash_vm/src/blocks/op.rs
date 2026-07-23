@@ -76,7 +76,7 @@ impl Compiler<'_> {
             return self.constants.get_int(i64::from(out == comp), builder);
         }
 
-        let var_checker = |ptr| self.cache.get_type(ptr);
+        let var_checker = |ptr| self.vars.get_type(ptr);
 
         let at = a.expected_type(var_checker).ty;
         let bt = b.expected_type(var_checker).ty;
