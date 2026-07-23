@@ -1,8 +1,9 @@
 use colored::Colorize;
+use smol_str::SmolStr;
 
 declare_module!("env.rs", 2, dbg_log, days_since_2000);
 
-pub unsafe extern "C" fn dbg_log(msg: *mut String) {
+pub unsafe extern "C" fn dbg_log(msg: *mut SmolStr) {
     let msg_val = unsafe { &mut *msg };
     if !msg_val.is_empty() {
         println!("{} {msg_val:?}", "[say]".bright_black());

@@ -69,7 +69,7 @@ pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
 }
 
 pub unsafe extern "C" fn to_number_from_string(i1: i64, i2: i64, i3: i64) -> f64 {
-    let s: String = unsafe { std::mem::transmute([i1, i2, i3]) };
+    let s: SmolStr = unsafe { std::mem::transmute([i1, i2, i3]) };
     string_to_number(&s)
     // TODO: Deallocating this shit
 }

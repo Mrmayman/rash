@@ -30,6 +30,12 @@ impl Compiler<'_> {
         input: &Input,
         blocks: &[ScratchBlock],
     ) {
+        if let Input::Obj(obj) = input
+            && obj.convert_to_number() < 1.0
+        {
+            return;
+        }
+
         let effects = self.effects(blocks);
 
         let zero = self.constants.get_int(0, builder);
@@ -47,16 +53,23 @@ impl Compiler<'_> {
         let entry_params = self.generate_params(builder, &final_params_loop);
         let mut entry_params2 = entry_params.clone();
         entry_params2.push(loop_value.into());
-        let condition = builder
-            .ins()
-            .icmp(IntCC::SignedGreaterThan, loop_value, zero);
-        builder.ins().brif(
-            condition,
-            loop_block,
-            &entry_params2,
-            end_block,
-            &entry_params,
-        );
+
+        if let Input::Obj(obj) = input
+            && obj.convert_to_number() >= 1.0
+        {
+            builder.ins().jump(loop_block, &entry_params2);
+        } else {
+            let condition = builder
+                .ins()
+                .icmp(IntCC::SignedGreaterThan, loop_value, zero);
+            builder.ins().brif(
+                condition,
+                loop_block,
+                &entry_params2,
+                end_block,
+                &entry_params,
+            );
+        }
 
         builder.switch_to_block(loop_block);
         self.cache.extend(final_params_loop.clone());
