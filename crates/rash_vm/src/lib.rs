@@ -25,6 +25,26 @@ pub use input_primitives::{Input, Ptr};
 pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};
 use smol_str::SmolStr;
 
+pub fn print_memory() {
+    let lock = MEMORY.lock().unwrap();
+
+    println!("MEMORY: {:X}", lock.as_ptr() as usize);
+
+    // Only print the changed values that aren't zero.
+    let print_until_idx = lock
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, n)| !matches!(**n, ScratchObject::Number(0.0)))
+        .map(|(i, _)| i);
+    if let Some(print_until_idx) = print_until_idx {
+        for (i, obj) in lock.iter().enumerate().take(print_until_idx + 1) {
+            println!("{i}: {obj:?}");
+        }
+    }
+    println!("...: {:?}", ScratchObject::Number(0.0));
+}
+
 mod config {
     /// Scratch has a special edge case for math with NaN.
     /// Any operation with NaN will be treated as

@@ -82,6 +82,8 @@ You can see the progress in implementing blocks in this [Google Docs spreadsheet
 
 Env vars:
 - `RASH_PRINT_IR` to print the cranelift IR of the compiled code.
+- `RASH_PRINT_FUNCTIONS` to print IR IDs of the callback functions.
+- `RASH_PRINT_MEMORY` to print memory values after running.
 
 # Contributing
 

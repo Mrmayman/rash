@@ -11,7 +11,7 @@ use crate::compiler::FuncMap;
 
 macro_rules! print_func {
     ($module:expr, $($fn:ident),+ $(,)?) => {
-        pub fn print_function_addresses() {
+        pub(super) fn print_function_addresses() {
             println!("\n========");
             println!("{}", $module);
             println!("========");

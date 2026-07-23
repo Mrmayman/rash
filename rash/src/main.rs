@@ -3,8 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use rash_loader_sb3::ProjectLoader;
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{
-    MEMORY, ProjectBuilder, RunState, Runtime, ScratchObject, SpriteBuilder, SpriteData, SpriteId,
-    runtime::Script,
+    MEMORY, ProjectBuilder, RunState, Runtime, SpriteBuilder, SpriteData, SpriteId, runtime::Script,
 };
 use winit::{
     event::{Event, WindowEvent},
@@ -25,7 +24,7 @@ fn main() {
             return;
         } else if arg == "--demo" {
             run_demo();
-            print_memory();
+            rash_vm::print_memory();
             return;
         }
         PathBuf::from(arg)
@@ -40,7 +39,9 @@ fn main() {
         p
     };
 
-    rash_vm::print_function_addresses();
+    if std::env::var("RASH_PRINT_FUNCTIONS").is_ok() {
+        rash_vm::print_function_addresses();
+    }
 
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
@@ -68,6 +69,10 @@ fn main() {
             _ => app.tick(event),
         })
         .unwrap();
+
+    if std::env::var("RASH_PRINT_MEMORY").is_ok() {
+        rash_vm::print_memory();
+    }
 }
 
 pub struct App {
