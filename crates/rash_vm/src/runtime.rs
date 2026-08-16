@@ -5,10 +5,11 @@ use memmap2::Mmap;
 use smol_str::SmolStr;
 
 use crate::{
+    Costumes,
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
-    graphics::{CostumeData, CostumeHash, CostumeId, RunState, SpriteId, SpriteLoadData},
+    graphics::{RunState, SpriteId, SpriteLoadData},
 };
 
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
@@ -270,17 +271,8 @@ impl ProjectBuilder {
         self.runtime.scripts.push(sprite.scripts);
     }
 
-    pub fn set_costume(
-        &mut self,
-        costume_names: HashMap<(SpriteId, String), CostumeHash>,
-        costume_numbers: HashMap<(SpriteId, usize), CostumeHash>,
-        costume_hashes: HashMap<CostumeHash, CostumeId>,
-        costume_intermediate: HashMap<CostumeId, CostumeData>,
-    ) {
-        self.runtime.costume_names = costume_names;
-        self.runtime.costume_numbers = costume_numbers;
-        self.runtime.costume_hashes = costume_hashes;
-        self.runtime.costume_data = costume_intermediate;
+    pub fn set_costumes(&mut self, costumes: Costumes) {
+        self.runtime.costumes = costumes;
     }
 
     #[must_use]
@@ -319,10 +311,7 @@ pub struct Runtime {
     threads: Vec<ScratchThread>,
     scripts: Scripts,
 
-    costume_names: HashMap<(SpriteId, String), CostumeHash>,
-    costume_numbers: HashMap<(SpriteId, usize), CostumeHash>,
-    costume_hashes: HashMap<CostumeHash, CostumeId>,
-    pub costume_data: HashMap<CostumeId, CostumeData>,
+    pub costumes: Costumes,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
     static_strings: Vec<SmolStr>,
