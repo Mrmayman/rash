@@ -159,7 +159,7 @@ impl Script {
                 | ScratchBlock::MotionGetX
                 | ScratchBlock::MotionGetY
                 | ScratchBlock::LooksShown(_)
-                | ScratchBlock::ControlDaysSince2000
+                | ScratchBlock::SensingDaysSince2000
                 | ScratchBlock::Log(_) => {}
             }
         }

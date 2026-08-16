@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 
-use crate::{CompileContext, Res, error::ErrExt, get, json::Block};
+use crate::{
+    CompileContext, FieldType, Res, error::ErrExt, get, helpers::get_idx_array, json::Block,
+};
 use rash_vm::{
     ScratchBlock,
     error::{RashError, Trace},
@@ -11,19 +13,13 @@ pub fn mathop(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
 
     let num = get::number(b, ctx, "NUM").trace(F)?;
 
-    let operator = b
-        .fields
-        .get("OPERATOR")
-        .ok_or(RashError::field_not_found("b.fields.OPERATOR"))
-        .trace(F)?
-        .as_array()
-        .ok_or(RashError::field_not_typed("b.fields.OPERATOR"))
-        .trace(F)?
-        .first()
-        .ok_or(RashError::field_not_found("b.fields.OPERATOR[0]"))
+    let operator = get_idx_array(b.fields.operator.as_ref(), 0, "b.fields.OPERATOR")
         .trace(F)?
         .as_str()
-        .ok_or(RashError::field_not_typed("b.fields.OPERATOR[0]"))
+        .ok_or(RashError::field_not_typed(
+            "b.fields.OPERATOR[0]",
+            FieldType::String,
+        ))
         .trace(F)?;
 
     match operator {

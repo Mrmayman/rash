@@ -10,7 +10,7 @@ pub type Error = RashError<Sb3ErrorKind>;
 
 pub(crate) trait ErrExt {
     fn field_not_found(field: &str) -> Self;
-    fn field_not_typed(field: &str) -> Self;
+    fn field_not_typed(field: &str, ty: FieldType) -> Self;
     fn invalid_warp_kind(field: &str) -> Self;
     fn blockdef_not_found(trace: &str) -> Self;
 }
@@ -23,10 +23,10 @@ impl ErrExt for Error {
         }
     }
 
-    fn field_not_typed(field: &str) -> Self {
+    fn field_not_typed(field: &str, ty: FieldType) -> Self {
         RashError {
             trace: vec![],
-            kind: Sb3ErrorKind::FieldNotTyped(field.to_owned()),
+            kind: Sb3ErrorKind::FieldNotTyped(field.to_owned(), ty),
         }
     }
 
@@ -65,10 +65,16 @@ pub enum Sb3ErrorKind {
     ZipExtract(ZipExtractError),
     Serde(serde_json::Error),
     FieldNotFound(String),
-    FieldNotTyped(String),
+    FieldNotTyped(String, FieldType),
     InvalidWarpKind(String),
     IoError(std::io::Error, Option<PathBuf>),
     CurrentCustomBlockNotFound,
+}
+
+#[derive(Debug)]
+pub enum FieldType {
+    String,
+    Array,
 }
 
 impl Display for Sb3ErrorKind {
@@ -83,8 +89,8 @@ impl Display for Sb3ErrorKind {
             Sb3ErrorKind::FieldNotFound(field) => {
                 write!(f, "field not found: {field}")?;
             }
-            Sb3ErrorKind::FieldNotTyped(field) => {
-                write!(f, "field not correct datatype: {field}")?;
+            Sb3ErrorKind::FieldNotTyped(field, ty) => {
+                write!(f, "field not correct datatype: {field}, expected {ty:?}")?;
             }
             Sb3ErrorKind::InvalidWarpKind(val) => {
                 write!(f, "invalid value for self.mutation.warp: {val}")?;

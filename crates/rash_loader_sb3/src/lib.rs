@@ -20,6 +20,9 @@ use rash_loader_sb3_json as json;
 mod blocks;
 mod error;
 mod get;
+mod helpers;
+
+pub use error::{FieldType, Sb3ErrorKind};
 
 pub type Res<T> = Result<T, error::Error>;
 
@@ -423,6 +426,8 @@ pub fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
             let val = get::number(b, ctx, "DY").trace("Block::compile.motion_changeyby")?;
             Ok(ScratchBlock::MotionChangeY(val))
         }
+        "motion_xposition" => Ok(ScratchBlock::MotionGetX),
+        "motion_yposition" => Ok(ScratchBlock::MotionGetY),
         "looks_show" => Ok(ScratchBlock::LooksShown(true)),
         "looks_hide" => Ok(ScratchBlock::LooksShown(false)),
         "control_if" => control::c_if(b, ctx),
@@ -435,7 +440,31 @@ pub fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
             let message = get::string(b, ctx, "MESSAGE").trace("Block::compile.looks_say")?;
             Ok(ScratchBlock::Log(message))
         }
-        "sensing_dayssince2000" => Ok(ScratchBlock::ControlDaysSince2000),
+        "control_stop" => {
+            const T: &str = "Block::compile.data_setvariableto";
+            let stop_option = b
+                .fields
+                .stop_option
+                .as_deref()
+                .ok_or(RashError::field_not_found("b.fields.STOP_OPTION"))
+                .trace(T)?;
+            let option = stop_option
+                .first()
+                .ok_or(RashError::field_not_found("b.fields.STOP_OPTION[0]"))
+                .trace(T)?;
+            let s = option.as_str();
+
+            if s == Some("this script") {
+                Ok(ScratchBlock::ControlStopThisScript)
+            } else if s == Some("all") {
+                todo!("Stop all")
+            } else if s == Some("other scripts in sprite") {
+                todo!("Stop other scripts in sprite")
+            } else {
+                unreachable!();
+            }
+        }
+        "sensing_dayssince2000" => Ok(ScratchBlock::SensingDaysSince2000),
         "procedures_call" => {
             let block = ctx.get_custom_block(b)?;
 
