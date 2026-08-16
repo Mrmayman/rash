@@ -380,7 +380,7 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::LooksShown(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
-            | ScratchBlock::ControlDaysSince2000 => Effects::new(),
+            | ScratchBlock::SensingDaysSince2000 => Effects::new(),
         }
     }
 }

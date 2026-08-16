@@ -97,7 +97,7 @@ pub struct Block {
     pub next: Option<String>,
     pub parent: Option<String>,
     pub inputs: BTreeMap<String, Value>,
-    pub fields: BTreeMap<String, Value>,
+    pub fields: BlockFields,
     pub shadow: bool,
     pub topLevel: bool,
 
@@ -106,6 +106,24 @@ pub struct Block {
     // Only for hat blocks.
     pub x: Option<f64>,
     pub y: Option<f64>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct BlockFields {
+    #[serde(rename = "STOP_OPTION")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_option: Option<Vec<Value>>,
+    #[serde(rename = "VARIABLE")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variable: Option<Vec<Value>>,
+    #[serde(rename = "OPERATOR")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operator: Option<Vec<Value>>,
+    #[serde(rename = "VALUE")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<Value>,
+    #[serde(flatten)]
+    others: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

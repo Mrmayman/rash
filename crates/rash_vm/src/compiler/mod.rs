@@ -103,7 +103,7 @@ pub enum ScratchBlock {
     MotionGetX,
     MotionGetY,
     LooksShown(bool),
-    ControlDaysSince2000,
+    SensingDaysSince2000,
 
     Log(Input),
 }
@@ -183,7 +183,7 @@ impl ScratchBlock {
             | ScratchBlock::OpMTan(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
-            | ScratchBlock::ControlDaysSince2000
+            | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::OpStrLen(_) => Some(VariableWrite::skip_nan(VarTypeChecked::Number)),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VariableWrite::normal(VarTypeChecked::String))
@@ -243,7 +243,7 @@ impl ScratchBlock {
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionGetArg(_)
-            | ScratchBlock::ControlDaysSince2000
+            | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
@@ -620,7 +620,7 @@ impl<'a> Compiler<'a> {
                     &[self.graphics_ptr, id, shown],
                 );
             }
-            ScratchBlock::ControlDaysSince2000 => {
+            ScratchBlock::SensingDaysSince2000 => {
                 let inst =
                     self.call_function(builder, callbacks::env::DAYS_SINCE_2000, &[], &[F64], &[]);
                 let val = builder.inst_results(inst)[0];

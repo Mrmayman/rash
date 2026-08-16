@@ -1,26 +1,31 @@
 use rash_loader_sb3_json::Block;
-use rash_vm::{ScratchBlock, error::RashError};
+use rash_vm::{
+    ScratchBlock,
+    error::{RashError, Trace},
+};
 
-use crate::{CompileContext, Res, error::ErrExt};
+use crate::{CompileContext, Res, error::ErrExt, helpers::get_expect_str};
 
 pub mod control;
 pub mod op;
 
 pub fn argument_reporter(b: &Block, ctx: &mut CompileContext<'_>) -> Res<ScratchBlock> {
-    let arg = b.fields.get("VALUE").ok_or(RashError::field_not_found(
-        "b(argument_reporter_string_number).fields.VALUE",
-    ))?;
+    const F: &str = "blocks::argument_reporter";
+    let arg = b
+        .fields
+        .value
+        .as_ref()
+        .ok_or(RashError::field_not_found(
+            "b(argument_reporter_string_number).fields.VALUE",
+        ))
+        .trace(F)?;
     match arg {
         serde_json::Value::Array(values) => {
-            let arg_name = values
-                .first()
-                .ok_or(RashError::field_not_found(
-                    "b(argument_reporter_string_number).fields.VALUE[0]",
-                ))?
-                .as_str()
-                .ok_or(RashError::field_not_found(
-                    "b(argument_reporter_string_number).fields.VALUE[0]: not string",
-                ))?;
+            let arg_name = get_expect_str(
+                values.first(),
+                "b(argument_reporter_string_number).fields.VALUE[0]",
+            )
+            .trace(F)?;
 
             let current_custom_block = ctx
                 .current_custom_block
