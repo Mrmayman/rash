@@ -5,9 +5,11 @@ use rash_vm::{
 };
 
 use crate::{
-    FieldType, Res,
+    Res,
     error::ErrExt,
-    helpers::{get_expect_str, get_idx_array},
+    helpers::{
+        expect_array, expect_str, get_expect_array, get_expect_str, get_idx_array, idx_array,
+    },
     load_block,
 };
 
@@ -25,15 +27,8 @@ pub fn substack(
     let Some(substack) = b.inputs.get(substack_name) else {
         return Ok(Vec::new());
     };
-    let substack = substack
-        .as_array()
-        .ok_or_else(|| {
-            RashError::field_not_typed(&format!("b.inputs.{substack_name}"), FieldType::Array)
-        })
-        .trace(F)?;
-    let Some(child_block_id) = substack
-        .get(1)
-        .ok_or_else(|| RashError::field_not_found(&format!("b.inputs.{substack_name}[1]")))
+    let substack = expect_array(substack, || format!("b.inputs.{substack_name}")).trace(F)?;
+    let Some(child_block_id) = idx_array(substack, 1, || format!("b.inputs.{substack_name}[1]"))
         .trace(F)?
         .as_str()
     else {
@@ -56,14 +51,8 @@ pub fn substack(
 
 pub fn variable_field(b: &Block) -> Res<&str> {
     const F: &str = "get::variable_field";
-    get_idx_array(b.fields.variable.as_ref(), 1, "b.fields.VARIABLE")
-        .trace(F)?
-        .as_str()
-        .ok_or(RashError::field_not_typed(
-            "b.fields.VARIABLE[1]",
-            FieldType::String,
-        ))
-        .trace(F)
+    let variable = get_idx_array(b.fields.variable.as_ref(), 1, "b.fields.VARIABLE").trace(F)?;
+    expect_str(variable, "b.fields.VARIABLE").trace(F)
 }
 
 pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
@@ -71,14 +60,8 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     let Some(input) = b.inputs.get(name) else {
         return Ok(false.into());
     };
-    let input = match input
-        .as_array()
-        .ok_or_else(|| RashError::field_not_typed(&format!("b.inputs.{name}"), FieldType::Array))
-        .trace(F)?
-        .get(1)
-        .ok_or_else(|| RashError::field_not_found(&format!("b.inputs.{name}[1]")))
-        .trace(F)?
-    {
+    let input = expect_array(input, || format!("b.inputs.{name}")).trace(F)?;
+    let input = match idx_array(&input, 1, || format!("b.inputs.{name}[1]")).trace(F)? {
         serde_json::Value::Null => false.into(),
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
             JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),
@@ -107,12 +90,12 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
                     }
                     _ => panic!(),
                 },
-                json_id::STRING => get_expect_str(vec.get(1), &format!("b.inputs.{name}[1][1]"))
+                json_id::STRING => get_expect_str(vec.get(1), || format!("b.inputs.{name}[1][1]"))
                     .trace(F)?
                     .into(),
                 json_id::VARIABLE => {
                     let id =
-                        get_expect_str(vec.get(2), &format!("b.inputs.{name}[1][2]")).trace(F)?;
+                        get_expect_str(vec.get(2), || format!("b.inputs.{name}[1][2]")).trace(F)?;
                     let ptr = ctx.get_var(id);
                     ScratchBlock::VarRead(ptr).into()
                 }
@@ -132,29 +115,15 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
 pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     const F: &str = "get::number";
 
-    let input = match b
-        .inputs
-        .get(name)
-        .ok_or_else(|| RashError::field_not_found(&format!("b.inputs.{name}")))
-        .trace(F)?
-        .as_array()
-        .ok_or_else(|| RashError::field_not_typed(&format!("b.inputs.{name}"), FieldType::Array))
-        .trace(F)?
-        .get(1)
-        .ok_or_else(|| RashError::field_not_found(&format!("b.inputs.{name}[1]")))
-        .trace(F)?
-    {
+    let input = get_expect_array(b.inputs.get(name), || format!("b.inputs.{name}")).trace(F)?;
+    let input = match idx_array(input, 1, || format!("b.inputs.{name}[1]")).trace(F)? {
         serde_json::Value::Null => false.into(),
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
             JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),
             JsonBlock::Array(_) => todo!(),
         },
         serde_json::Value::Array(vec) => {
-            let n = vec
-                .first()
-                .ok_or(RashError::field_not_found(&format!(
-                    "b.inputs.{name}[1][0]"
-                )))
+            let n = idx_array(vec, 0, || format!("b.inputs.{name}[1][0]"))
                 .trace(F)?
                 .as_i64()
                 .unwrap();
@@ -204,18 +173,9 @@ pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
 
 pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     const F: &str = "get::string";
-    let input = match b
-        .inputs
-        .get(name)
-        .ok_or_else(|| RashError::field_not_found(&format!("b.inputs.{name}")))
-        .trace(F)?
-        .as_array()
-        .ok_or_else(|| RashError::field_not_typed(&format!("b.inputs.{name}"), FieldType::Array))
-        .trace(F)?
-        .get(1)
-        .ok_or_else(|| RashError::field_not_found(&format!("b.inputs.{name}[1]")))
-        .trace(F)?
-    {
+
+    let input = get_expect_array(b.inputs.get(name), || format!("b.inputs.{name}")).trace(F)?;
+    let input = match idx_array(input, 1, || format!("b.inputs.{name}[1]")).trace(F)? {
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
             JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),
             JsonBlock::Array(_) => todo!(),

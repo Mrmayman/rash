@@ -23,7 +23,7 @@ pub fn argument_reporter(b: &Block, ctx: &mut CompileContext<'_>) -> Res<Scratch
         serde_json::Value::Array(values) => {
             let arg_name = get_expect_str(
                 values.first(),
-                "b(argument_reporter_string_number).fields.VALUE[0]",
+                || "b(argument_reporter_string_number).fields.VALUE[0]",
             )
             .trace(F)?;
 

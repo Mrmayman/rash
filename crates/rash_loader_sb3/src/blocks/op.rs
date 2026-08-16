@@ -1,26 +1,19 @@
 use std::cmp::Ordering;
 
 use crate::{
-    CompileContext, FieldType, Res, error::ErrExt, get, helpers::get_idx_array, json::Block,
+    CompileContext, Res, get,
+    helpers::{expect_str, get_idx_array},
+    json::Block,
 };
-use rash_vm::{
-    ScratchBlock,
-    error::{RashError, Trace},
-};
+use rash_vm::{ScratchBlock, error::Trace};
 
 pub fn mathop(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
     const F: &str = "op::mathop";
 
     let num = get::number(b, ctx, "NUM").trace(F)?;
 
-    let operator = get_idx_array(b.fields.operator.as_ref(), 0, "b.fields.OPERATOR")
-        .trace(F)?
-        .as_str()
-        .ok_or(RashError::field_not_typed(
-            "b.fields.OPERATOR[0]",
-            FieldType::String,
-        ))
-        .trace(F)?;
+    let operator = get_idx_array(b.fields.operator.as_ref(), 0, "b.fields.OPERATOR").trace(F)?;
+    let operator = expect_str(operator, "b.fields.OPERATOR").trace(F)?;
 
     match operator {
         "abs" => Ok(ScratchBlock::OpMAbs(num)),
