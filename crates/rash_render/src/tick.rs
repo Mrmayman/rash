@@ -74,7 +74,7 @@ impl Renderer {
                 }
 
                 let costume_id = state.current_costume;
-                let costume = self.costumes.get(&costume_id).unwrap();
+                let costume = self.costumes.get(costume_id.0 as usize).unwrap();
                 render_pass.set_bind_group(1, &costume.bind_group, &[]);
 
                 let i = i.0 as u32 * 6;

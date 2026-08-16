@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -178,14 +178,4 @@ pub struct SpriteLoadData {
     pub size: f64,
     pub costume: CostumeId,
     pub shown: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CostumeHash(Rc<str>);
-
-impl CostumeHash {
-    #[must_use]
-    pub fn new(s: &str) -> Self {
-        Self(Rc::from(s))
-    }
 }

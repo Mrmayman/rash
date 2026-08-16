@@ -4,7 +4,7 @@ use std::{
 };
 
 use rash_vm::error::{ErrorConvert, RashError};
-use zip_extract::ZipExtractError;
+use zip::result::ZipError;
 
 pub type Error = RashError<Sb3ErrorKind>;
 
@@ -62,7 +62,7 @@ impl<T> ErrorConvertPath<T, Sb3ErrorKind> for Result<T, std::io::Error> {
 
 #[derive(Debug)]
 pub enum Sb3ErrorKind {
-    ZipExtract(ZipExtractError),
+    Zip(ZipError),
     Serde(serde_json::Error),
     FieldNotFound(String),
     FieldNotTyped(String, FieldType),
@@ -80,8 +80,8 @@ pub enum FieldType {
 impl Display for Sb3ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Sb3ErrorKind::ZipExtract(zip_extract_error) => {
-                write!(f, "zip extract error: {zip_extract_error}")?;
+            Sb3ErrorKind::Zip(error) => {
+                write!(f, "zip error: {error}")?;
             }
             Sb3ErrorKind::Serde(error) => {
                 write!(f, "json error: {error}")?;
@@ -128,6 +128,6 @@ fn io_err_cvt(n: std::io::Error) -> Sb3ErrorKind {
     Sb3ErrorKind::IoError(n, None)
 }
 err_convert!(IoErr, io_err_cvt);
-err_convert!(ZipExtractError, Sb3ErrorKind::ZipExtract);
+err_convert!(ZipError, Sb3ErrorKind::Zip);
 type SerdeErr = serde_json::Error;
 err_convert!(SerdeErr, Sb3ErrorKind::Serde);

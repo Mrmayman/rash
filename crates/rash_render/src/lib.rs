@@ -1,6 +1,6 @@
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
-use rash_vm::{CostumeId, RunState};
+use rash_vm::RunState;
 
 use crate::{buffers::GlobalBuffer, texture::Costume};
 
@@ -32,6 +32,6 @@ pub struct Renderer {
     window_size: WindowSize,
     global_state: GlobalBuffer,
     last_time: Instant,
-    costumes: HashMap<CostumeId, Costume>,
+    costumes: Vec<Costume>,
     pub state: RunState,
 }
