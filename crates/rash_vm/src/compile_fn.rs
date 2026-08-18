@@ -206,7 +206,7 @@ fn create_function(isa: &dyn TargetIsa) -> (Function, CallConv) {
     sig.params.push(AbiParam::new(I64)); // Jump ID
     sig.params.push(AbiParam::new(I64)); // Repeat Stack
     sig.params.push(AbiParam::new(I64)); // Args pointer
-    sig.params.push(AbiParam::new(I64)); // Scripts
+    sig.params.push(AbiParam::new(I64)); // SpawnableScripts
     sig.params.push(AbiParam::new(I64)); // RunState
     sig.params.push(AbiParam::new(I8)); // Is Screen Refresh?
     sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)

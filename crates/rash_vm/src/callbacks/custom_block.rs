@@ -1,7 +1,7 @@
 use crate::{
     data_types::ScratchObject,
     graphics::RunState,
-    runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, Scripts},
+    runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, SpawnableScripts},
 };
 
 declare_module!(
@@ -20,7 +20,7 @@ pub enum PauseStatus {
 pub unsafe extern "C" fn call_no_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,
-    scripts: *const Scripts,
+    scripts: *const SpawnableScripts,
     graphics: *mut RunState,
 ) {
     debug_assert!(!arg_buffer.is_null());
@@ -30,7 +30,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
     // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
-    let Some(script) = scripts.custom_blocks.get(&id) else {
+    let Some(script) = scripts.custom_blocks.get(id.0) else {
         panic!("No custom block found with id {}", id.0)
     };
 
@@ -47,7 +47,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
 pub unsafe extern "C" fn call_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,
-    scripts: *const Scripts,
+    scripts: *const SpawnableScripts,
     graphics: *mut RunState,
     child_thread: *mut Option<ScratchThread>,
     parent_is_screen_refresh: bool,
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
-    let Some(script) = scripts.custom_blocks.get(&id) else {
+    let Some(script) = scripts.custom_blocks.get(id.0) else {
         panic!("No custom block found with id {}", id.0)
     };
 
