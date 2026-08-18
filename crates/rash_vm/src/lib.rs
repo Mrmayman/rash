@@ -7,6 +7,7 @@ mod costumes;
 pub mod data_types;
 mod effects;
 pub mod error;
+mod gapvec;
 pub mod graphics;
 mod input_primitives;
 mod ins_shortcuts;

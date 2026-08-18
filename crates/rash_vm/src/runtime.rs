@@ -9,6 +9,7 @@ use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
+    gapvec::GapVec,
     graphics::{RunState, SpriteId, SpriteLoadData},
 };
 
@@ -17,7 +18,7 @@ type JitFunction = unsafe extern "C" fn(
     JumpId,
     *mut Vec<i64>, // Stack repeat
     *const ScratchObject,
-    *const Scripts,
+    *const SpawnableScripts,
     *mut RunState,
     bool, // Is screen refresh
     *mut Option<ScratchThread>,
@@ -239,7 +240,7 @@ impl SpriteBuilder {
                 ..
             } => {
                 self.scripts.custom_blocks.insert(
-                    id,
+                    id.0,
                     CustomBlock {
                         // Delaying this till later for intelligent analysis
                         script: CustomBlockFunc::ToCompile(script),
@@ -268,7 +269,13 @@ impl ProjectBuilder {
         // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
         self.runtime.static_strings.extend(sprite.static_strings);
-        self.runtime.scripts.push(sprite.scripts);
+
+        let this = &mut self.runtime.scripts;
+        this.green_flags.extend(sprite.scripts.green_flags);
+        sprite
+            .scripts
+            .custom_blocks
+            .push_to(&mut this.custom_blocks);
     }
 
     pub fn set_costumes(&mut self, costumes: Costumes) {
@@ -277,7 +284,7 @@ impl ProjectBuilder {
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
-        for script in self.runtime.scripts.custom_blocks.values_mut() {
+        for script in &mut self.runtime.scripts.custom_blocks {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
                 continue;
             };
@@ -309,7 +316,7 @@ impl ProjectBuilder {
 pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
     threads: Vec<ScratchThread>,
-    scripts: Scripts,
+    scripts: SpawnableScripts,
 
     pub costumes: Costumes,
 
@@ -359,16 +366,15 @@ impl Runtime {
 }
 
 #[derive(Default)]
-pub struct Scripts {
+pub struct SpawnableScripts {
     pub green_flags: Vec<ScratchThread>,
-    pub custom_blocks: HashMap<CustomBlockId, CustomBlock>,
+    pub custom_blocks: Vec<CustomBlock>,
 }
 
-impl Scripts {
-    pub fn push(&mut self, script: Self) {
-        self.green_flags.extend(script.green_flags);
-        self.custom_blocks.extend(script.custom_blocks);
-    }
+#[derive(Default)]
+pub struct Scripts {
+    pub green_flags: Vec<ScratchThread>,
+    pub custom_blocks: GapVec<CustomBlock>,
 }
 
 pub struct ScratchThread {
@@ -463,7 +469,7 @@ impl ScratchThread {
     ///   may result in panics or undefined behaviour).
     /// - There hopefully aren't any compiler bugs
     ///   creating broken code
-    pub unsafe fn tick(&mut self, scripts: &Scripts, state: &mut RunState) -> bool {
+    pub unsafe fn tick(&mut self, scripts: &SpawnableScripts, state: &mut RunState) -> bool {
         if self.jumped_point.is_done() {
             return true;
         }
