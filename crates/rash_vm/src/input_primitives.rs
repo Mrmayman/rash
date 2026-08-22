@@ -363,6 +363,7 @@ impl Input {
             Input::Obj(o) => VariableWrite {
                 ty: Some(o.get_type()).into(),
                 skip_nan: !o.convert_to_number().is_nan(),
+                direct: true,
             },
             Input::Block(b) => b
                 .return_type(vartype)

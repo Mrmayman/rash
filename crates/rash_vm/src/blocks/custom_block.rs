@@ -16,9 +16,15 @@ impl Compiler<'_> {
         args: &[Input],
         is_screen_refresh: bool,
     ) {
+        let mut effects = (self.custom_block_effects)(custom_block_id);
+        effects.set_direct(true);
+        effects
+            .writes
+            .retain(|p, _| !self.clobber_stack.contains(p));
         let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
 
-        self.vars.save(builder, &mut self.constants, self.memory);
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &effects);
         let args: Vec<[Value; 4]> = args
             .iter()
             .map(|n| n.get_object(self, builder))
@@ -90,6 +96,7 @@ impl Compiler<'_> {
             );
         }
 
-        self.vars.reinit(builder, &mut self.constants, self.memory);
+        self.vars
+            .reinit(builder, &mut self.constants, self.memory, &effects);
     }
 }

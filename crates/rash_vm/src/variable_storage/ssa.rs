@@ -1,12 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
 use cranelift::{
-    codegen::ir::{InstBuilder, MemFlags, types::I64},
+    codegen::ir::{
+        InstBuilder, MemFlags,
+        types::{F64, I64},
+    },
     frontend::FunctionBuilder,
 };
 
 use crate::{
     Ptr, ScratchObject,
+    compiler::VarTypeChecked,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING},
     effects::{Effects, VariableWrite},
@@ -114,8 +118,13 @@ impl super::VarStore for SsaVarStore {
         builder: &mut FunctionBuilder,
         constants: &mut ConstantMap,
         memory: &[ScratchObject],
+        effects: &Effects,
     ) {
-        for (ptr, val) in &self.variable_vals {
+        for (ptr, val) in self.variable_vals.iter().filter(|n| {
+            effects.is_unknown
+                || effects.reads.contains(n.0)
+                || effects.writes.get(n.0).is_some_and(|n| n.direct)
+        }) {
             let ptr = ptr.constant(constants, builder, memory);
 
             match &val.val {
@@ -155,15 +164,39 @@ impl super::VarStore for SsaVarStore {
         builder: &mut FunctionBuilder,
         constants: &mut ConstantMap,
         memory: &[ScratchObject],
+        effects: &Effects,
     ) {
         for (var, val) in &mut self.variable_vals {
             let ptr = var.constant(constants, builder, memory);
-            let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
-            let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-            let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
-            let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
+            let write = effects.writes.get(var).copied();
 
-            *val = VariableSlot::normal(ScratchValue::Object([i1, i2, i3, i4]));
+            if effects.is_unknown || write.is_some_and(|n| n.ty == VarTypeChecked::Object) {
+                let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
+                let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
+
+                *val = VariableSlot::normal(ScratchValue::Object([i1, i2, i3, i4]));
+                continue;
+            }
+            let Some(write) = write else { continue };
+            match write.ty {
+                VarTypeChecked::Number => {
+                    let i2 = builder.ins().load(F64, MemFlags::new(), ptr, 8);
+                    *val = VariableSlot::normal(ScratchValue::Num(i2));
+                }
+                VarTypeChecked::Bool => {
+                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    *val = VariableSlot::normal(ScratchValue::Bool(i2));
+                }
+                VarTypeChecked::String => {
+                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                    let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
+                    *val = VariableSlot::normal(ScratchValue::String([i2, i3, i4]));
+                }
+                VarTypeChecked::Object => unreachable!(),
+            }
         }
     }
 }

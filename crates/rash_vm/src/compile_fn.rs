@@ -23,8 +23,9 @@ use crate::{
     callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
+    effects::Effects,
     graphics::SpriteId,
-    runtime::ScratchThread,
+    runtime::{CustomBlockId, ScratchThread},
 };
 
 pub fn compile(
@@ -33,6 +34,7 @@ pub fn compile(
     id: SpriteId,
     num_args: usize,
     is_screen_refresh: bool,
+    custom_block_effects: &dyn Fn(CustomBlockId) -> Effects,
 ) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
@@ -105,15 +107,14 @@ pub fn compile(
         temp_slot4,
         func_map,
         call_conv,
+        custom_block_effects,
     );
 
     for block in script {
         compiler.compile_block(block, &mut builder);
     }
 
-    compiler
-        .vars
-        .save(&mut builder, &mut compiler.constants, compiler.memory);
+    compiler.save_vars(&mut builder);
 
     let return_value = builder.ins().iconst(I64, -1);
     builder.ins().return_(&[return_value]);

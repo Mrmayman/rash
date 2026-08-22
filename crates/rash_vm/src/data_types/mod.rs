@@ -30,9 +30,9 @@ mod tests;
 #[repr(C)]
 #[derive(PartialEq, Clone)]
 pub enum ScratchObject {
-    Number(f64),
-    String(SmolStr),
-    Bool(bool),
+    Number(f64),     // 0
+    String(SmolStr), // 1
+    Bool(bool),      // 2
 }
 
 // Debugging code for checking if the objects are being dropped
