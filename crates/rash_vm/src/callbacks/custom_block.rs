@@ -1,8 +1,8 @@
 use crate::{
     data_types::ScratchObject,
-    runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, SpawnableScripts},
+    runtime::{CustomBlockFunc, CustomBlockId, JumpId, ScratchThread, SpawnableScripts},
 };
-use rash_core::{RunState};
+use rash_core::RunState;
 
 declare_module!(
     "custom_block.rs",
@@ -18,7 +18,7 @@ pub enum PauseStatus {
 }
 
 pub unsafe extern "C" fn call_no_screen_refresh(
-    arg_buffer: *const ScratchObject,
+    arg_buffer: *mut ScratchObject,
     id: i64,
     scripts: *const SpawnableScripts,
     graphics: *mut RunState,
@@ -34,14 +34,27 @@ pub unsafe extern "C" fn call_no_screen_refresh(
         panic!("No custom block found with id {}", id.0)
     };
 
-    let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
-
-    let CustomBlockFunc::Compiled(script) = &script.script else {
+    let CustomBlockFunc::Compiled(s) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
     };
 
-    let mut script = script.spawn(false, args);
-    while !unsafe { script.tick(scripts, &mut *graphics) } {}
+    let result = unsafe {
+        (s.func)(
+            JumpId::default(),
+            std::ptr::null_mut(),
+            arg_buffer,
+            scripts,
+            graphics,
+            false,
+            std::ptr::null_mut(),
+        )
+    };
+    debug_assert!(result.is_done());
+
+    for offset in 0..script.num_args {
+        let arg = unsafe { arg_buffer.add(offset) };
+        unsafe { std::ptr::drop_in_place(arg) };
+    }
 }
 
 pub unsafe extern "C" fn call_screen_refresh(
