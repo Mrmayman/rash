@@ -292,9 +292,10 @@ pub struct Compiler<'compiler> {
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
     pub static_strings: Vec<SmolStr>,
+    pub clobber_stack: HashSet<Ptr>,
     pub vars: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
-    pub custom_block_effects: &'compiler dyn Fn(CustomBlockId) -> Effects,
+    pub custom_block_effects: &'compiler mut dyn FnMut(CustomBlockId) -> Effects,
 
     /// Storing how many loops inside we are right now
     /// while compiling the current code.
@@ -317,7 +318,6 @@ pub struct Compiler<'compiler> {
     ///
     /// This is used with [`ScratchBlock::ControlRepeat`] and [`ScratchBlock::ControlRepeatUntil`]
     pub repeat_stack: usize,
-    pub clobber_stack: HashSet<Ptr>,
 
     /// A [`Value`] of `*mut Vec<LoopFrame>` representing the stack
     /// of loops. This is a **compile-time handle to a runtime
@@ -349,7 +349,8 @@ impl<'a> Compiler<'a> {
         temp_slot4: (Value, StackSlot),
         func_map: FuncMap,
         call_conv: CallConv,
-        custom_block_effects: &'a dyn Fn(CustomBlockId) -> Effects,
+        mut custom_block_effects: &'a mut dyn FnMut(CustomBlockId) -> Effects,
+        external_env: &'a dyn Fn(Ptr) -> VariableWrite,
     ) -> Self {
         let mut constants = ConstantMap::new();
 
@@ -359,12 +360,18 @@ impl<'a> Compiler<'a> {
         }
         builder.switch_to_block(code_block);
 
-        let effects = analyze(&code, &custom_block_effects);
+        let effects = analyze(&code, &mut custom_block_effects, &mut |_, _| {});
 
         let vars: Box<dyn VarStore> = if effects.is_unknown {
             Box::new(GenericVarStore::new(memory))
         } else {
-            Box::new(SsaVarStore::new(builder, &effects, &mut constants, memory))
+            Box::new(SsaVarStore::new(
+                builder,
+                &effects,
+                &mut constants,
+                memory,
+                external_env,
+            ))
         };
 
         Self {
@@ -401,6 +408,9 @@ impl<'a> Compiler<'a> {
             ScratchBlock::VarSet(ptr, obj) => {
                 self.var_set(obj, builder, *ptr);
             }
+            ScratchBlock::VarRead(ptr) => {
+                return Some(self.var_read(builder, *ptr));
+            }
             ScratchBlock::OpAdd(a, b) => {
                 return Some(ScratchValue::Num(self.op_add(a, b, builder)));
             }
@@ -415,9 +425,6 @@ impl<'a> Compiler<'a> {
             }
             ScratchBlock::OpMod(a, b) => {
                 return Some(ScratchValue::Num(self.op_modulo(a, b, builder)));
-            }
-            ScratchBlock::VarRead(ptr) => {
-                return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
                 return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));

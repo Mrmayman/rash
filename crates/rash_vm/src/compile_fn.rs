@@ -20,10 +20,11 @@ use cranelift::{
 use smol_str::SmolStr;
 
 use crate::{
+    Ptr,
     callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
-    effects::Effects,
+    effects::{Effects, VariableWrite},
     graphics::SpriteId,
     runtime::{CustomBlockId, ScratchThread},
 };
@@ -34,7 +35,8 @@ pub fn compile(
     id: SpriteId,
     num_args: usize,
     is_screen_refresh: bool,
-    custom_block_effects: &dyn Fn(CustomBlockId) -> Effects,
+    custom_block_effects: &mut dyn FnMut(CustomBlockId) -> Effects,
+    external_env: &dyn Fn(Ptr) -> VariableWrite,
 ) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
@@ -108,6 +110,7 @@ pub fn compile(
         func_map,
         call_conv,
         custom_block_effects,
+        external_env,
     );
 
     for block in script {

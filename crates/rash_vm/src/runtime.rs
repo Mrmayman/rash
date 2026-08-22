@@ -9,7 +9,7 @@ use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
-    effects::{Effects, analyze},
+    effects::{Effects, VariableWrite, analyze},
     gapvec::GapVec,
     graphics::{RunState, SpriteId, SpriteLoadData},
 };
@@ -230,7 +230,10 @@ impl SpriteBuilder {
                     self.id,
                     num_args,
                     script.kind.is_screen_refresh(),
-                    &|_| Effects::unknown(), // TODO: inter-function-analysis in green flag
+                    &mut |_| Effects::unknown(), // TODO: inter-function-analysis in green flag
+                    // You can't safely tell what a variable's type will be
+                    // before a green flag is run due to concurrent threads
+                    &|_| VariableWrite::default(),
                 );
 
                 self.static_strings.extend(static_strings);
@@ -286,21 +289,20 @@ impl ProjectBuilder {
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
-        let mut custom_block_effects = HashMap::new();
-        for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
-            let CustomBlockFunc::ToCompile(scr) = &script.script else {
-                continue;
-            };
-            // TODO: inter-function analysis inside inter-function analysis
-            let mut effects = analyze(&scr.blocks, &|_| Effects::unknown());
-            effects.set_direct(true);
-            custom_block_effects.insert(CustomBlockId(id), effects);
-        }
+        let (custom_block_effects, call_env) = self.analyze_custom_blocks();
 
         for script in &mut self.runtime.scripts.custom_blocks {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
                 continue;
             };
+            let ScriptKind::CustomBlock { id, .. } = &scr.kind else {
+                debug_assert!(
+                    false,
+                    "non-custom block script found in self.runtime.custom_blocks!"
+                );
+                continue;
+            };
+            let call_env = call_env.get(id);
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
@@ -310,11 +312,18 @@ impl ProjectBuilder {
                 script.sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
-                &|id| {
+                &mut |id| {
                     custom_block_effects
                         .get(&id)
                         .cloned()
                         .unwrap_or(Effects::unknown())
+                },
+                &|ptr| {
+                    if let Some(call_env) = call_env {
+                        call_env.writes.get(&ptr).copied().unwrap_or_default()
+                    } else {
+                        VariableWrite::default()
+                    }
                 },
             );
 
@@ -324,6 +333,43 @@ impl ProjectBuilder {
 
         self.runtime.init();
         self.runtime
+    }
+
+    fn analyze_custom_blocks(
+        &mut self,
+    ) -> (
+        HashMap<CustomBlockId, Effects>,
+        HashMap<CustomBlockId, Effects>,
+    ) {
+        // The effects (changes in variable types) of calling each custom block.
+        let mut custom_block_effects = HashMap::new();
+        // Call env: the variable types that are present at the call site
+        // of a custom block call.
+        //
+        // For example, if x is always a number when `foo()` is called,
+        // then `call_env[foo]` will have `x` as a number.
+        let mut call_env: HashMap<CustomBlockId, Effects> = HashMap::new();
+
+        for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
+            let CustomBlockFunc::ToCompile(scr) = &script.script else {
+                continue;
+            };
+            let throw_call_func = &mut |id, eff| {
+                if call_env.contains_key(&id) {
+                    if let Some(old_eff) = call_env.get_mut(&id) {
+                        old_eff.merge(&eff, &|_| VariableWrite::default());
+                    }
+                } else {
+                    call_env.insert(id, eff);
+                }
+            };
+            // TODO: inter-function analysis inside inter-function analysis
+            let mut effects = analyze(&scr.blocks, &mut |_| Effects::unknown(), throw_call_func);
+            effects.set_direct(true);
+            custom_block_effects.insert(CustomBlockId(id), effects);
+        }
+
+        (custom_block_effects, call_env)
     }
 
     pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
