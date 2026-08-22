@@ -241,8 +241,8 @@ fn generate_textures(
                     device,
                     queue,
                     &img,
-                    &sampler,
-                    &costume_layout,
+                    sampler,
+                    costume_layout,
                 ));
             }
 
@@ -250,8 +250,8 @@ fn generate_textures(
                 costume,
                 device,
                 queue,
-                &sampler,
-                &costume_layout,
+                sampler,
+                costume_layout,
             )?)
         })
         .collect()
