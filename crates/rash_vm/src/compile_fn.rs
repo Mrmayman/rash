@@ -23,9 +23,9 @@ use crate::{
     callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
-    graphics::SpriteId,
     runtime::ScratchThread,
 };
+use rash_core::SpriteId;
 
 pub fn compile(
     script: &[ScratchBlock],

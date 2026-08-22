@@ -2168,6 +2168,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "pollster",
+ "rash_core",
  "rash_loader_sb3",
  "rash_render",
  "rash_vm",
@@ -2177,9 +2178,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rash_core"
+version = "0.1.0"
+
+[[package]]
 name = "rash_loader_sb3"
 version = "0.1.0"
 dependencies = [
+ "rash_core",
  "rash_loader_sb3_json",
  "rash_vm",
  "serde_json",
@@ -2200,7 +2206,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "image",
- "rash_vm",
+ "rash_core",
  "svg_render",
  "wgpu",
 ]
@@ -2218,6 +2224,7 @@ dependencies = [
  "ordered-float 4.6.0",
  "paste",
  "rand 0.10.2",
+ "rash_core",
  "smol_str 0.3.6",
 ]
 

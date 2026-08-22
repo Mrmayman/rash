@@ -2,10 +2,10 @@ use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use json::{Block, JsonBlock, JsonStruct};
 
+use rash_core::{SpriteId, SpriteLoadData, costumes::Costumes};
 use rash_vm::{
-    Costumes, Input, MEMORY, Ptr, ScratchBlock,
+    Input, MEMORY, Ptr, ScratchBlock,
     error::{ErrorConvert, RashError, Trace},
-    graphics::{SpriteId, SpriteLoadData},
     runtime::{CustomBlockId, ProjectBuilder, Runtime, SpriteBuilder},
 };
 use zip::ZipArchive;

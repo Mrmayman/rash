@@ -11,10 +11,10 @@ use crate::{
     ScratchObject,
     builder::{c_repeat, change, set},
     compiler::{MEMORY, ScratchBlock},
-    graphics::{RunState, SpriteId},
     input_primitives::Ptr,
     runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
 };
+use rash_core::{RunState, SpriteId};
 
 const X: Ptr = Ptr(0);
 
