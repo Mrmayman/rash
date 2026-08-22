@@ -9,6 +9,7 @@ use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
+    effects::{Effects, analyze},
     gapvec::GapVec,
     graphics::{RunState, SpriteId, SpriteLoadData},
 };
@@ -229,6 +230,7 @@ impl SpriteBuilder {
                     self.id,
                     num_args,
                     script.kind.is_screen_refresh(),
+                    &|_| Effects::unknown(), // TODO: inter-function-analysis in green flag
                 );
 
                 self.static_strings.extend(static_strings);
@@ -284,6 +286,17 @@ impl ProjectBuilder {
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
+        let mut custom_block_effects = HashMap::new();
+        for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
+            let CustomBlockFunc::ToCompile(scr) = &script.script else {
+                continue;
+            };
+            // TODO: inter-function analysis inside inter-function analysis
+            let mut effects = analyze(&scr.blocks, &|_| Effects::unknown());
+            effects.set_direct(true);
+            custom_block_effects.insert(CustomBlockId(id), effects);
+        }
+
         for script in &mut self.runtime.scripts.custom_blocks {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
                 continue;
@@ -297,6 +310,12 @@ impl ProjectBuilder {
                 script.sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
+                &|id| {
+                    custom_block_effects
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or(Effects::unknown())
+                },
             );
 
             script.script = CustomBlockFunc::Compiled(thread);

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use cranelift::{
     codegen::ir::BlockArg,
     prelude::{FunctionBuilder, InstBuilder, IntCC, Value, types::I64},
@@ -6,7 +8,7 @@ use cranelift::{
 use crate::{
     callbacks,
     compiler::{Compiler, ScratchBlock},
-    effects::{CheckEffects, Effects},
+    effects::{CheckEffects, Effects, VariableWrite},
     input_primitives::{Input, Ptr, ScratchValue},
     variable_storage::VariableSlot,
 };
@@ -17,7 +19,7 @@ impl Compiler<'_> {
             self.call_stack_pop(builder);
         }
 
-        self.vars.save(builder, &mut self.constants, self.memory);
+        self.save_vars(builder);
         let minus_one = self.constants.get_int(-1, builder);
         builder.ins().return_(&[minus_one]);
         let new_block = builder.create_block();
@@ -37,6 +39,30 @@ impl Compiler<'_> {
         }
 
         let effects = self.effects(blocks);
+
+        // TODO: apply this optimization to repeat until and forever
+        let clobber: HashMap<Ptr, VariableWrite> = effects
+            .writes
+            .iter()
+            .filter(|n| !n.1.direct)
+            .filter(|n| !self.clobber_stack.contains(n.0))
+            .map(|n| {
+                (
+                    *n.0,
+                    VariableWrite {
+                        direct: true,
+                        ..*n.1
+                    },
+                )
+            })
+            .collect();
+        self.clobber_stack.extend(clobber.iter().map(|n| *n.0));
+        let clobber = Effects {
+            writes: clobber,
+            ..Effects::new()
+        };
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &clobber);
 
         let zero = self.constants.get_int(0, builder);
         let old_constants = self.constants.clone();
@@ -115,6 +141,11 @@ impl Compiler<'_> {
         } else {
             self.constants = old_constants;
         }
+
+        self.clobber_stack
+            .retain(|n| !clobber.writes.contains_key(n));
+        self.vars
+            .reinit(builder, &mut self.constants, self.memory, &clobber);
     }
 
     pub fn control_forever(&mut self, builder: &mut FunctionBuilder<'_>, blocks: &[ScratchBlock]) {
@@ -142,7 +173,7 @@ impl Compiler<'_> {
 
     fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
         blocks.effects(
-            &mut |_| Effects::unknown(), // TODO: inter-function analysis
+            &self.custom_block_effects,
             &|v| self.vars.get_type(v),
             &mut |_| {}, // We don't care if it returns early
         )
