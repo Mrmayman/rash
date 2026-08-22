@@ -30,12 +30,12 @@ type JitFunction = unsafe extern "C" fn(
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
-struct JumpId(i64);
+pub struct JumpId(i64);
 
 impl JumpId {
-    const DONE: Self = Self(-1);
+    pub const DONE: Self = Self(-1);
 
-    fn is_done(self) -> bool {
+    pub fn is_done(self) -> bool {
         self == Self::DONE
     }
 }
@@ -454,7 +454,7 @@ pub struct ScratchThread {
     child_thread: Box<Option<ScratchThread>>,
 
     buffer: Arc<Mmap>,
-    func: JitFunction,
+    pub(crate) func: JitFunction, // Used by `callbacks::custom_block::call_no_screen_refresh`
 }
 
 impl Debug for ScratchThread {

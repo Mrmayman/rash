@@ -17,6 +17,7 @@ Terminology:
 This terminology may not match scratch-specific terms, I'm using clearer ones.
 
 Any function can indirectly inherit warp-ness (non-yielding) when called by a warp function.
+
 # Safety
 
 > Note: When I talk about safety here, I'm talking about memory safety, not logical/semantical correctness.

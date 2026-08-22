@@ -37,8 +37,7 @@ impl Compiler<'_> {
             key: None,
         });
         for [i1, i2, i3, i4] in args {
-            // This will later be moved into a Vec
-            // (inside the callback) and dropped
+            // This will later be dropped inside the callback
             builder.ins().stack_store(i1, stack_slot, 0);
             builder.ins().stack_store(i2, stack_slot, 8);
             builder.ins().stack_store(i3, stack_slot, 16);
