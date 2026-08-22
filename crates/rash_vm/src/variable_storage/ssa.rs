@@ -82,7 +82,7 @@ impl SsaVarStore {
             variable_vals.insert(
                 var,
                 VariableSlot {
-                    val: val,
+                    val,
                     skip_nan: external_env.skip_nan,
                 },
             );
