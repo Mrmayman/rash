@@ -1,8 +1,8 @@
 use crate::{
     data_types::ScratchObject,
-    graphics::RunState,
     runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, SpawnableScripts},
 };
+use rash_core::{RunState};
 
 declare_module!(
     "custom_block.rs",

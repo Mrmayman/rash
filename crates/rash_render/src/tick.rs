@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use rash_vm::{GraphicsState, SpriteId};
+use rash_core::{GraphicsState, SpriteId};
 
 use super::to_bytes;
 use crate::WindowSize;

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rash_vm.path = "../rash_vm"
+rash_core.path = "../rash_core"
 svg_render.path = "../svg_render"
 
 wgpu.workspace = true

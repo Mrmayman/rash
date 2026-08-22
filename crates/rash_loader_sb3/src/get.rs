@@ -61,7 +61,7 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
         return Ok(false.into());
     };
     let input = expect_array(input, || format!("b.inputs.{name}")).trace(F)?;
-    let input = match idx_array(&input, 1, || format!("b.inputs.{name}[1]")).trace(F)? {
+    let input = match idx_array(input, 1, || format!("b.inputs.{name}[1]")).trace(F)? {
         serde_json::Value::Null => false.into(),
         serde_json::Value::String(n) => match ctx.get_block(n).unwrap().clone() {
             JsonBlock::Block { block } => load_block(&block, ctx).trace(F)?.into(),

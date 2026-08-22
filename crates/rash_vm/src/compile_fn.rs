@@ -25,9 +25,9 @@ use crate::{
     compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
-    graphics::SpriteId,
     runtime::{CustomBlockId, ScratchThread},
 };
+use rash_core::SpriteId;
 
 pub fn compile(
     script: &[ScratchBlock],

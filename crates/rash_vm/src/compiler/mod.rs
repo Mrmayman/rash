@@ -25,11 +25,11 @@ use crate::{
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::{Effects, VariableWrite, analyze},
-    graphics::{RunState, SpriteId},
     input_primitives::{Input, Ptr, ScratchValue},
     runtime::CustomBlockId,
     variable_storage::{GenericVarStore, SsaVarStore, VarStore},
 };
+use rash_core::{RunState, SpriteId};
 
 mod display;
 

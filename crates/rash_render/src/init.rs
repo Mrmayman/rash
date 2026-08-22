@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_vm::{Costumes, GraphicsState, RunState, Runtime, SpriteData, SpriteLoadData};
+use rash_core::{
+    GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData, costumes::Costumes,
+};
 use svg_render::SvgRenderer;
 use wgpu::util::DeviceExt;
 
@@ -14,11 +17,13 @@ use super::{Renderer, buffers::GlobalBuffer};
 impl Renderer {
     pub async fn new(
         window_size: WindowSize,
-        vm: &Runtime,
         surface: &wgpu::Surface<'_>,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        // These two map to the fields of `rash_vm::Runtime`
+        sprite_load_info: &HashMap<SpriteId, SpriteLoadData>,
+        costumes: &Costumes,
     ) -> Self {
         let WindowSize { width, height } = window_size;
 
@@ -138,7 +143,7 @@ impl Renderer {
             cache: None,
         });
 
-        let sprites_state = vec![GraphicsState::default(); vm.sprite_load_info.len()];
+        let sprites_state = vec![GraphicsState::default(); sprite_load_info.len()];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),
@@ -175,7 +180,7 @@ impl Renderer {
         let svg_renderer = SvgRenderer::new();
 
         let costumes = generate_textures(
-            &vm.costumes,
+            costumes,
             &svg_renderer,
             device,
             queue,
@@ -190,8 +195,7 @@ impl Renderer {
             }
         };
 
-        let sprites = vm
-            .sprite_load_info
+        let sprites = sprite_load_info
             .iter()
             .map(|(id, sprite_info)| {
                 let costume = costumes.get(sprite_info.costume.0 as usize).unwrap();
@@ -237,8 +241,8 @@ fn generate_textures(
                     device,
                     queue,
                     &img,
-                    &sampler,
-                    &costume_layout,
+                    sampler,
+                    costume_layout,
                 ));
             }
 
@@ -246,8 +250,8 @@ fn generate_textures(
                 costume,
                 device,
                 queue,
-                &sampler,
-                &costume_layout,
+                sampler,
+                costume_layout,
             )?)
         })
         .collect()

@@ -5,14 +5,13 @@ use memmap2::Mmap;
 use smol_str::SmolStr;
 
 use crate::{
-    Costumes,
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
     effects::{Effects, VariableWrite, analyze},
     gapvec::GapVec,
-    graphics::{RunState, SpriteId, SpriteLoadData},
 };
+use rash_core::{RunState, SpriteId, SpriteLoadData, costumes::Costumes};
 
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
 type JitFunction = unsafe extern "C" fn(
