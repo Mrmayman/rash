@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt::Debug,
+    sync::Arc,
+};
 
 use cranelift::codegen::CompiledCode;
 use memmap2::Mmap;
@@ -353,13 +357,12 @@ impl ProjectBuilder {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
                 continue;
             };
-            let throw_call_func = &mut |id, eff| {
-                if call_env.contains_key(&id) {
-                    if let Some(old_eff) = call_env.get_mut(&id) {
-                        old_eff.merge(&eff, &|_| VariableWrite::default());
-                    }
-                } else {
-                    call_env.insert(id, eff);
+            let throw_call_func = &mut |id, eff| match call_env.entry(id) {
+                Entry::Occupied(mut old_eff) => {
+                    old_eff.get_mut().merge(&eff, &|_| VariableWrite::default());
+                }
+                Entry::Vacant(e) => {
+                    e.insert(eff);
                 }
             };
             // TODO: inter-function analysis inside inter-function analysis
