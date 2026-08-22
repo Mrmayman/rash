@@ -10,7 +10,7 @@ use crate::{
 
 #[must_use]
 fn eff<T: CheckEffects>(input: &T) -> Effects {
-    analyze(input, &|_| Effects::unknown())
+    analyze(input, &mut |_| Effects::unknown(), &mut |_, _| {})
 }
 
 const X: Ptr = Ptr(0);
@@ -173,10 +173,11 @@ fn repeat_loop_nested() {
     let blocks = vec![c_repeat(10.0, vec![c_repeat(10.0, vec![change(X, 1.0)])])];
 
     let e = blocks.effects(
-        &|_| Effects::unknown(),
+        &mut |_| Effects::unknown(),
         // Let's say X was previously a number
         &|_| VariableWrite::normal(VarTypeChecked::Number),
         &mut |_| {},
+        &mut |_, _| {},
     );
 
     assert!(!e.is_unknown);

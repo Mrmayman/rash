@@ -39,6 +39,7 @@ impl SsaVarStore {
         effects: &Effects,
         constants: &mut ConstantMap,
         memory: &[ScratchObject],
+        external_env: &dyn Fn(Ptr) -> VariableWrite,
     ) -> Self {
         let mut variable_vals = HashMap::new();
 
@@ -50,15 +51,40 @@ impl SsaVarStore {
             .collect();
 
         for var in vars {
+            let external_env = external_env(var);
             let ptr = var.constant(constants, builder, memory);
-            let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
-            let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-            let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
-            let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
+
+            let val = match external_env.ty {
+                VarTypeChecked::Number => {
+                    let i2 = builder.ins().load(F64, MemFlags::new(), ptr, 8);
+                    ScratchValue::Num(i2)
+                }
+                VarTypeChecked::Bool => {
+                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    ScratchValue::Bool(i2)
+                }
+                VarTypeChecked::String => {
+                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                    let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
+                    ScratchValue::String([i2, i3, i4])
+                }
+                VarTypeChecked::Object => {
+                    let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
+                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                    let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
+
+                    ScratchValue::Object([i1, i2, i3, i4])
+                }
+            };
 
             variable_vals.insert(
                 var,
-                VariableSlot::normal(ScratchValue::Object([i1, i2, i3, i4])),
+                VariableSlot {
+                    val: val,
+                    skip_nan: external_env.skip_nan,
+                },
             );
         }
 

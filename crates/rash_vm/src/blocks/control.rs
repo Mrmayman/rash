@@ -173,9 +173,10 @@ impl Compiler<'_> {
 
     fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
         blocks.effects(
-            &self.custom_block_effects,
+            &mut self.custom_block_effects,
             &|v| self.vars.get_type(v),
             &mut |_| {}, // We don't care if it returns early
+            &mut |_, _| {},
         )
     }
 
