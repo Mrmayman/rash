@@ -1,10 +1,9 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use rash_core::{RunState, SpriteData, SpriteId};
 use rash_loader_sb3::ProjectLoader;
 use rash_render::{Renderer, WindowSize};
-use rash_vm::{
-    MEMORY, ProjectBuilder, RunState, Runtime, SpriteBuilder, SpriteData, SpriteId, runtime::Script,
-};
+use rash_vm::{MEMORY, ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -121,11 +120,12 @@ impl App {
                 width: window_size.width,
                 height: window_size.height,
             },
-            &vm,
             &surface,
             &adapter,
             &device,
             &queue,
+            &vm.sprite_load_info,
+            &vm.costumes,
         )
         .await;
 

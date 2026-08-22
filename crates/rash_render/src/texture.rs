@@ -1,5 +1,5 @@
 use image::{GenericImageView, ImageError};
-use rash_vm::CostumeData;
+use rash_core::CostumeData;
 
 #[allow(unused)]
 pub struct Costume {

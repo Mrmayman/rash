@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use rash_vm::RunState;
+use rash_core::RunState;
 
 use crate::{buffers::GlobalBuffer, texture::Costume};
 

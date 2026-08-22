@@ -6,6 +6,8 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rash_core.path = "../rash_core"
+
 # For JIT compiling
 cranelift = "0.131"
 clear-cache = "0.1.3"

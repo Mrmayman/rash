@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+pub mod costumes;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct SpriteId(pub i64);

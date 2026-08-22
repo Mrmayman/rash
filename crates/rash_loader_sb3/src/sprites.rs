@@ -1,8 +1,9 @@
 use std::{collections::HashMap, fs::File, io::Read};
 
+use rash_core::{CostumeData, SpriteId, costumes::Costumes};
 use rash_loader_sb3_json::{JsonBlock, Target};
 use rash_vm::{
-    CostumeData, Costumes, Ptr, ScratchBlock, ScratchObject, SpriteBuilder, SpriteId,
+    Ptr, ScratchBlock, ScratchObject, SpriteBuilder,
     error::{ErrorConvert, RashError, Trace},
     runtime::Script,
 };

@@ -1,13 +1,13 @@
 use std::{collections::HashMap, sync::MutexGuard};
 
 use crate::{
-    ProjectBuilder, RunState, SpriteBuilder, SpriteData,
+    ProjectBuilder, SpriteBuilder,
     compiler::{MEMORY, ScratchBlock},
     data_types::ScratchObject,
-    graphics::SpriteId,
     print_function_addresses, print_memory,
     runtime::Script,
 };
+use rash_core::{RunState, SpriteData, SpriteId};
 
 fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
     let mut sprite = SpriteBuilder::new(SpriteId(0));
