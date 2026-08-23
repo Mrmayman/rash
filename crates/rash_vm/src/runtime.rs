@@ -15,7 +15,7 @@ use crate::{
     effects::{Effects, VariableWrite, analyze},
     gapvec::GapVec,
 };
-use rash_core::{RunState, SpriteId, SpriteLoadData, costumes::Costumes};
+use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
 
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
 type JitFunction = unsafe extern "C" fn(
@@ -286,7 +286,7 @@ impl ProjectBuilder {
             .push_to(&mut this.custom_blocks);
     }
 
-    pub fn set_costumes(&mut self, costumes: Costumes) {
+    pub fn set_costumes(&mut self, costumes: CostumeStore) {
         self.runtime.costumes = costumes;
     }
 
@@ -385,7 +385,7 @@ pub struct Runtime {
     threads: Vec<ScratchThread>,
     scripts: SpawnableScripts,
 
-    pub costumes: Costumes,
+    pub costumes: CostumeStore,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
     static_strings: Vec<SmolStr>,

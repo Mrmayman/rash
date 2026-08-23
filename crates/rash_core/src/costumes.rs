@@ -1,23 +1,40 @@
 use std::collections::HashMap;
 
-use crate::{CostumeData, CostumeId, SpriteId};
+use crate::{CostumeId, SpriteId};
+
+/// The raw costume information as read from the project file.
+#[derive(Clone)]
+pub struct RawCostumeData {
+    pub bytes: Vec<u8>,
+    pub name: String,
+    pub hash: String,
+    pub rotation_center_x: f64,
+    pub rotation_center_y: f64,
+    pub is_svg: bool,
+}
 
 #[derive(Default)]
-pub struct Costumes {
+pub struct CostumeStore {
     sprites: Vec<SpriteCostumes>,
-    pub costumes: Vec<CostumeData>,
+    pub costumes: Vec<RawCostumeData>,
 
     dedup: HashMap<String, CostumeId>,
 }
 
-impl Costumes {
+impl CostumeStore {
     pub fn new() -> Self {
         Self::default()
     }
 
+    pub fn free_memory(&mut self) {
+        for c in &mut self.costumes {
+            c.bytes.clear();
+        }
+    }
+
     pub fn add_costume(
         &mut self,
-        costume: CostumeData,
+        costume: RawCostumeData,
         name: String,
         hash: String,
         sprite: SpriteId,

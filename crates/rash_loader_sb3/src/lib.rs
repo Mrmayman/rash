@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use json::{Block, JsonBlock, JsonStruct};
 
-use rash_core::{SpriteId, SpriteLoadData, costumes::Costumes};
+use rash_core::{CostumeStore, SpriteId, SpriteLoadData};
 use rash_vm::{
     Input, MEMORY, Ptr, ScratchBlock,
     error::{ErrorConvert, RashError, Trace},
@@ -55,7 +55,7 @@ impl ProjectLoader {
         let memory = MEMORY.lock().unwrap();
 
         let mut builder = ProjectBuilder::new();
-        let mut costumes = Costumes::new();
+        let mut costumes = CostumeStore::new();
         let mut variable_map = HashMap::new();
         let mut state_map = HashMap::new();
 
