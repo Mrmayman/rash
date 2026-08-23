@@ -50,7 +50,9 @@ fn main() {
             .unwrap(),
     );
 
-    let vm = match ProjectLoader::new(&path).unwrap().build() {
+    println!("Loading project from {path:?}");
+    let file = std::fs::File::open(&path).unwrap();
+    let vm = match ProjectLoader::new(file).unwrap().build() {
         Ok(n) => n,
         Err(err) => {
             eprintln!("{err}");
