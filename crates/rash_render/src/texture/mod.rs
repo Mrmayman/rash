@@ -1,6 +1,8 @@
 use image::{GenericImageView, ImageError};
 use rash_core::RawCostumeData;
 
+pub mod load;
+
 #[allow(unused)]
 pub struct Texture {
     pub texture: wgpu::Texture,
