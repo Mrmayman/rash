@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     io::{Read, Seek},
+    path::Path,
 };
 
 use json::{Block, JsonBlock, JsonStruct};
@@ -29,9 +30,22 @@ mod sprites;
 
 pub use error::{FieldType, Sb3ErrorKind};
 
-pub type Res<T> = Result<T, error::Error>;
+type Res<T> = Result<T, error::Error>;
 
-pub struct ProjectLoader<R: Read + Seek> {
+pub fn load_from_path(path: impl AsRef<Path>) -> Res<Runtime> {
+    let path = path.as_ref();
+    let file = std::fs::File::open(path)
+        .to("std::fs::File::open", "load_from_path")
+        .trace(&format!("(path: {})", path.display()))?;
+    load_from_reader(file)
+}
+
+pub fn load_from_reader<R: Read + Seek>(r: R) -> Res<Runtime> {
+    let loader = ProjectLoader::new(r)?;
+    loader.build()
+}
+
+struct ProjectLoader<R: Read + Seek> {
     json: json::JsonStruct,
     archive: ZipArchive<R>,
 }
@@ -101,14 +115,14 @@ impl<R: Read + Seek> ProjectLoader<R> {
 }
 
 #[derive(Debug, Clone)]
-pub struct CustomBlockDef {
+struct CustomBlockDef {
     args: Vec<String>,
     args_name_to_id: Option<HashMap<String, String>>,
     is_screen_refresh: bool,
     id: CustomBlockId,
 }
 
-pub struct CompileContext<'a> {
+struct CompileContext<'a> {
     sprite_json: json::Target,
     variable_map: &'a mut HashMap<String, Ptr>,
 

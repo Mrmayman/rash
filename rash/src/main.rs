@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use rash_core::{RunState, SpriteData, SpriteId};
-use rash_loader_sb3::ProjectLoader;
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{MEMORY, ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
@@ -51,8 +50,7 @@ fn main() {
     );
 
     println!("Loading project from {path:?}");
-    let file = std::fs::File::open(&path).unwrap();
-    let vm = match ProjectLoader::new(file).unwrap().build() {
+    let vm = match rash_loader_sb3::load_from_path(&path) {
         Ok(n) => n,
         Err(err) => {
             eprintln!("{err}");
