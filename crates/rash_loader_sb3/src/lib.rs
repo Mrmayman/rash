@@ -68,7 +68,7 @@ impl ProjectLoader {
             load_costumes(&mut self.archive, sprite_json, &mut costumes, id).trace(FN_N)?;
 
             let costume = costumes
-                .get_by_number(id, sprite_json.currentCostume as usize)
+                .index_to_id(id, sprite_json.currentCostume as usize)
                 .unwrap();
             let state = SpriteLoadData {
                 x: sprite_json.x.unwrap_or_default(),

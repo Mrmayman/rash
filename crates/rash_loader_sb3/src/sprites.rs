@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::File, io::Read};
 
-use rash_core::{RawCostumeData, CostumeStore, SpriteId};
+use rash_core::{CostumeStore, RawCostumeData, SpriteId};
 use rash_loader_sb3_json::{JsonBlock, Target};
 use rash_vm::{
     Ptr, ScratchBlock, ScratchObject, SpriteBuilder,
