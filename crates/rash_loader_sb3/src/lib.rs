@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, collections::HashMap, path::Path};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    io::{Read, Seek},
+};
 
 use json::{Block, JsonBlock, JsonStruct};
 
@@ -12,7 +16,7 @@ use zip::ZipArchive;
 
 use crate::{
     blocks::{control, op},
-    error::{ErrExt, ErrorConvertPath},
+    error::ErrExt,
     sprites::{load_blocks, load_costumes},
 };
 use rash_loader_sb3_json as json;
@@ -27,18 +31,16 @@ pub use error::{FieldType, Sb3ErrorKind};
 
 pub type Res<T> = Result<T, error::Error>;
 
-pub struct ProjectLoader {
+pub struct ProjectLoader<R: Read + Seek> {
     json: json::JsonStruct,
-    archive: ZipArchive<std::fs::File>,
+    archive: ZipArchive<R>,
 }
 
-impl ProjectLoader {
-    pub fn new(file_path: &Path) -> Res<Self> {
+impl<R: Read + Seek> ProjectLoader<R> {
+    pub fn new(r: R) -> Res<Self> {
         const FN_N: &str = "ProjectLoader::new";
-        println!("[info] Loading file from {}", file_path.display());
 
-        let file = std::fs::File::open(file_path).to_p(file_path, "std::fs::File::open", FN_N)?;
-        let mut archive = zip::ZipArchive::new(file).to("zip::ZipArchive::new", FN_N)?;
+        let mut archive = zip::ZipArchive::new(r).to("zip::ZipArchive::new", FN_N)?;
 
         let json = archive
             .by_name("project.json")
