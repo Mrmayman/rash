@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-pub mod costumes;
+mod costumes;
+pub use costumes::{CostumeStore, RawCostumeData};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -161,16 +162,6 @@ impl Default for GraphicsState {
 #[derive(Clone, Debug, Default)]
 pub struct SpriteData {
     pub graphics: GraphicsState,
-}
-
-#[derive(Clone)]
-pub struct CostumeData {
-    pub bytes: Vec<u8>,
-    pub name: String,
-    pub hash: String,
-    pub rotation_center_x: f64,
-    pub rotation_center_y: f64,
-    pub is_svg: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

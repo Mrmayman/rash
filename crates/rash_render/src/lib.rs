@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use rash_core::RunState;
 
-use crate::{buffers::GlobalBuffer, texture::Costume};
+use crate::{buffers::GlobalBuffer, texture::Texture};
 
 #[derive(Clone, Copy)]
 pub struct WindowSize {
@@ -32,6 +32,6 @@ pub struct Renderer {
     window_size: WindowSize,
     global_state: GlobalBuffer,
     last_time: Instant,
-    costumes: Vec<Costume>,
+    textures: Vec<Texture>,
     pub state: RunState,
 }

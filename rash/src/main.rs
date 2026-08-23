@@ -85,7 +85,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn new(mut vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -125,7 +125,7 @@ impl App {
             &device,
             &queue,
             &vm.sprite_load_info,
-            &vm.costumes,
+            &mut vm.costumes,
         )
         .await;
 

@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_core::{
-    GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData, costumes::Costumes,
-};
+use rash_core::{CostumeStore, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData};
 use svg_render::SvgRenderer;
 use wgpu::util::DeviceExt;
 
 use crate::WindowSize;
 
-use super::texture::Costume;
+use super::texture::Texture;
 use super::to_bytes;
 
 use super::{Renderer, buffers::GlobalBuffer};
@@ -23,7 +21,7 @@ impl Renderer {
         queue: &wgpu::Queue,
         // These two map to the fields of `rash_vm::Runtime`
         sprite_load_info: &HashMap<SpriteId, SpriteLoadData>,
-        costumes: &Costumes,
+        costumes: &mut CostumeStore,
     ) -> Self {
         let WindowSize { width, height } = window_size;
 
@@ -97,7 +95,7 @@ impl Renderer {
             ],
         });
 
-        let costume_layout = Costume::get_bind_group_layout(device);
+        let costume_layout = Texture::get_bind_group_layout(device);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -175,11 +173,11 @@ impl Renderer {
             ],
         });
 
-        let sampler = Costume::create_sampler(device);
+        let sampler = Texture::create_sampler(device);
 
         let svg_renderer = SvgRenderer::new();
 
-        let costumes = generate_textures(
+        let textures = generate_textures(
             costumes,
             &svg_renderer,
             device,
@@ -187,18 +185,19 @@ impl Renderer {
             &sampler,
             &costume_layout,
         );
-        let costumes = match costumes {
+        let textures = match textures {
             Ok(n) => n,
             Err(err) => {
                 eprintln!("While loading costumes: {err}");
                 Vec::new()
             }
         };
+        costumes.free_memory();
 
         let sprites = sprite_load_info
             .iter()
             .map(|(id, sprite_info)| {
-                let costume = costumes.get(sprite_info.costume.0 as usize).unwrap();
+                let costume = textures.get(sprite_info.costume.0 as usize).unwrap();
                 let graphics = graphics(sprite_info, costume);
                 (*id, SpriteData { graphics })
             })
@@ -213,20 +212,20 @@ impl Renderer {
             global_state,
             global_buffer,
             last_time: Instant::now(),
-            costumes,
+            textures,
             state: RunState { sprites },
         }
     }
 }
 
 fn generate_textures(
-    costumes: &Costumes,
+    costumes: &CostumeStore,
     svg_renderer: &SvgRenderer,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     sampler: &wgpu::Sampler,
     costume_layout: &wgpu::BindGroupLayout,
-) -> Result<Vec<Costume>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Texture>, Box<dyn std::error::Error>> {
     costumes
         .costumes
         .iter()
@@ -236,7 +235,7 @@ fn generate_textures(
             {
                 let img = svg_renderer.render(&svg_text)?;
 
-                return Ok(Costume::from_image(
+                return Ok(Texture::from_image(
                     costume,
                     device,
                     queue,
@@ -246,7 +245,7 @@ fn generate_textures(
                 ));
             }
 
-            Ok(Costume::from_bytes(
+            Ok(Texture::from_bytes(
                 costume,
                 device,
                 queue,
@@ -257,7 +256,7 @@ fn generate_textures(
         .collect()
 }
 
-fn graphics(sprite_info: &SpriteLoadData, costume_info: &Costume) -> GraphicsState {
+fn graphics(sprite_info: &SpriteLoadData, costume_info: &Texture) -> GraphicsState {
     GraphicsState {
         x: sprite_info.x as f32,
         y: sprite_info.y as f32,

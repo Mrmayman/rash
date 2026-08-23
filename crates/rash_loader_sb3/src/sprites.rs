@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::File, io::Read};
 
-use rash_core::{CostumeData, SpriteId, costumes::Costumes};
+use rash_core::{RawCostumeData, CostumeStore, SpriteId};
 use rash_loader_sb3_json::{JsonBlock, Target};
 use rash_vm::{
     Ptr, ScratchBlock, ScratchObject, SpriteBuilder,
@@ -14,7 +14,7 @@ use crate::{CompileContext, Res, Sb3ErrorKind, error::ErrExt, get, load_block};
 pub fn load_costumes(
     archive: &mut ZipArchive<File>,
     sprite_json: &Target,
-    costumes: &mut Costumes,
+    costumes: &mut CostumeStore,
     id: SpriteId,
 ) -> Res<()> {
     const FN_N: &str = "ProjectLoader::load_costumes";
@@ -26,7 +26,7 @@ pub fn load_costumes(
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"));
 
-        let data = CostumeData {
+        let data = RawCostumeData {
             bytes,
             name: costume.name.clone(),
             hash: costume.assetId.clone(),
