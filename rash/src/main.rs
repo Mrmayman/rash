@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use rash_core::{RunState, SpriteData, SpriteId};
-use rash_loader_sb3::ProjectLoader;
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{MEMORY, ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
@@ -50,7 +49,8 @@ fn main() {
             .unwrap(),
     );
 
-    let vm = match ProjectLoader::new(&path).unwrap().build() {
+    println!("Loading project from {path:?}");
+    let vm = match rash_loader_sb3::load_from_path(&path) {
         Ok(n) => n,
         Err(err) => {
             eprintln!("{err}");
@@ -85,7 +85,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn new(mut vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -125,7 +125,7 @@ impl App {
             &device,
             &queue,
             &vm.sprite_load_info,
-            &vm.costumes,
+            &mut vm.costumes,
         )
         .await;
 

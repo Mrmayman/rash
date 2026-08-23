@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt::Debug,
+    sync::Arc,
+};
 
 use cranelift::codegen::CompiledCode;
 use memmap2::Mmap;
@@ -8,15 +12,17 @@ use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
+    effects::{Effects, VariableWrite, analyze},
+    gapvec::GapVec,
 };
-use rash_core::{RunState, SpriteId, SpriteLoadData, costumes::Costumes};
+use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
 
 #[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
 type JitFunction = unsafe extern "C" fn(
     JumpId,
     *mut Vec<i64>, // Stack repeat
     *const ScratchObject,
-    *const Scripts,
+    *const SpawnableScripts,
     *mut RunState,
     bool, // Is screen refresh
     *mut Option<ScratchThread>,
@@ -24,12 +30,12 @@ type JitFunction = unsafe extern "C" fn(
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
-struct JumpId(i64);
+pub struct JumpId(i64);
 
 impl JumpId {
-    const DONE: Self = Self(-1);
+    pub const DONE: Self = Self(-1);
 
-    fn is_done(self) -> bool {
+    pub fn is_done(self) -> bool {
         self == Self::DONE
     }
 }
@@ -227,6 +233,10 @@ impl SpriteBuilder {
                     self.id,
                     num_args,
                     script.kind.is_screen_refresh(),
+                    &mut |_| Effects::unknown(), // TODO: inter-function-analysis in green flag
+                    // You can't safely tell what a variable's type will be
+                    // before a green flag is run due to concurrent threads
+                    &|_| VariableWrite::default(),
                 );
 
                 self.static_strings.extend(static_strings);
@@ -238,7 +248,7 @@ impl SpriteBuilder {
                 ..
             } => {
                 self.scripts.custom_blocks.insert(
-                    id,
+                    id.0,
                     CustomBlock {
                         // Delaying this till later for intelligent analysis
                         script: CustomBlockFunc::ToCompile(script),
@@ -267,19 +277,35 @@ impl ProjectBuilder {
         // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
         self.runtime.static_strings.extend(sprite.static_strings);
-        self.runtime.scripts.push(sprite.scripts);
+
+        let this = &mut self.runtime.scripts;
+        this.green_flags.extend(sprite.scripts.green_flags);
+        sprite
+            .scripts
+            .custom_blocks
+            .push_to(&mut this.custom_blocks);
     }
 
-    pub fn set_costumes(&mut self, costumes: Costumes) {
+    pub fn set_costumes(&mut self, costumes: CostumeStore) {
         self.runtime.costumes = costumes;
     }
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
-        for script in self.runtime.scripts.custom_blocks.values_mut() {
+        let (custom_block_effects, call_env) = self.analyze_custom_blocks();
+
+        for script in &mut self.runtime.scripts.custom_blocks {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
                 continue;
             };
+            let ScriptKind::CustomBlock { id, .. } = &scr.kind else {
+                debug_assert!(
+                    false,
+                    "non-custom block script found in self.runtime.custom_blocks!"
+                );
+                continue;
+            };
+            let call_env = call_env.get(id);
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
@@ -289,6 +315,19 @@ impl ProjectBuilder {
                 script.sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
+                &mut |id| {
+                    custom_block_effects
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or(Effects::unknown())
+                },
+                &|ptr| {
+                    if let Some(call_env) = call_env {
+                        call_env.writes.get(&ptr).copied().unwrap_or_default()
+                    } else {
+                        VariableWrite::default()
+                    }
+                },
             );
 
             script.script = CustomBlockFunc::Compiled(thread);
@@ -297,6 +336,42 @@ impl ProjectBuilder {
 
         self.runtime.init();
         self.runtime
+    }
+
+    fn analyze_custom_blocks(
+        &mut self,
+    ) -> (
+        HashMap<CustomBlockId, Effects>,
+        HashMap<CustomBlockId, Effects>,
+    ) {
+        // The effects (changes in variable types) of calling each custom block.
+        let mut custom_block_effects = HashMap::new();
+        // Call env: the variable types that are present at the call site
+        // of a custom block call.
+        //
+        // For example, if x is always a number when `foo()` is called,
+        // then `call_env[foo]` will have `x` as a number.
+        let mut call_env: HashMap<CustomBlockId, Effects> = HashMap::new();
+
+        for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
+            let CustomBlockFunc::ToCompile(scr) = &script.script else {
+                continue;
+            };
+            let throw_call_func = &mut |id, eff| match call_env.entry(id) {
+                Entry::Occupied(mut old_eff) => {
+                    old_eff.get_mut().merge(&eff, &|_| VariableWrite::default());
+                }
+                Entry::Vacant(e) => {
+                    e.insert(eff);
+                }
+            };
+            // TODO: inter-function analysis inside inter-function analysis
+            let mut effects = analyze(&scr.blocks, &mut |_| Effects::unknown(), throw_call_func);
+            effects.set_direct(true);
+            custom_block_effects.insert(CustomBlockId(id), effects);
+        }
+
+        (custom_block_effects, call_env)
     }
 
     pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
@@ -308,9 +383,9 @@ impl ProjectBuilder {
 pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
     threads: Vec<ScratchThread>,
-    scripts: Scripts,
+    scripts: SpawnableScripts,
 
-    pub costumes: Costumes,
+    pub costumes: CostumeStore,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
     static_strings: Vec<SmolStr>,
@@ -358,16 +433,15 @@ impl Runtime {
 }
 
 #[derive(Default)]
-pub struct Scripts {
+pub struct SpawnableScripts {
     pub green_flags: Vec<ScratchThread>,
-    pub custom_blocks: HashMap<CustomBlockId, CustomBlock>,
+    pub custom_blocks: Vec<CustomBlock>,
 }
 
-impl Scripts {
-    pub fn push(&mut self, script: Self) {
-        self.green_flags.extend(script.green_flags);
-        self.custom_blocks.extend(script.custom_blocks);
-    }
+#[derive(Default)]
+pub struct Scripts {
+    pub green_flags: Vec<ScratchThread>,
+    pub custom_blocks: GapVec<CustomBlock>,
 }
 
 pub struct ScratchThread {
@@ -380,7 +454,7 @@ pub struct ScratchThread {
     child_thread: Box<Option<ScratchThread>>,
 
     buffer: Arc<Mmap>,
-    func: JitFunction,
+    pub(crate) func: JitFunction, // Used by `callbacks::custom_block::call_no_screen_refresh`
 }
 
 impl Debug for ScratchThread {
@@ -462,7 +536,7 @@ impl ScratchThread {
     ///   may result in panics or undefined behaviour).
     /// - There hopefully aren't any compiler bugs
     ///   creating broken code
-    pub unsafe fn tick(&mut self, scripts: &Scripts, state: &mut RunState) -> bool {
+    pub unsafe fn tick(&mut self, scripts: &SpawnableScripts, state: &mut RunState) -> bool {
         if self.jumped_point.is_done() {
             return true;
         }

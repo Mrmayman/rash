@@ -6,6 +6,7 @@ mod constant_set;
 pub mod data_types;
 mod effects;
 pub mod error;
+mod gapvec;
 mod input_primitives;
 mod ins_shortcuts;
 pub mod runtime;

@@ -1,8 +1,10 @@
 use image::{GenericImageView, ImageError};
-use rash_core::CostumeData;
+use rash_core::RawCostumeData;
+
+pub mod load;
 
 #[allow(unused)]
-pub struct Costume {
+pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub bind_group: wgpu::BindGroup,
@@ -14,9 +16,9 @@ pub struct Costume {
     pub texture_height: u32,
 }
 
-impl Costume {
+impl Texture {
     pub fn from_bytes(
-        costume: &CostumeData,
+        costume: &RawCostumeData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         sampler: &wgpu::Sampler,
@@ -29,7 +31,7 @@ impl Costume {
     }
 
     pub fn from_image(
-        costume: &CostumeData,
+        costume: &RawCostumeData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,

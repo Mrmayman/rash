@@ -4,25 +4,13 @@ use crate::{
     Ptr, ScratchBlock,
     builder::{c_if, c_if_else, c_repeat, change, fadd, fmul, set},
     compiler::VarTypeChecked,
-    effects::{CheckEffects, Effects, VariableWrite},
+    effects::{CheckEffects, Effects, VariableWrite, analyze},
     runtime::CustomBlockId,
 };
 
 #[must_use]
 fn eff<T: CheckEffects>(input: &T) -> Effects {
-    let mut other_effs: Option<Effects> = None;
-    let var_ty = &|_| VariableWrite::default();
-    let mut main_eff = input.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
-        if let Some(other_effs) = &mut other_effs {
-            other_effs.merge(&e, var_ty);
-        } else {
-            other_effs = Some(e);
-        }
-    });
-    if let Some(other_effs) = other_effs {
-        main_eff.merge(&other_effs, var_ty);
-    }
-    main_eff
+    analyze(input, &mut |_| Effects::unknown(), &mut |_, _| {})
 }
 
 const X: Ptr = Ptr(0);
@@ -189,6 +177,7 @@ fn repeat_loop_nested() {
         // Let's say X was previously a number
         &|_| VariableWrite::normal(VarTypeChecked::Number),
         &mut |_| {},
+        &mut |_, _| {},
     );
 
     assert!(!e.is_unknown);

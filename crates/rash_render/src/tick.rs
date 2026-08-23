@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use rash_core::{GraphicsState, SpriteId};
+use rash_core::{ShaderState, SpriteId};
 
 use super::to_bytes;
 use crate::WindowSize;
@@ -33,7 +33,7 @@ impl Renderer {
     fn render_inner(
         &mut self,
         sprite_order: &[SpriteId],
-        graphics: &[GraphicsState],
+        graphics: &[ShaderState],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
@@ -74,7 +74,7 @@ impl Renderer {
                 }
 
                 let costume_id = state.current_costume;
-                let costume = self.costumes.get(costume_id.0 as usize).unwrap();
+                let costume = self.textures.get(costume_id.0 as usize).unwrap();
                 render_pass.set_bind_group(1, &costume.bind_group, &[]);
 
                 let i = i.0 as u32 * 6;
@@ -98,7 +98,7 @@ impl Renderer {
     ) {
         let mut graphics: Vec<(_, _)> = self.state.sprites.iter().collect();
         graphics.sort_by_key(|n| n.0);
-        let graphics: Vec<GraphicsState> = graphics.into_iter().map(|n| n.1.graphics).collect();
+        let graphics: Vec<ShaderState> = graphics.into_iter().map(|n| n.1.graphics).collect();
 
         queue.write_buffer(&self.sprites_buffer, 0, to_bytes(&graphics));
 

@@ -17,6 +17,7 @@ Terminology:
 This terminology may not match scratch-specific terms, I'm using clearer ones.
 
 Any function can indirectly inherit warp-ness (non-yielding) when called by a warp function.
+
 # Safety
 
 > Note: When I talk about safety here, I'm talking about memory safety, not logical/semantical correctness.
@@ -43,7 +44,7 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 - **WARNING:** If the Custom Block requires arguments, this *must* be valid and have the right number of elements. There is no bounds checking for performance reasons.
   - If the Custom Block doesn't require arguments, it doesn't matter what you pass here, though.
 
-## `*const Scripts`
+## `*const SpawnableScripts`
 - Compiled functions ready to be spawned/executed.
 - This is used for "spawning" Custom Blocks to be called, ie. getting a handle to another JIT function to be called from a JIT function.
 - Can be `null` if you aren't calling any Custom Blocks.

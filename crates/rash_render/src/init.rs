@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_core::{
-    GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData, costumes::Costumes,
-};
-use svg_render::SvgRenderer;
+use rash_core::{CostumeStore, RunState, ShaderState, SpriteData, SpriteId, SpriteLoadData};
 use wgpu::util::DeviceExt;
 
 use crate::WindowSize;
+use crate::texture::load::load_textures;
 
-use super::texture::Costume;
+use super::texture::Texture;
 use super::to_bytes;
 
 use super::{Renderer, buffers::GlobalBuffer};
@@ -23,51 +21,11 @@ impl Renderer {
         queue: &wgpu::Queue,
         // These two map to the fields of `rash_vm::Runtime`
         sprite_load_info: &HashMap<SpriteId, SpriteLoadData>,
-        costumes: &Costumes,
+        costumes: &mut CostumeStore,
     ) -> Self {
         let WindowSize { width, height } = window_size;
 
-        let surface_caps = surface.get_capabilities(adapter);
-        // Shader code here assumes an sRGB surface texture. Using a different
-        // one will result in all the colors coming out darker. If you want to support non
-        // sRGB surfaces, you'll need to account for that when drawing to the frame.
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
-
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width,
-            height,
-            present_mode: if surface_caps
-                .present_modes
-                .contains(&wgpu::PresentMode::Fifo)
-            {
-                wgpu::PresentMode::Fifo
-            } else {
-                surface_caps.present_modes[0]
-            },
-            alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-
-        let common = include_str!("shaders/common.wgsl");
-        let vert = common.to_owned() + include_str!("shaders/vert.wgsl");
-        let frag = common.to_owned() + include_str!("shaders/frag.wgsl");
-
-        let vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Vertex Shader"),
-            source: wgpu::ShaderSource::Wgsl(vert.into()),
-        });
-        let frag_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Fragment Shader"),
-            source: wgpu::ShaderSource::Wgsl(frag.into()),
-        });
+        let config = create_surface_config(surface, adapter, width, height);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Render Bind Group Layout"),
@@ -97,53 +55,12 @@ impl Renderer {
             ],
         });
 
-        let costume_layout = Costume::get_bind_group_layout(device);
+        let costume_layout = Texture::get_bind_group_layout(device);
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&bind_group_layout, &costume_layout],
-                immediate_size: 0,
-            });
+        let render_pipeline =
+            create_render_pipeline(device, &config, &bind_group_layout, &costume_layout);
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &vert_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &frag_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
-        let sprites_state = vec![GraphicsState::default(); sprite_load_info.len()];
+        let sprites_state = vec![ShaderState::default(); sprite_load_info.len()];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),
@@ -175,30 +92,12 @@ impl Renderer {
             ],
         });
 
-        let sampler = Costume::create_sampler(device);
-
-        let svg_renderer = SvgRenderer::new();
-
-        let costumes = generate_textures(
-            costumes,
-            &svg_renderer,
-            device,
-            queue,
-            &sampler,
-            &costume_layout,
-        );
-        let costumes = match costumes {
-            Ok(n) => n,
-            Err(err) => {
-                eprintln!("While loading costumes: {err}");
-                Vec::new()
-            }
-        };
+        let textures = load_textures(device, queue, costumes, costume_layout);
 
         let sprites = sprite_load_info
             .iter()
             .map(|(id, sprite_info)| {
-                let costume = costumes.get(sprite_info.costume.0 as usize).unwrap();
+                let costume = textures.get(sprite_info.costume.0 as usize).unwrap();
                 let graphics = graphics(sprite_info, costume);
                 (*id, SpriteData { graphics })
             })
@@ -213,52 +112,113 @@ impl Renderer {
             global_state,
             global_buffer,
             last_time: Instant::now(),
-            costumes,
+            textures,
             state: RunState { sprites },
         }
     }
 }
 
-fn generate_textures(
-    costumes: &Costumes,
-    svg_renderer: &SvgRenderer,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    sampler: &wgpu::Sampler,
-    costume_layout: &wgpu::BindGroupLayout,
-) -> Result<Vec<Costume>, Box<dyn std::error::Error>> {
-    costumes
-        .costumes
+fn create_surface_config(
+    surface: &wgpu::Surface<'_>,
+    adapter: &wgpu::Adapter,
+    width: u32,
+    height: u32,
+) -> wgpu::SurfaceConfiguration {
+    let surface_caps = surface.get_capabilities(adapter);
+    // Shader code here assumes an sRGB surface texture. Using a different
+    // one will result in all the colors coming out darker. If you want to support non
+    // sRGB surfaces, you'll need to account for that when drawing to the frame.
+    let surface_format = surface_caps
+        .formats
         .iter()
-        .map(|costume| {
-            if costume.is_svg
-                && let Ok(svg_text) = String::from_utf8(costume.bytes.clone())
-            {
-                let img = svg_renderer.render(&svg_text)?;
+        .find(|f| f.is_srgb())
+        .copied()
+        .unwrap_or(surface_caps.formats[0]);
 
-                return Ok(Costume::from_image(
-                    costume,
-                    device,
-                    queue,
-                    &img,
-                    sampler,
-                    costume_layout,
-                ));
-            }
-
-            Ok(Costume::from_bytes(
-                costume,
-                device,
-                queue,
-                sampler,
-                costume_layout,
-            )?)
-        })
-        .collect()
+    wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: surface_format,
+        width,
+        height,
+        present_mode: if surface_caps
+            .present_modes
+            .contains(&wgpu::PresentMode::Fifo)
+        {
+            wgpu::PresentMode::Fifo
+        } else {
+            surface_caps.present_modes[0]
+        },
+        alpha_mode: surface_caps.alpha_modes[0],
+        view_formats: vec![],
+        desired_maximum_frame_latency: 2,
+    }
 }
 
-fn graphics(sprite_info: &SpriteLoadData, costume_info: &Costume) -> GraphicsState {
-    GraphicsState {
+fn create_render_pipeline(
+    device: &wgpu::Device,
+    config: &wgpu::wgt::SurfaceConfiguration<Vec<wgpu::TextureFormat>>,
+    bind_group_layout: &wgpu::BindGroupLayout,
+    costume_layout: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let common = include_str!("shaders/common.wgsl");
+    let vert = common.to_owned() + include_str!("shaders/vert.wgsl");
+    let frag = common.to_owned() + include_str!("shaders/frag.wgsl");
+
+    let vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Vertex Shader"),
+        source: wgpu::ShaderSource::Wgsl(vert.into()),
+    });
+    let frag_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Fragment Shader"),
+        source: wgpu::ShaderSource::Wgsl(frag.into()),
+    });
+
+    let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Render Pipeline Layout"),
+        bind_group_layouts: &[bind_group_layout, costume_layout],
+        immediate_size: 0,
+    });
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Render Pipeline"),
+        layout: Some(&render_pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &vert_shader,
+            entry_point: Some("vs_main"),
+            buffers: &[],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &frag_shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: config.format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+            polygon_mode: wgpu::PolygonMode::Fill,
+            // Requires Features::DEPTH_CLIP_CONTROL
+            unclipped_depth: false,
+            // Requires Features::CONSERVATIVE_RASTERIZATION
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+fn graphics(sprite_info: &SpriteLoadData, costume_info: &Texture) -> ShaderState {
+    ShaderState {
         x: sprite_info.x as f32,
         y: sprite_info.y as f32,
         texture_width: costume_info.texture_width as f32,

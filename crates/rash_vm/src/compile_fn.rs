@@ -20,10 +20,12 @@ use cranelift::{
 use smol_str::SmolStr;
 
 use crate::{
+    Ptr,
     callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, ScratchBlock},
     data_types::ScratchObject,
-    runtime::ScratchThread,
+    effects::{Effects, VariableWrite},
+    runtime::{CustomBlockId, ScratchThread},
 };
 use rash_core::SpriteId;
 
@@ -33,6 +35,8 @@ pub fn compile(
     id: SpriteId,
     num_args: usize,
     is_screen_refresh: bool,
+    custom_block_effects: &mut dyn FnMut(CustomBlockId) -> Effects,
+    external_env: &dyn Fn(Ptr) -> VariableWrite,
 ) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
@@ -105,15 +109,15 @@ pub fn compile(
         temp_slot4,
         func_map,
         call_conv,
+        custom_block_effects,
+        external_env,
     );
 
     for block in script {
         compiler.compile_block(block, &mut builder);
     }
 
-    compiler
-        .vars
-        .save(&mut builder, &mut compiler.constants, compiler.memory);
+    compiler.save_vars(&mut builder);
 
     let return_value = builder.ins().iconst(I64, -1);
     builder.ins().return_(&[return_value]);
@@ -206,7 +210,7 @@ fn create_function(isa: &dyn TargetIsa) -> (Function, CallConv) {
     sig.params.push(AbiParam::new(I64)); // Jump ID
     sig.params.push(AbiParam::new(I64)); // Repeat Stack
     sig.params.push(AbiParam::new(I64)); // Args pointer
-    sig.params.push(AbiParam::new(I64)); // Scripts
+    sig.params.push(AbiParam::new(I64)); // SpawnableScripts
     sig.params.push(AbiParam::new(I64)); // RunState
     sig.params.push(AbiParam::new(I8)); // Is Screen Refresh?
     sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)

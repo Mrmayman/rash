@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{LazyLock, Mutex},
 };
 
@@ -24,7 +24,7 @@ use crate::{
     callbacks,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
-    effects::{CheckEffects, Effects, VariableWrite},
+    effects::{Effects, VariableWrite, analyze},
     input_primitives::{Input, Ptr, ScratchValue},
     runtime::CustomBlockId,
     variable_storage::{GenericVarStore, SsaVarStore, VarStore},
@@ -288,12 +288,14 @@ pub struct Compiler<'compiler> {
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
-    pub program_analysis: Effects,
+    pub effects: Effects,
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
     pub static_strings: Vec<SmolStr>,
+    pub clobber_stack: HashSet<Ptr>,
     pub vars: Box<dyn VarStore>,
     pub temp_slot4: (Value, StackSlot),
+    pub custom_block_effects: &'compiler mut dyn FnMut(CustomBlockId) -> Effects,
 
     /// Storing how many loops inside we are right now
     /// while compiling the current code.
@@ -347,6 +349,8 @@ impl<'a> Compiler<'a> {
         temp_slot4: (Value, StackSlot),
         func_map: FuncMap,
         call_conv: CallConv,
+        mut custom_block_effects: &'a mut dyn FnMut(CustomBlockId) -> Effects,
+        external_env: &'a dyn Fn(Ptr) -> VariableWrite,
     ) -> Self {
         let mut constants = ConstantMap::new();
 
@@ -356,34 +360,24 @@ impl<'a> Compiler<'a> {
         }
         builder.switch_to_block(code_block);
 
-        let mut other_eff: Option<Effects> = None;
-        let var_ty = &|_| VariableWrite::default();
-        let mut program_analysis = code.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
-            if let Some(other) = &mut other_eff {
-                other.merge(&e, var_ty);
-            } else {
-                other_eff = Some(e);
-            }
-        });
-        if let Some(other_eff) = other_eff {
-            program_analysis.merge(&other_eff, var_ty);
-        }
+        let effects = analyze(&code, &mut custom_block_effects, &mut |_, _| {});
 
-        let vars: Box<dyn VarStore> = if program_analysis.is_unknown {
+        let vars: Box<dyn VarStore> = if effects.is_unknown {
             Box::new(GenericVarStore::new(memory))
         } else {
             Box::new(SsaVarStore::new(
                 builder,
-                &program_analysis,
+                &effects,
                 &mut constants,
                 memory,
+                external_env,
             ))
         };
 
         Self {
             temp_slot4,
             vars,
-            program_analysis,
+            effects,
             constants,
             call_conv,
             break_points: vec![code_block],
@@ -391,6 +385,7 @@ impl<'a> Compiler<'a> {
             break_counter: 0,
             repeat_stack: 0,
             static_strings: Vec::new(),
+            clobber_stack: HashSet::new(),
             memory,
             script_ptr,
             loop_stack_ptr,
@@ -400,6 +395,7 @@ impl<'a> Compiler<'a> {
             is_screen_refresh,
             is_called_as_refresh,
             child_thread_ptr,
+            custom_block_effects,
         }
     }
 
@@ -411,6 +407,9 @@ impl<'a> Compiler<'a> {
         match block {
             ScratchBlock::VarSet(ptr, obj) => {
                 self.var_set(obj, builder, *ptr);
+            }
+            ScratchBlock::VarRead(ptr) => {
+                return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpAdd(a, b) => {
                 return Some(ScratchValue::Num(self.op_add(a, b, builder)));
@@ -426,9 +425,6 @@ impl<'a> Compiler<'a> {
             }
             ScratchBlock::OpMod(a, b) => {
                 return Some(ScratchValue::Num(self.op_modulo(a, b, builder)));
-            }
-            ScratchBlock::VarRead(ptr) => {
-                return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
                 return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));
@@ -661,7 +657,7 @@ impl<'a> Compiler<'a> {
         for _ in 0..2 {
             // TODO: Hacky workaround for too-fast timing
             self.break_counter += 1;
-            self.vars.save(builder, &mut self.constants, self.memory);
+            self.save_vars(builder);
             let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
             builder.ins().return_(&[break_counter]);
@@ -671,8 +667,18 @@ impl<'a> Compiler<'a> {
             self.break_points.push(b);
             builder.switch_to_block(b);
 
-            self.vars.reinit(builder, &mut self.constants, self.memory);
+            self.vars.reinit(
+                builder,
+                &mut self.constants,
+                self.memory,
+                &Effects::unknown(),
+            );
         }
+    }
+
+    pub fn save_vars(&mut self, builder: &mut FunctionBuilder<'_>) {
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &self.effects);
     }
 }
 
