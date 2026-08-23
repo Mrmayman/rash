@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use rash_core::{CostumeStore, GraphicsState, RunState, SpriteData, SpriteId, SpriteLoadData};
+use rash_core::{CostumeStore, RunState, ShaderState, SpriteData, SpriteId, SpriteLoadData};
 use svg_render::SvgRenderer;
 use wgpu::util::DeviceExt;
 
@@ -141,7 +141,7 @@ impl Renderer {
             cache: None,
         });
 
-        let sprites_state = vec![GraphicsState::default(); sprite_load_info.len()];
+        let sprites_state = vec![ShaderState::default(); sprite_load_info.len()];
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),
@@ -227,9 +227,8 @@ fn generate_textures(
     costume_layout: &wgpu::BindGroupLayout,
 ) -> Result<Vec<Texture>, Box<dyn std::error::Error>> {
     costumes
-        .costumes
-        .iter()
-        .map(|costume| {
+        .iter_by_id()
+        .map(|(_, costume)| {
             if costume.is_svg
                 && let Ok(svg_text) = String::from_utf8(costume.bytes.clone())
             {
@@ -256,8 +255,8 @@ fn generate_textures(
         .collect()
 }
 
-fn graphics(sprite_info: &SpriteLoadData, costume_info: &Texture) -> GraphicsState {
-    GraphicsState {
+fn graphics(sprite_info: &SpriteLoadData, costume_info: &Texture) -> ShaderState {
+    ShaderState {
         x: sprite_info.x as f32,
         y: sprite_info.y as f32,
         texture_width: costume_info.texture_width as f32,

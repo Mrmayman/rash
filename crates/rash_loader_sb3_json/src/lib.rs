@@ -6,6 +6,11 @@
 //! Scratch `.sb3` files are just ZIP files that
 //! contain a JSON file called `project.json`,
 //! as well as the costumes and sounds.
+//!
+//! # Why
+//!
+//! This would have been part of `rash_loader_sb3`
+//! had it not been for compile time issues.
 
 #![allow(unused)]
 

@@ -1,3 +1,7 @@
+//! Some core, shared types and utilities used across Rash.
+//!
+//! Split into separate crate to reduce compile times.
+
 use std::collections::HashMap;
 
 mod costumes;
@@ -7,6 +11,11 @@ pub use costumes::{CostumeStore, RawCostumeData};
 #[repr(transparent)]
 pub struct SpriteId(pub i64);
 
+/// The raw VM ID of a costume.
+///
+/// Not necessarily in any meaningful Scratch-related order,
+/// purely used for internal storage and access.
+/// If you want to access by-index or by-name, see [`CostumeStore`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
 pub struct CostumeId(pub i32);
 
@@ -118,15 +127,16 @@ impl RunState {
 }
 
 const _E: () = {
-    assert!(std::mem::size_of::<GraphicsState>() == 16 * 4);
+    assert!(std::mem::size_of::<ShaderState>() == 16 * 4);
 };
 
 // WARNING: If you change this,
 // update the shader-side definition too in
 // `crates/rash_render/src/shaders/common.wgsl`
+/// The graphical state of each sprite. Passed to the shader.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct GraphicsState {
+pub struct ShaderState {
     pub x: f32,
     pub y: f32,
     pub texture_width: f32,
@@ -138,10 +148,11 @@ pub struct GraphicsState {
     pub center_y: f32,
 
     pub shown: i32,
+    /// Ignored, just do `[0; _]`
     pub padding: [i32; 7],
 }
 
-impl Default for GraphicsState {
+impl Default for ShaderState {
     fn default() -> Self {
         Self {
             x: 36.0,
@@ -161,9 +172,14 @@ impl Default for GraphicsState {
 /// The global state of each sprite at runtime.
 #[derive(Clone, Debug, Default)]
 pub struct SpriteData {
-    pub graphics: GraphicsState,
+    pub graphics: ShaderState,
 }
 
+/// Info of a sprite loaded from disk.
+///
+/// The difference between this and [`ShaderState`]/[`RunState`]
+/// is that some info in that is computed at runtime
+/// while this is loaded straight from disk.
 #[derive(Debug, Clone, Copy)]
 pub struct SpriteLoadData {
     pub x: f64,
