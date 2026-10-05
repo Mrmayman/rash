@@ -5,9 +5,7 @@ use cranelift::{
         self, CompiledCode, FinalizedRelocTarget,
         binemit::Reloc,
         control::ControlPlane,
-        ir::{
-            ExternalName, Function, LibCall, StackSlotData, StackSlotKind, UserFuncName, types::I8,
-        },
+        ir::{ExternalName, Function, StackSlotData, StackSlotKind, UserFuncName, types::I8},
     },
     prelude::{
         AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
@@ -230,10 +228,7 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
             continue;
         };
         let target_addr: usize = match target_name {
-            ExternalName::LibCall(LibCall::FloorF64) => callbacks::op::floor as *const () as usize,
-            ExternalName::LibCall(other) => {
-                panic!("unhandled libcall: {other:?}")
-            }
+            ExternalName::LibCall(libcall) => resolve_libcall(*libcall),
             ExternalName::User(name_ref) => {
                 let name = func_map.get_by_left(name_ref).unwrap();
                 let funcs = &callbacks::FUNCS;
@@ -309,4 +304,59 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
             eprintln!("WARNING: Failed to clear_cache");
         }
     };
+}
+
+/// Maps a Cranelift [`LibCall`] to the address of our Rust implementation.
+///
+/// Cranelift emits these when the target ISA doesn't have a native
+/// instruction for the operation. The full list of variants lives in
+/// `cranelift_codegen::ir::LibCall`; we handle every variant that can
+/// realistically be emitted by our IR.
+///
+/// Variants that are impossible for our compiler to produce (TLS,
+/// stack probing, etc.) still panic with a clear message rather than
+/// silently miscompiling.
+fn resolve_libcall(libcall: cranelift::codegen::ir::LibCall) -> usize {
+    use cranelift::codegen::ir::LibCall;
+
+    match libcall {
+        // ── float rounding (f32) ────────────────────────────────
+        LibCall::CeilF32 => callbacks::op::ceil_f32 as *const () as usize,
+        LibCall::FloorF32 => callbacks::op::floor_f32 as *const () as usize,
+        LibCall::TruncF32 => callbacks::op::trunc_f32 as *const () as usize,
+        LibCall::NearestF32 => callbacks::op::nearest_f32 as *const () as usize,
+
+        // ── float rounding (f64) ────────────────────────────────
+        LibCall::CeilF64 => callbacks::op::ceil as *const () as usize,
+        LibCall::FloorF64 => callbacks::op::floor as *const () as usize, // existing
+        LibCall::TruncF64 => callbacks::op::trunc as *const () as usize,
+        LibCall::NearestF64 => callbacks::op::nearest as *const () as usize,
+
+        // ── fused multiply-add ──────────────────────────────────
+        LibCall::FmaF32 => callbacks::op::fma_f32 as *const () as usize,
+        LibCall::FmaF64 => callbacks::op::fma as *const () as usize,
+
+        // ── libc memory routines ────────────────────────────────
+        // These are emitted for bulk memory ops (e.g. large memcpy
+        // lowering). Our IR doesn't produce them today, but if a
+        // future optimisation pass does, these libc symbols are
+        // already linked into the process.
+        LibCall::Memcpy => libc::memcpy as *const () as usize,
+        LibCall::Memset => libc::memset as *const () as usize,
+        LibCall::Memmove => libc::memmove as *const () as usize,
+        LibCall::Memcmp => libc::memcmp as *const () as usize,
+
+        // ── things we should never emit ─────────────────────────
+        LibCall::Probestack => panic!(
+            "Probestack libcall emitted — enable_probestack should be disabled \
+             or the stack size limit raised"
+        ),
+        LibCall::ElfTlsGetAddr | LibCall::ElfTlsGetOffset => {
+            panic!("TLS libcall emitted — we don't support thread-local storage")
+        }
+        LibCall::X86Pshufb => panic!(
+            "X86Pshufb libcall emitted — enable SSSE3 in the target ISA flags \
+             or avoid byte-shuffle SIMD ops"
+        ),
+    }
 }
