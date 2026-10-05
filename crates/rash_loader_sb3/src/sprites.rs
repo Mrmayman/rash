@@ -32,13 +32,13 @@ pub fn load_costumes<R: Read + Seek>(
         let data = RawCostumeData {
             bytes,
             name: costume.name.clone(),
-            hash: costume.assetId.clone(),
-            rotation_center_x: costume.rotationCenterX,
-            rotation_center_y: costume.rotationCenterY,
+            hash: costume.asset_id.clone(),
+            rotation_center_x: costume.rotation_center_x,
+            rotation_center_y: costume.rotation_center_y,
             is_svg,
         };
 
-        costumes.add_costume(data, costume.name.clone(), costume.assetId.clone(), id);
+        costumes.add_costume(data, costume.name.clone(), costume.asset_id.clone(), id);
     }
     Ok(())
 }

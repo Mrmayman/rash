@@ -84,7 +84,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
             load_costumes(&mut self.archive, sprite_json, &mut costumes, id).trace(FN_N)?;
 
             let costume = costumes
-                .index_to_id(id, sprite_json.currentCostume as usize)
+                .index_to_id(id, sprite_json.current_costume as usize)
                 .unwrap();
             let state = SpriteLoadData {
                 x: sprite_json.x.unwrap_or_default(),
