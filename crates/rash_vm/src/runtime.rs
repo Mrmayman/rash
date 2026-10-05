@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    fmt::Debug,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use cranelift::codegen::CompiledCode;
 use memmap2::Mmap;
@@ -12,7 +8,7 @@ use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
-    effects::{Effects, VariableWrite, analyze},
+    effects::{Effects, VariableWrite},
     gapvec::GapVec,
 };
 use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
@@ -264,7 +260,7 @@ impl SpriteBuilder {
 
 #[derive(Default)]
 pub struct ProjectBuilder {
-    runtime: Runtime,
+    pub(crate) runtime: Runtime,
 }
 
 impl ProjectBuilder {
@@ -323,7 +319,12 @@ impl ProjectBuilder {
                 },
                 &|ptr| {
                     if let Some(call_env) = call_env {
-                        call_env.writes.get(&ptr).copied().unwrap_or_default()
+                        call_env
+                            .call_site
+                            .writes
+                            .get(&ptr)
+                            .copied()
+                            .unwrap_or_default()
                     } else {
                         VariableWrite::default()
                     }
@@ -338,42 +339,6 @@ impl ProjectBuilder {
         self.runtime
     }
 
-    fn analyze_custom_blocks(
-        &mut self,
-    ) -> (
-        HashMap<CustomBlockId, Effects>,
-        HashMap<CustomBlockId, Effects>,
-    ) {
-        // The effects (changes in variable types) of calling each custom block.
-        let mut custom_block_effects = HashMap::new();
-        // Call env: the variable types that are present at the call site
-        // of a custom block call.
-        //
-        // For example, if x is always a number when `foo()` is called,
-        // then `call_env[foo]` will have `x` as a number.
-        let mut call_env: HashMap<CustomBlockId, Effects> = HashMap::new();
-
-        for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
-            let CustomBlockFunc::ToCompile(scr) = &script.script else {
-                continue;
-            };
-            let throw_call_func = &mut |id, eff| match call_env.entry(id) {
-                Entry::Occupied(mut old_eff) => {
-                    old_eff.get_mut().merge(&eff, &|_| VariableWrite::default());
-                }
-                Entry::Vacant(e) => {
-                    e.insert(eff);
-                }
-            };
-            // TODO: inter-function analysis inside inter-function analysis
-            let mut effects = analyze(&scr.blocks, &mut |_| Effects::unknown(), throw_call_func);
-            effects.set_direct(true);
-            custom_block_effects.insert(CustomBlockId(id), effects);
-        }
-
-        (custom_block_effects, call_env)
-    }
-
     pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
         self.runtime.sprite_load_info = state_map;
     }
@@ -383,7 +348,7 @@ impl ProjectBuilder {
 pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
     threads: Vec<ScratchThread>,
-    scripts: SpawnableScripts,
+    pub(crate) scripts: SpawnableScripts,
 
     pub costumes: CostumeStore,
 

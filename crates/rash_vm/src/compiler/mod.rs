@@ -272,6 +272,31 @@ impl ScratchBlock {
             | ScratchBlock::MotionSetY(_) => true,
         }
     }
+
+    pub fn check_calls_custom_blocks(&self, on_call: &mut impl FnMut(CustomBlockId)) {
+        match self {
+            ScratchBlock::FunctionCallScreenRefresh(id, _)
+            | ScratchBlock::FunctionCallNoScreenRefresh(id, _) => on_call(*id),
+
+            ScratchBlock::ControlIf(_, blocks)
+            | ScratchBlock::ControlRepeat(_, blocks)
+            | ScratchBlock::ControlRepeatUntil(_, blocks)
+            | ScratchBlock::ControlForever(blocks) => {
+                for block in blocks {
+                    block.check_calls_custom_blocks(on_call);
+                }
+            }
+            ScratchBlock::ControlIfElse(_, blocks1, blocks2) => {
+                for block in blocks1 {
+                    block.check_calls_custom_blocks(on_call);
+                }
+                for block in blocks2 {
+                    block.check_calls_custom_blocks(on_call);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
