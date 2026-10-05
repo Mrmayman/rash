@@ -36,7 +36,6 @@ mod display;
 pub static MEMORY: LazyLock<Mutex<Box<[ScratchObject]>>> =
     LazyLock::new(|| Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice()));
 
-#[allow(unused)]
 #[derive(Debug, PartialEq)]
 pub enum ScratchBlock {
     /// Sets a variable to a value.
@@ -699,6 +698,7 @@ impl FunctionStore {
         }
     }
 
+    #[track_caller]
     pub fn get_function(
         &mut self,
         call_conv: CallConv,

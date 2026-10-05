@@ -27,7 +27,7 @@ mod tests;
 ///
 /// There are a few methods to convert between the different types,
 /// that accurately mirror the behaviour of the Scratch programming language.
-#[repr(C)]
+#[repr(C, u64)]
 #[derive(PartialEq, Clone)]
 pub enum ScratchObject {
     Number(f64),     // 0
