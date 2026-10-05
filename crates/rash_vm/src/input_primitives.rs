@@ -21,7 +21,7 @@ pub struct Ptr(pub usize);
 
 impl std::fmt::Debug for Ptr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "*({})", self.0)
+        write!(f, "var{}", self.0)
     }
 }
 
