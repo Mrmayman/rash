@@ -21,4 +21,5 @@ colored = "2"
 ordered-float = "4.*"
 paste = "1.*"
 bimap = "0.6.*"
-smol_str = "0.3.6"
+smol_str = "=0.3.6" # Pinned version since crucial for ABI stability
+libc = "0.2.*"
