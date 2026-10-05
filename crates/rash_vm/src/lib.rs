@@ -1,3 +1,4 @@
+mod analysis_passes;
 mod blocks;
 mod callbacks;
 mod compile_fn;
