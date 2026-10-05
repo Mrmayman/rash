@@ -45,7 +45,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
             arg_buffer,
             scripts,
             graphics,
-            false,
+            0,
             std::ptr::null_mut(),
         )
     };
