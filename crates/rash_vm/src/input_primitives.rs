@@ -1,5 +1,5 @@
 use cranelift::{
-    codegen::ir::MemFlags,
+    codegen::ir::{MemFlags, condcodes::IntCC},
     prelude::{
         FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
         types::{F64, I64},
@@ -471,8 +471,11 @@ impl ScratchValue {
         match self {
             ScratchValue::Num(value) => {
                 // (*n != 0.0 && !n.is_nan()) as i64
-                let zero = compiler.constants.get_float(0.0, builder);
-                let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
+
+                // In Scratch, -0.0 is truthy. But IEEE 754 says -0.0 == +0.0.
+                // So we bitcast and check against raw bits of +0.0 (which is just 0)
+                let bits = builder.ins().bitcast(I64, MemFlags::new(), *value);
+                let is_not_zero = builder.ins().icmp_imm(IntCC::NotEqual, bits, 0);
                 let is_not_nan = builder.ins().fcmp(FloatCC::Equal, *value, *value);
 
                 let res = builder.ins().band(is_not_zero, is_not_nan);

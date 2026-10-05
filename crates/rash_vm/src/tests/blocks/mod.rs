@@ -7,7 +7,7 @@ use utils::run_code;
 
 use crate::{
     Input, Ptr, ScratchBlock, ScratchObject,
-    builder::{c_repeat, fadd, fdiv, fmod, fmul, fsub},
+    builder::{c_if, c_repeat, fadd, fdiv, fmod, fmul, fsub},
     compiler::VarType,
 };
 
@@ -310,6 +310,19 @@ pub fn math_div() {
     assert!(memory[16].convert_to_number().is_sign_positive());
 
     assert_eq!(memory[17].convert_to_number(), 0.0);
+}
+
+#[test]
+pub fn negative_zero_is_truthy() {
+    // Real bug btw
+    let memory = run_code(vec![
+        set_var(Ptr(0), -0.0),
+        c_if(Ptr(0), vec![set_var(Ptr(1), 1.0)]),
+        // Also verify the literal path
+        c_if(-0.0, vec![set_var(Ptr(2), 1.0)]),
+    ]);
+    assert_eq!(memory[1].convert_to_number(), 1.0);
+    assert_eq!(memory[2].convert_to_number(), 1.0);
 }
 
 #[test]
