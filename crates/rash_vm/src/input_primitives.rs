@@ -307,7 +307,7 @@ impl Input {
                         [i1, i2, i3, i4]
                     }
                     ScratchValue::Num(value) => {
-                        let id = builder.ins().iconst(I64, ID_NUMBER);
+                        let id = compiler.constants.get_int(ID_NUMBER, builder);
                         let zero = compiler.constants.get_int(0, builder);
                         let value = builder.ins().bitcast(
                             I64,
@@ -317,7 +317,7 @@ impl Input {
                         [id, value, zero, zero]
                     }
                     ScratchValue::Bool(value) => {
-                        let id = builder.ins().iconst(I64, ID_BOOL);
+                        let id = compiler.constants.get_int(ID_BOOL, builder);
                         let zero = compiler.constants.get_int(0, builder);
                         [id, value, zero, zero]
                     }
@@ -474,9 +474,11 @@ impl ScratchValue {
                 let zero = compiler.constants.get_float(0.0, builder);
                 let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
                 let is_not_nan = builder.ins().fcmp(FloatCC::Equal, *value, *value);
+
                 let res = builder.ins().band(is_not_zero, is_not_nan);
                 let one = compiler.constants.get_int(1, builder);
                 let zero = compiler.constants.get_int(0, builder);
+
                 builder.ins().select(res, one, zero)
             }
             ScratchValue::Bool(value) => *value,

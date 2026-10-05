@@ -21,8 +21,7 @@ impl Compiler<'_> {
                 self.ins_drop_obj(builder, ptr);
                 match obj {
                     ScratchObject::Number(num) => {
-                        self.vars
-                            .store_f64(ptr, builder, *num, &mut self.constants);
+                        self.vars.store_f64(ptr, builder, *num, &mut self.constants);
                     }
                     ScratchObject::Bool(num) => {
                         self.vars

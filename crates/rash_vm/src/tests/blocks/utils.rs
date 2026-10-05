@@ -39,9 +39,8 @@ fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
 /// As long as the compiler is functioning correctly,
 /// this will be safe, as the machine code under correct
 /// circumstances would function correctly.
-#[allow(unused)]
 pub fn run_code<'a>(code: Vec<ScratchBlock>) -> MutexGuard<'a, Box<[ScratchObject]>> {
-    let mut memory = MEMORY.lock().unwrap();
+    let memory = MEMORY.lock().unwrap();
     if std::env::var("RASH_PRINT_FUNCTIONS").is_ok() {
         print_function_addresses();
     }
