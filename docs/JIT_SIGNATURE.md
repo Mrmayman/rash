@@ -53,8 +53,8 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 - Access to any sprite-specific data and global miscellaneous state, especially for things like graphics.
 - Can be `null` if this function doesn't do any graphical or audio operations.
 
-## `bool`
-- Is yielding enabled (pausable)? (1 or 0)
+## `u8`
+- Allow yielding? (1 or 0)
 - (Also known as "Screen Refresh" in Scratch)
 - Default `1`. Opt in to false (`0`) for better performance if you know the functions won't yield.
 - This is used for propagating non-yielding behavior through a long chain of calls (see top of this doc, "Execution model").

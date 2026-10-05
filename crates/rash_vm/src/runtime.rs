@@ -24,7 +24,7 @@ type JitFunction = unsafe extern "C" fn(
     *const ScratchObject,
     *const SpawnableScripts,
     *mut RunState,
-    bool, // Is screen refresh
+    u8, // Is screen refresh (1/0)
     *mut Option<ScratchThread>,
 ) -> JumpId;
 
@@ -560,7 +560,7 @@ impl ScratchThread {
                 self.arguments.as_ptr(),
                 scripts,
                 state,
-                self.is_screen_refresh,
+                self.is_screen_refresh as u8,
                 &raw mut *self.child_thread,
             )
         };
