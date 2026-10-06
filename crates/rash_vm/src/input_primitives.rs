@@ -503,12 +503,32 @@ impl ScratchValue {
         match self {
             ScratchValue::Num(value) => ScratchValue::Num(*value),
             ScratchValue::Bool(value) => ScratchValue::Bool(*value),
-            ScratchValue::String([i2, i3, i4]) => {
-                let i1 = compiler.constants.get_int(ID_STRING, builder);
-                obj_clone(compiler, builder, i1, *i2, *i3, *i4)
+            ScratchValue::String([i1, i2, i3]) => {
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_STR,
+                    &[I64, I64, I64, I64],
+                    &[],
+                    &[*i1, *i2, *i3, compiler.temp_slot4.0],
+                );
+                let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                ScratchValue::String([i1, i2, i3])
             }
             ScratchValue::Object([i1, i2, i3, i4]) => {
-                obj_clone(compiler, builder, *i1, *i2, *i3, *i4)
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_OBJ,
+                    &[I64, I64, I64, I64, I64],
+                    &[],
+                    &[*i1, *i2, *i3, *i4, compiler.temp_slot4.0],
+                );
+                let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
+                ScratchValue::Object([i1, i2, i3, i4])
             }
         }
     }
@@ -537,28 +557,6 @@ impl ScratchValue {
             ScratchValue::Object(n) => *n,
         }
     }
-}
-
-fn obj_clone(
-    compiler: &mut Compiler<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    i1: Value,
-    i2: Value,
-    i3: Value,
-    i4: Value,
-) -> ScratchValue {
-    compiler.call_function(
-        builder,
-        callbacks::types::CLONE_OBJ,
-        &[I64, I64, I64, I64, I64],
-        &[],
-        &[i1, i2, i3, i4, compiler.temp_slot4.0],
-    );
-    let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
-    let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
-    let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
-    let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
-    ScratchValue::Object([i1, i2, i3, i4])
 }
 
 fn obj_to_bool(
