@@ -153,14 +153,16 @@ impl Compiler<'_> {
         let end_block = builder.create_block();
 
         let effects = self.effects(blocks);
-
         let final_params = effects.generate_params(builder, loop_block, &*self.vars);
-
         let entry_params = self.generate_params(builder, &final_params);
 
         builder.ins().jump(loop_block, &entry_params);
         builder.switch_to_block(loop_block);
         self.vars.extend(final_params.clone());
+
+        if effects.yields {
+            self.constants.clear();
+        }
 
         for block in blocks {
             self.compile_block(block, builder);
