@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::MutexGuard};
+use std::sync::MutexGuard;
 
 use crate::{
     ProjectBuilder, SpriteBuilder,
@@ -7,7 +7,7 @@ use crate::{
     print_function_addresses, print_memory,
     runtime::Script,
 };
-use rash_core::{RunState, SpriteData, SpriteId};
+use rash_core::{RunState, SpriteId};
 
 fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
     let mut sprite = SpriteBuilder::new(SpriteId(0));
@@ -15,10 +15,7 @@ fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
     let mut vm = builder.build(&memory);
-    let mut state = RunState {
-        // We won't do any graphics operations here
-        sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
-    };
+    let mut state = RunState::new(); // No graphics operations here
 
     while !vm.update(&mut state) {}
 }

@@ -77,6 +77,8 @@ impl<R: Read + Seek> ProjectLoader<R> {
 
         let mut custom_block_num = 0;
 
+        let mut sprite_order = Vec::new();
+
         for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
             let id = SpriteId(sprite_i as i64);
             let mut sprite = SpriteBuilder::new(id);
@@ -104,8 +106,13 @@ impl<R: Read + Seek> ProjectLoader<R> {
                 &memory,
             )?;
 
+            sprite_order.push((id, sprite_json.layer_order));
             builder.add_sprite(sprite);
         }
+
+        sprite_order.sort_by_key(|(_, order)| *order);
+        let sprite_order = sprite_order.into_iter().map(|(id, _)| id).collect();
+        builder.set_sprite_order(sprite_order);
 
         builder.set_costumes(costumes);
         builder.set_init_state(state_map);

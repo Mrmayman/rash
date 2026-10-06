@@ -261,7 +261,6 @@ impl ProjectBuilder {
     }
 
     pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
-        // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
         self.runtime.static_strings.extend(sprite.static_strings);
 
@@ -271,6 +270,10 @@ impl ProjectBuilder {
             .scripts
             .custom_blocks
             .push_to(&mut this.custom_blocks);
+    }
+
+    pub fn set_sprite_order(&mut self, order: Vec<SpriteId>) {
+        self.runtime.sprite_order = order;
     }
 
     pub fn set_costumes(&mut self, costumes: CostumeStore) {
