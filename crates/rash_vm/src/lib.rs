@@ -1,3 +1,31 @@
+//! The JIT compiler for Scratch projects. You can manually hook this up
+//! to a renderer, or run it headlessly.
+//!
+//! ```
+//! # use rash_vm::{MEMORY, ProjectBuilder, ScratchBlock, Script, SpriteBuilder, SpriteId, RunState};
+//! # use std::collections::HashMap;
+//! let memory = MEMORY.lock().unwrap();
+//!
+//! let mut sprite = SpriteBuilder::new(SpriteId(0));
+//!
+//! sprite.add_script(
+//!     Script::new_green_flag(vec![
+//!         ScratchBlock::Log("Hello World".into()),
+//!     ]),
+//!     &memory,
+//! );
+//! // You can also add custom blocks...
+//!
+//! let mut builder = ProjectBuilder::new();
+//! builder.add_sprite(sprite);
+//!
+//! let mut vm = builder.build(&memory);
+//! // Make sure `memory` lives as long as `vm`
+//!
+//! let mut state = RunState::new(); // No graphics operations
+//! while !vm.update(&mut state) {}
+//! ```
+
 mod analysis_passes;
 mod blocks;
 mod callbacks;
@@ -21,7 +49,8 @@ pub use callbacks::print_function_addresses;
 pub use compiler::{MEMORY, ScratchBlock};
 pub use data_types::ScratchObject;
 pub use input_primitives::{Input, Ptr};
-pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};
+pub use rash_core::*;
+pub use runtime::{ProjectBuilder, Runtime, Script, SpriteBuilder};
 
 use smol_str::SmolStr;
 

@@ -12,8 +12,8 @@ pub struct Texture {
     pub hash: String,
     pub rotation_center_x: f64,
     pub rotation_center_y: f64,
-    pub texture_width: u32,
-    pub texture_height: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Texture {
@@ -106,8 +106,8 @@ impl Texture {
             bind_group,
             rotation_center_x,
             rotation_center_y,
-            texture_width: dimensions.0,
-            texture_height: dimensions.1,
+            width: dimensions.0,
+            height: dimensions.1,
         }
     }
 

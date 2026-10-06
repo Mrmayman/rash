@@ -126,7 +126,7 @@ impl Input {
             Input::Obj(obj) => obj.convert_to_number().is_nan(),
             Input::Block(block) => {
                 if let ScratchBlock::FunctionGetArg(idx) = **block
-                    && let Some(arg) = args_list.get(idx as usize)
+                    && let Some(arg) = args_list.get(idx)
                 {
                     return !arg.skip_nan;
                 }
