@@ -39,11 +39,13 @@ impl Debug for JumpId {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
 
+#[derive(Clone)]
 pub enum MaybeCompiled {
     ToCompile(Script),
     Compiled(ScratchThread),
 }
 
+#[derive(Clone)]
 pub struct CustomBlock {
     pub script: MaybeCompiled,
     pub sprite_id: SpriteId,
@@ -51,6 +53,7 @@ pub struct CustomBlock {
     pub num_args: usize,
 }
 
+#[derive(Clone)]
 pub struct Script {
     pub blocks: Vec<ScratchBlock>,
     pub kind: ScriptKind,
@@ -166,6 +169,7 @@ impl Script {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum ScriptKind {
     GreenFlag,
     CustomBlock {
@@ -187,6 +191,7 @@ impl ScriptKind {
     }
 }
 
+#[derive(Clone)]
 pub struct SpriteBuilder {
     id: SpriteId,
     scripts: Scripts,
@@ -253,6 +258,17 @@ impl SpriteBuilder {
 #[derive(Default)]
 pub struct ProjectBuilder {
     pub(crate) runtime: Runtime,
+}
+
+impl Clone for ProjectBuilder {
+    fn clone(&self) -> Self {
+        Self {
+            // Cloning here is fine because the unsafe
+            // structures in runtime (like ScratchThread)
+            // haven't been initialized yet
+            runtime: self.runtime.clone_private(),
+        }
+    }
 }
 
 impl ProjectBuilder {
@@ -440,20 +456,34 @@ impl Runtime {
                 .rposition(|&id| id == thread.sprite_id)
         });
     }
+
+    // Our runtime holds on to pointers and other unsafe stuff,
+    // wouldn't want to clone *that* in public.
+    fn clone_private(&self) -> Self {
+        Self {
+            sprite_order: self.sprite_order.clone(),
+            threads: self.threads.clone(),
+            scripts: self.scripts.clone(),
+            costumes: self.costumes.clone(),
+            sprite_load_info: self.sprite_load_info.clone(),
+            static_strings: self.static_strings.clone(),
+        }
+    }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SpawnableScripts {
     pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
     pub custom_blocks: Vec<CustomBlock>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Scripts {
     pub green_flags: Vec<(SpriteId, Script)>,
     pub custom_blocks: GapVec<CustomBlock>,
 }
 
+#[derive(Clone)]
 pub struct ScratchThread {
     sprite_id: SpriteId,
     is_screen_refresh: bool,

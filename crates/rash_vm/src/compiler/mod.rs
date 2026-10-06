@@ -40,7 +40,7 @@ mod display;
 pub static MEMORY: LazyLock<Mutex<Box<[ScratchObject]>>> =
     LazyLock::new(|| Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice()));
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ScratchBlock {
     /// Sets a variable to a value.
     VarSet(Ptr, Input),

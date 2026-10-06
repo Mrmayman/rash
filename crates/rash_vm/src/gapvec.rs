@@ -8,6 +8,14 @@ impl<T> Default for GapVec<T> {
     }
 }
 
+impl<T: Clone> Clone for GapVec<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl<T> GapVec<T> {
     pub fn new() -> Self {
         Self::default()

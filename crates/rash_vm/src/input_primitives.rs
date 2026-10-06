@@ -52,7 +52,7 @@ impl Ptr {
 ///     ScratchBlock::OpAdd(5.0.into(), 3.0.into()).into()
 /// );
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Input {
     Obj(ScratchObject),
     Block(Box<ScratchBlock>),

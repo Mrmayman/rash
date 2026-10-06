@@ -16,7 +16,7 @@ pub struct RawCostumeData {
 /// The store for all costumes in the project.
 ///
 /// You can access costumes by name, by index or by [`CostumeId`] here.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CostumeStore {
     sprites: Vec<SpriteCostumes>,
     costumes: Vec<RawCostumeData>,
@@ -94,7 +94,7 @@ impl CostumeStore {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct SpriteCostumes {
     by_name: HashMap<String, CostumeId>,
     by_index: Vec<CostumeId>,
