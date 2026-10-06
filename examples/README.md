@@ -6,9 +6,7 @@ This directory contains a bunch of example projects to test on. Do note that mos
 
 - `mc23pre66.sb3` is the same project, after 2 years of development. It is a 2d Minecraft clone with complexity somewhat close to Paper Minecraft.
 
-- `pi.sb3` is a benchmark for calculating pi.
-
-- `pi functions.sb3` is the same benchmark, but with repeated function calls inside a hot loop.
+- `pi benchmark/` a simple benchmark testing core parts of the compiler, by calculating Pi
 
 - `repeated sum.sb3` is for checking the performance of repeated addition.
 
