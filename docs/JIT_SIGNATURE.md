@@ -16,7 +16,8 @@ Terminology:
 
 This terminology may not match scratch-specific terms, I'm using clearer ones.
 
-Any function can indirectly inherit warp-ness (non-yielding) when called by a warp function.
+Any function, including yielding ones, become warp (inherited)
+when called by a warp function.
 
 # Safety
 
@@ -54,10 +55,12 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 - Can be `null` if this function doesn't do any graphical or audio operations.
 
 ## `u8`
-- Allow yielding? (1 or 0)
-- (Also known as "Screen Refresh" in Scratch)
-- Default `1`. Opt in to false (`0`) for better performance if you know the functions won't yield.
-- This is used for propagating non-yielding behavior through a long chain of calls (see top of this doc, "Execution model").
+
+- Allow yielding? (1 or 0, also known as "Screen Refresh" in Scratch)
+- Disabling gives better performance
+
+This is used for propagating warp behavior through a long chain of calls.
+See top of this doc, "Execution model".
 
 ## `*mut Option<ScratchThread>`
 - Place to store the state of any child function that is called by the parent.

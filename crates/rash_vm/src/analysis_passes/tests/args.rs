@@ -34,10 +34,10 @@ fn call_environment_records_argument_types_for_single_call() {
         ),
     ]);
 
-    let (_, call_env) = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks();
 
     assert_arg_types(
-        &call_env[&B],
+        &analysis[&B].1,
         &[
             VarTypeChecked::Number,
             VarTypeChecked::String,
@@ -66,10 +66,10 @@ fn call_environment_merges_argument_types_across_call_sites() {
         ),
     ]);
 
-    let (_, call_env) = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks();
 
     assert_arg_types(
-        &call_env[&C],
+        &analysis[&C].1,
         &[
             VarTypeChecked::Number,
             VarTypeChecked::String,
@@ -86,9 +86,9 @@ fn call_environment_argument_types_downgrade_on_mismatch() {
         custom_block(B, vec![call_with_args(C, vec![true.into()])]),
     ]);
 
-    let (_, call_env) = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks();
 
-    assert_arg_types(&call_env[&C], &[VarTypeChecked::Object]);
+    assert_arg_types(&analysis[&C].1, &[VarTypeChecked::Object]);
 }
 
 #[test]
@@ -98,12 +98,12 @@ fn call_environment_with_no_arguments_has_empty_argument_types() {
         custom_block(A, vec![call(B)]),
     ]);
 
-    let (_, call_env) = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks();
 
     assert!(
-        call_env[&B].argument_types.is_empty(),
+        analysis[&B].1.argument_types.is_empty(),
         "expected no argument types, got {:?}",
-        call_env[&B].argument_types
+        analysis[&B].1.argument_types
     );
 }
 
@@ -127,12 +127,12 @@ fn call_environment_merges_call_site_and_argument_types_independently() {
         ),
     ]);
 
-    let (_, call_env) = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&call_env[&C].call_site, &[(X, VarTypeChecked::Number)]);
+    assert_writes(&analysis[&C].1.call_site, &[(X, VarTypeChecked::Number)]);
 
     assert_arg_types(
-        &call_env[&C],
+        &analysis[&C].1,
         &[VarTypeChecked::Number, VarTypeChecked::Object],
     );
 }

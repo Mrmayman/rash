@@ -10,19 +10,9 @@ use crate::{
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
     gapvec::GapVec,
+    jit_func::JitFunction,
 };
 use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
-
-#[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
-type JitFunction = unsafe extern "C" fn(
-    JumpId,
-    *mut Vec<i64>, // Stack repeat
-    *const ScratchObject,
-    *const SpawnableScripts,
-    *mut RunState,
-    u8, // Is screen refresh (1/0)
-    *mut Option<ScratchThread>,
-) -> JumpId;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -233,6 +223,7 @@ impl SpriteBuilder {
                     // You can't safely tell what a variable's type will be
                     // before a green flag is run due to concurrent threads
                     &|_| VariableWrite::default(),
+                    Vec::new(),
                 );
 
                 self.static_strings.extend(static_strings);
@@ -288,7 +279,7 @@ impl ProjectBuilder {
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
-        let (custom_block_effects, call_env) = self.analyze_custom_blocks();
+        let custom_block_analysis = self.analyze_custom_blocks();
 
         for script in &mut self.runtime.scripts.custom_blocks {
             let CustomBlockFunc::ToCompile(scr) = &script.script else {
@@ -301,7 +292,7 @@ impl ProjectBuilder {
                 );
                 continue;
             };
-            let call_env = call_env.get(id);
+            let analysis = custom_block_analysis.get(id);
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
@@ -312,13 +303,13 @@ impl ProjectBuilder {
                 script.num_args,
                 scr.kind.is_screen_refresh(),
                 &mut |id| {
-                    custom_block_effects
+                    custom_block_analysis
                         .get(&id)
-                        .cloned()
+                        .map(|n| n.0.clone())
                         .unwrap_or(Effects::unknown())
                 },
                 &|ptr| {
-                    if let Some(call_env) = call_env {
+                    if let Some((_, call_env)) = analysis {
                         call_env
                             .call_site
                             .writes
@@ -329,6 +320,9 @@ impl ProjectBuilder {
                         VariableWrite::default()
                     }
                 },
+                analysis
+                    .map(|n| n.1.argument_types.clone())
+                    .unwrap_or_default(),
             );
 
             script.script = CustomBlockFunc::Compiled(thread);
@@ -419,7 +413,8 @@ pub struct ScratchThread {
     child_thread: Box<Option<ScratchThread>>,
 
     buffer: Arc<Mmap>,
-    pub(crate) func: JitFunction, // Used by `callbacks::custom_block::call_no_screen_refresh`
+    // Used by `callbacks::custom_block::call_no_screen_refresh`
+    pub(crate) func: JitFunction,
 }
 
 impl Debug for ScratchThread {

@@ -45,7 +45,7 @@ impl Compiler<'_> {
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
-        if is_screen_refresh && self.is_screen_refresh {
+        if is_screen_refresh && self.is_inherently_pausable {
             let inst = self.call_function(
                 builder,
                 callbacks::custom_block::CALL_SCREEN_REFRESH,
@@ -54,10 +54,10 @@ impl Compiler<'_> {
                 &[
                     slot_ptr,
                     custom_block_id,
-                    self.script_ptr,
-                    self.graphics_ptr,
-                    self.child_thread_ptr,
-                    self.is_called_as_refresh,
+                    self.jit_args.script_ptr,
+                    self.jit_args.graphics_ptr,
+                    self.jit_args.child_thread_ptr,
+                    self.jit_args.is_called_by_pausable,
                 ],
             );
 
@@ -89,8 +89,8 @@ impl Compiler<'_> {
                 &[
                     slot_ptr,
                     custom_block_id,
-                    self.script_ptr,
-                    self.graphics_ptr,
+                    self.jit_args.script_ptr,
+                    self.jit_args.graphics_ptr,
                 ],
             );
         }
