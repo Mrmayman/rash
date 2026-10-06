@@ -180,10 +180,6 @@ impl App {
 }
 
 fn run_demo() {
-    // TODO: All memory is a global variable
-    // I *will* refactor this in the future
-    let memory = MEMORY.lock().unwrap();
-
     let mut sprite = SpriteBuilder::new(SpriteId(0));
     sprite.add_script(
         // Script::new_green_flag(vec![
@@ -191,12 +187,15 @@ fn run_demo() {
         //     ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
         // ]),
         Script::new_green_flag(rash_vm::builder::program_pi()),
-        &memory,
     );
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
-    let mut vm = builder.build(&memory);
-    let mut state = RunState::new(); // No graphics operations here
 
+    // TODO: All memory is a global variable
+    // I *will* refactor this in the future
+    let memory = MEMORY.lock().unwrap();
+    let mut vm = builder.build(&memory);
+
+    let mut state = RunState::new(); // No graphics operations here
     while !vm.update(&mut state) {}
 }

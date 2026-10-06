@@ -4,21 +4,19 @@
 //! ```
 //! # use rash_vm::{MEMORY, ProjectBuilder, ScratchBlock, Script, SpriteBuilder, SpriteId, RunState};
 //! # use std::collections::HashMap;
-//! let memory = MEMORY.lock().unwrap();
 //!
 //! let mut sprite = SpriteBuilder::new(SpriteId(0));
-//!
 //! sprite.add_script(
 //!     Script::new_green_flag(vec![
 //!         ScratchBlock::Log("Hello World".into()),
 //!     ]),
-//!     &memory,
 //! );
 //! // You can also add custom blocks...
 //!
 //! let mut builder = ProjectBuilder::new();
 //! builder.add_sprite(sprite);
 //!
+//! let memory = MEMORY.lock().unwrap();
 //! let mut vm = builder.build(&memory);
 //! // Make sure `memory` lives as long as `vm`
 //!
