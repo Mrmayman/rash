@@ -7,7 +7,7 @@ pub fn load_textures(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     costumes: &mut CostumeStore,
-    costume_layout: wgpu::BindGroupLayout,
+    costume_layout: &wgpu::BindGroupLayout,
 ) -> Vec<Texture> {
     let sampler = Texture::create_sampler(device);
 

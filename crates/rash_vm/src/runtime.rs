@@ -16,10 +16,10 @@ use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
-pub struct JumpId(i64);
+pub(crate) struct JumpId(i64);
 
 impl JumpId {
-    pub const DONE: Self = Self(-1);
+    const DONE: Self = Self(-1);
 
     pub fn is_done(self) -> bool {
         self == Self::DONE
@@ -223,7 +223,7 @@ impl SpriteBuilder {
                     // You can't safely tell what a variable's type will be
                     // before a green flag is run due to concurrent threads
                     &|_| VariableWrite::default(),
-                    Vec::new(),
+                    &[],
                 );
 
                 self.static_strings.extend(static_strings);
@@ -305,8 +305,7 @@ impl ProjectBuilder {
                 &mut |id| {
                     custom_block_analysis
                         .get(&id)
-                        .map(|n| n.0.clone())
-                        .unwrap_or(Effects::unknown())
+                        .map_or(Effects::unknown(), |n| n.0.clone())
                 },
                 &|ptr| {
                     if let Some((_, call_env)) = analysis {
@@ -321,7 +320,7 @@ impl ProjectBuilder {
                     }
                 },
                 analysis
-                    .map(|n| n.1.argument_types.clone())
+                    .map(|n| n.1.argument_types.as_slice())
                     .unwrap_or_default(),
             );
 

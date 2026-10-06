@@ -62,7 +62,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         let json: JsonStruct =
             serde_json::from_reader(json).to("serde_json::from_reader (project.json)", FN_N)?;
 
-        Ok(Self { archive, json })
+        Ok(Self { json, archive })
     }
 
     pub fn build(mut self) -> Res<Runtime> {

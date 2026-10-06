@@ -182,7 +182,7 @@ impl Effects {
 
         self.union_reads(other);
 
-        for (ptr, write) in other.writes.iter() {
+        for (ptr, write) in &other.writes {
             if self
                 .writes
                 .get(ptr)
@@ -195,7 +195,7 @@ impl Effects {
         }
     }
 
-    pub fn then(mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
+    pub fn then(mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
         self.sequence(&other, var_type);
         self
     }
@@ -261,18 +261,13 @@ impl Effects {
         }
     }
 
-    pub fn or(mut self, other: Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
+    pub fn or(mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
         self.merge(&other, var_type);
         self
     }
 
     pub fn is_fully_direct(&self) -> bool {
-        for (_, ty) in &self.writes {
-            if !ty.direct {
-                return false;
-            }
-        }
-        true
+        !self.writes.values().any(|ty| !ty.direct)
     }
 
     pub fn generate_params(
@@ -408,7 +403,7 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::OpStrContains(a, b)
             | ScratchBlock::OpBAnd(a, b)
             | ScratchBlock::OpCmp(a, b, _)
-            | ScratchBlock::OpBOr(a, b) => a.effects(c, v, e, f).then(b.effects(c, v, e, f), v),
+            | ScratchBlock::OpBOr(a, b) => a.effects(c, v, e, f).then(&b.effects(c, v, e, f), v),
 
             ScratchBlock::MotionChangeX(input)
             | ScratchBlock::MotionChangeY(input)
@@ -430,7 +425,7 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::ControlIf(input, blocks) => {
                 let mut final_effects = input
                     .effects(c, v, e, f)
-                    .then(blocks.effects(c, v, e, f), v);
+                    .then(&blocks.effects(c, v, e, f), v);
                 // Setting input.effects to may_not_happen is fine,
                 // since input would be read-only and this only affects writes
                 final_effects.may_not_happen = true;
@@ -443,7 +438,7 @@ impl CheckEffects for ScratchBlock {
             ScratchBlock::ControlIfElse(input, b1, b2) => {
                 let b1 = b1.effects(c, v, e, f);
                 let b2 = b2.effects(c, v, e, f);
-                input.effects(c, v, e, f).then(b1.or(b2, v), v)
+                input.effects(c, v, e, f).then(&b1.or(&b2, v), v)
             }
 
             ScratchBlock::ControlStopThisScript => {
@@ -460,7 +455,7 @@ impl CheckEffects for ScratchBlock {
                 f(*id, call_site);
                 let mut code_eff = c(*id);
                 code_eff.set_direct(false);
-                args.effects(c, v, e, f).then(code_eff, v)
+                args.effects(c, v, e, f).then(&code_eff, v)
             }
             // Screen refresh blocks could yield
             ScratchBlock::FunctionCallScreenRefresh(id, args) => {
@@ -515,13 +510,13 @@ impl<T: CheckEffects> CheckEffects for &[T] {
                 var_ty,
                 &mut |thrown_effect| {
                     // If a function returns early, the thrown effect is propagated.
-                    e(effects.clone().then(thrown_effect, var_ty));
+                    e(effects.clone().then(&thrown_effect, var_ty));
                 },
                 &mut |id, thrown| {
                     f(
                         id,
                         CallSiteInfo {
-                            call_site: effects.clone().then(thrown.call_site, var_ty),
+                            call_site: effects.clone().then(&thrown.call_site, var_ty),
                             argument_types: thrown.argument_types,
                         },
                     );

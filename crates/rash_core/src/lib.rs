@@ -26,6 +26,9 @@ pub struct RunState {
 }
 
 impl RunState {
+    pub fn new() -> Self {
+        Self::default()
+    }
     // TODO: Implement Pen trails
 
     /// # Safety

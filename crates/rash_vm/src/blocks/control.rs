@@ -292,7 +292,7 @@ impl Compiler<'_> {
     ) {
         let effects = self
             .effects(then_blocks)
-            .or(self.effects(else_blocks), &|v| self.vars.get_type(v));
+            .or(&self.effects(else_blocks), &|v| self.vars.get_type(v));
 
         let then_block = builder.create_block();
         let else_block = builder.create_block();

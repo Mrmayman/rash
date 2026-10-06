@@ -92,7 +92,7 @@ impl Renderer {
             ],
         });
 
-        let textures = load_textures(device, queue, costumes, costume_layout);
+        let textures = load_textures(device, queue, costumes, &costume_layout);
 
         let sprites = sprite_load_info
             .iter()
@@ -221,8 +221,8 @@ fn graphics(sprite_info: &SpriteLoadData, costume_info: &Texture) -> ShaderState
     ShaderState {
         x: sprite_info.x as f32,
         y: sprite_info.y as f32,
-        texture_width: costume_info.texture_width as f32,
-        texture_height: costume_info.texture_height as f32,
+        texture_width: costume_info.width as f32,
+        texture_height: costume_info.height as f32,
         size: sprite_info.size as f32,
         current_costume: sprite_info.costume,
         center_x: costume_info.rotation_center_x as f32,

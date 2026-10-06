@@ -46,7 +46,7 @@ pub fn compile(
     is_inherently_pausable: bool,
     custom_block_effects: &mut dyn FnMut(CustomBlockId) -> Effects,
     external_env: &dyn Fn(Ptr) -> VariableWrite,
-    arg_types: Vec<VariableWrite>,
+    arg_types: &[VariableWrite],
 ) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
@@ -67,7 +67,7 @@ pub fn compile(
     let jit_args = get_call_args(&mut builder);
     let jit_args = JitArgs::new(jit_args);
 
-    let args_list = fetch_function_arguments(num_args, &arg_types, &mut builder, jit_args.args_ptr);
+    let args_list = fetch_function_arguments(num_args, arg_types, &mut builder, jit_args.args_ptr);
 
     let temp_slot4 = create_main_slot(&mut builder);
     builder.ins().jump(jmp1_block, &[jit_args.jump_id.into()]);

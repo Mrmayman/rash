@@ -729,7 +729,7 @@ impl FunctionStore {
 
         let Some(func_ref) = self.func_map.get_by_right(&name) else {
             crate::print_function_addresses();
-            panic!("Function not found: {}", name);
+            panic!("Function not found: {name}");
         };
         let func = ExtFuncData {
             name: ExternalName::User(*func_ref),
