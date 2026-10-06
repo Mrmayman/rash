@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ProjectBuilder,
+    ProjectBuilder, ScratchBlock,
     effects::{CallSiteInfo, Effects, VariableWrite, analyze},
     runtime::{CustomBlockId, MaybeCompiled},
 };
@@ -30,8 +30,12 @@ impl ProjectBuilder {
 
                 let mut calls = Vec::new();
                 for block in &script.blocks {
-                    block.check_calls_custom_blocks(&mut |called| {
-                        calls.push(called);
+                    block.walk(&mut |b| {
+                        if let ScratchBlock::FunctionCallNoScreenRefresh(id, _)
+                        | ScratchBlock::FunctionCallScreenRefresh(id, _) = b
+                        {
+                            calls.push(*id);
+                        }
                     });
                 }
                 if calls.iter().any(|n| !resolved.contains_key(n)) {
