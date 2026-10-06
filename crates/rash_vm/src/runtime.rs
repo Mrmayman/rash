@@ -218,22 +218,6 @@ impl SpriteBuilder {
         match script.kind {
             ScriptKind::GreenFlag => {
                 self.scripts.green_flags.push((self.id, script));
-                // This is where all your magic happens :D
-                // let (thread, static_strings) = compile(
-                //     &script.blocks,
-                //     memory,
-                //     self.id,
-                //     num_args,
-                //     script.kind.is_screen_refresh(),
-                //     &mut |_| Effects::unknown(), // TODO: inter-function-analysis in green flag
-                //     // You can't safely tell what a variable's type will be
-                //     // before a green flag is run due to concurrent threads
-                //     &|_| VariableWrite::default(),
-                //     &[],
-                // );
-
-                // self.static_strings.extend(static_strings);
-                // self.scripts.green_flags.push(thread);
             }
             ScriptKind::CustomBlock {
                 id,
@@ -305,6 +289,7 @@ impl ProjectBuilder {
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
+        // This is where all your magic happens :D
         self.compile(memory);
 
         self.runtime.init();
