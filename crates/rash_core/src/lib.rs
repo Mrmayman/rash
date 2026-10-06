@@ -2,8 +2,6 @@
 //!
 //! Split into separate crate to reduce compile times.
 
-use std::collections::HashMap;
-
 mod costumes;
 pub use costumes::{CostumeStore, RawCostumeData};
 
@@ -22,13 +20,14 @@ pub struct CostumeId(pub i32);
 /// The global state of the VM at runtime.
 #[derive(Debug, Clone, Default)]
 pub struct RunState {
-    pub sprites: HashMap<SpriteId, SpriteData>,
+    pub sprites: Vec<(SpriteId, SpriteData)>,
 }
 
 impl RunState {
     pub fn new() -> Self {
         Self::default()
     }
+
     // TODO: Implement Pen trails
 
     /// # Safety
@@ -39,7 +38,7 @@ impl RunState {
     }
 
     pub fn go_to(&mut self, id: SpriteId, x: f32, y: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x = x;
         state.graphics.y = y;
     }
@@ -52,7 +51,7 @@ impl RunState {
     }
 
     pub fn set_x(&mut self, id: SpriteId, x: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x = x;
     }
 
@@ -64,7 +63,7 @@ impl RunState {
     }
 
     pub fn set_y(&mut self, id: SpriteId, y: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y = y;
     }
 
@@ -83,12 +82,12 @@ impl RunState {
     }
 
     pub fn get_x(&mut self, id: SpriteId) -> f32 {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x
     }
 
     pub fn get_y(&mut self, id: SpriteId) -> f32 {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y
     }
 
@@ -107,17 +106,17 @@ impl RunState {
     }
 
     pub fn change_x(&mut self, id: SpriteId, x: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x += x;
     }
 
     pub fn change_y(&mut self, id: SpriteId, y: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y += y;
     }
 
     pub fn shown(&mut self, id: SpriteId, shown: bool) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.shown = i32::from(shown);
     }
 

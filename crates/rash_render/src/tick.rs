@@ -96,24 +96,20 @@ impl Renderer {
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
     ) {
-        let mut graphics: Vec<(_, _)> = self.state.sprites.iter().collect();
-        graphics.sort_by_key(|n| n.0);
-        let graphics: Vec<ShaderState> = graphics.into_iter().map(|n| n.1.graphics).collect();
+        let graphics: Vec<ShaderState> = self.state.sprites.iter().map(|n| n.1.graphics).collect();
 
         queue.write_buffer(&self.sprites_buffer, 0, to_bytes(&graphics));
 
         match self.render_inner(sprite_order, &graphics, device, queue, surface) {
             Ok(()) => {}
-            // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                self.resize(self.window_size, device, queue, surface);
+                self.resize(self.window_size, device, queue, surface); // Reconfigure
             }
-            // The system is out of memory, we should probably quit
             Err(wgpu::SurfaceError::OutOfMemory) => {
                 eprintln!("[error] Graphics: Out Of Memory");
                 return;
             }
-            // This happens when the a frame takes too long to present
+            // Frame took too long to present
             Err(err) => {
                 eprintln!("[error] {err}");
             }

@@ -94,7 +94,7 @@ impl Renderer {
 
         let textures = load_textures(device, queue, costumes, &costume_layout);
 
-        let sprites = sprite_load_info
+        let mut sprites: Vec<(SpriteId, SpriteData)> = sprite_load_info
             .iter()
             .map(|(id, sprite_info)| {
                 let costume = textures.get(sprite_info.costume.0 as usize).unwrap();
@@ -102,6 +102,15 @@ impl Renderer {
                 (*id, SpriteData { graphics })
             })
             .collect();
+
+        sprites.sort_by_key(|(id, _)| id.0);
+        assert!(
+            sprites
+                .iter()
+                .enumerate()
+                .all(|(index, (id, _))| id.0 as usize == index),
+            "Sprite IDs must be contiguous and map directly to their Vec indices"
+        );
 
         Self {
             render_pipeline,

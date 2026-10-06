@@ -1,6 +1,6 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
-use rash_core::{RunState, SpriteData, SpriteId};
+use rash_core::{RunState, SpriteId};
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{MEMORY, ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
@@ -196,10 +196,7 @@ fn run_demo() {
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
     let mut vm = builder.build(&memory);
-    let mut state = RunState {
-        // We won't do any graphics operations here
-        sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
-    };
+    let mut state = RunState::new(); // No graphics operations here
 
     while !vm.update(&mut state) {}
 }
