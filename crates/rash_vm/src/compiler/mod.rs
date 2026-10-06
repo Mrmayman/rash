@@ -21,7 +21,10 @@ use cranelift::{
 use smol_str::SmolStr;
 
 use crate::{
-    callbacks,
+    callbacks::{
+        self,
+        external::{looks, motion},
+    },
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::{Effects, VariableWrite, analyze},
@@ -30,7 +33,7 @@ use crate::{
     runtime::CustomBlockId,
     variable_storage::{GenericVarStore, SsaVarStore, VarStore},
 };
-use rash_core::{RunState, SpriteId};
+use rash_core::SpriteId;
 
 mod display;
 
@@ -538,9 +541,9 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_go_to as *const (),
+                    motion::C_GO_TO,
                     &[I64, I64, F64, F64],
                     &[],
                     &[self.jit_args.graphics_ptr, id, x, y],
@@ -551,9 +554,9 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_change_x as *const (),
+                    motion::C_CHANGE_X,
                     &[I64, I64, F64],
                     &[],
                     &[self.jit_args.graphics_ptr, id, x],
@@ -564,9 +567,9 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_change_y as *const (),
+                    motion::C_CHANGE_Y,
                     &[I64, I64, F64],
                     &[],
                     &[self.jit_args.graphics_ptr, id, y],
@@ -577,9 +580,9 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_set_x as *const (),
+                    motion::C_SET_X,
                     &[I64, I64, F64],
                     &[],
                     &[self.jit_args.graphics_ptr, id, x],
@@ -590,9 +593,9 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_set_y as *const (),
+                    motion::C_SET_Y,
                     &[I64, I64, F64],
                     &[],
                     &[self.jit_args.graphics_ptr, id, y],
@@ -601,9 +604,9 @@ impl<'a> Compiler<'a> {
             ScratchBlock::MotionGetX => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function_indirect(
+                let inst = self.call_function(
                     builder,
-                    RunState::c_get_x as *const (),
+                    motion::C_GET_X,
                     &[I64, I64],
                     &[F64],
                     &[self.jit_args.graphics_ptr, id],
@@ -615,9 +618,9 @@ impl<'a> Compiler<'a> {
             ScratchBlock::MotionGetY => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function_indirect(
+                let inst = self.call_function(
                     builder,
-                    RunState::c_get_y as *const (),
+                    motion::C_GET_Y,
                     &[I64, I64],
                     &[F64],
                     &[self.jit_args.graphics_ptr, id],
@@ -630,9 +633,9 @@ impl<'a> Compiler<'a> {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
                 let shown = self.constants.get_int(i64::from(*shown), builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_shown as *const (),
+                    looks::C_SHOWN,
                     &[I64, I64, I64],
                     &[],
                     &[self.jit_args.graphics_ptr, id, shown],

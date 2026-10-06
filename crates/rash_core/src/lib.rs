@@ -29,25 +29,10 @@ impl RunState {
     }
 
     // TODO: Implement Pen trails
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_go_to(this: *mut Self, id: SpriteId, x: f64, y: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).go_to(id, x as f32, y as f32);
-    }
-
     pub fn go_to(&mut self, id: SpriteId, x: f32, y: f32) {
         let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x = x;
         state.graphics.y = y;
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_set_x(this: *mut Self, id: SpriteId, x: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).set_x(id, x as f32);
     }
 
     pub fn set_x(&mut self, id: SpriteId, x: f32) {
@@ -55,30 +40,9 @@ impl RunState {
         state.graphics.x = x;
     }
 
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_set_y(this: *mut Self, id: SpriteId, y: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).set_y(id, y as f32);
-    }
-
     pub fn set_y(&mut self, id: SpriteId, y: f32) {
         let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y = y;
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_get_x(this: *mut Self, id: SpriteId) -> f64 {
-        debug_assert!(!this.is_null());
-        f64::from((unsafe { &mut *this }).get_x(id))
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_get_y(this: *mut Self, id: SpriteId) -> f64 {
-        debug_assert!(!this.is_null());
-        f64::from((unsafe { &mut *this }).get_y(id))
     }
 
     pub fn get_x(&mut self, id: SpriteId) -> f32 {
@@ -89,20 +53,6 @@ impl RunState {
     pub fn get_y(&mut self, id: SpriteId) -> f32 {
         let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_change_x(this: *mut Self, id: SpriteId, x: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).change_x(id, x as f32);
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_change_y(this: *mut Self, id: SpriteId, y: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).change_y(id, y as f32);
     }
 
     pub fn change_x(&mut self, id: SpriteId, x: f32) {
@@ -118,13 +68,6 @@ impl RunState {
     pub fn shown(&mut self, id: SpriteId, shown: bool) {
         let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.shown = i32::from(shown);
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_shown(this: *mut Self, id: SpriteId, shown: i64) {
-        debug_assert!(!this.is_null());
-        unsafe { &mut *this }.shown(id, shown == 1);
     }
 }
 
