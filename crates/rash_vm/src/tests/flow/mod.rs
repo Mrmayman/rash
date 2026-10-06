@@ -125,10 +125,10 @@ fn warp_custom_block_does_not_refresh() {
                 CustomBlockId(0),
                 true, // warp
             ),
-            Script::new_green_flag(vec![ScratchBlock::FunctionCallScreenRefresh(
-                CustomBlockId(0),
-                vec![],
-            )]),
+            Script::new_green_flag(vec![
+                set(X, 0.0),
+                ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), vec![]),
+            ]),
         ],
         |m| assert_eq!(m[0].convert_to_number(), 2.0),
         2,

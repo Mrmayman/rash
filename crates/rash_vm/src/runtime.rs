@@ -491,7 +491,7 @@ pub struct ScratchThread {
 
     stack_repeat: Vec<i64>,
     jumped_point: JumpId,
-    child_thread: Box<Option<ScratchThread>>,
+    child_thread: Option<Box<ScratchThread>>,
 
     buffer: Arc<Mmap>,
     // Used by `callbacks::custom_block::call_no_screen_refresh`
@@ -523,7 +523,7 @@ impl ScratchThread {
             jumped_point: JumpId::default(),
             sprite_id: self.sprite_id,
             is_screen_refresh,
-            child_thread: Box::new(None),
+            child_thread: None,
             arguments,
         }
     }
@@ -560,7 +560,7 @@ impl ScratchThread {
             jumped_point: JumpId::default(),
             sprite_id,
             is_screen_refresh,
-            child_thread: Box::new(None),
+            child_thread: None,
             arguments: Vec::new(),
         }
     }
@@ -585,10 +585,10 @@ impl ScratchThread {
         // If the parent (current) thread paused while
         // running a child thread which also paused,
         // then tick the child thread instead until it ends,
-        if let Some(thread) = &mut *self.child_thread {
+        if let Some(thread) = &mut self.child_thread {
             let child_ended = unsafe { thread.tick(scripts, state) };
             if child_ended {
-                *self.child_thread = None;
+                self.child_thread = None;
             } else {
                 return false;
             }
@@ -602,7 +602,7 @@ impl ScratchThread {
                 scripts,
                 state,
                 self.is_screen_refresh as u8,
-                &raw mut *self.child_thread,
+                &raw mut self.child_thread,
             )
         };
         self.jumped_point = result;

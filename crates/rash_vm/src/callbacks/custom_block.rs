@@ -62,7 +62,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     id: i64,
     scripts: *const SpawnableScripts,
     graphics: *mut RunState,
-    child_thread: *mut Option<ScratchThread>,
+    child_thread: *mut Option<Box<ScratchThread>>,
     parent_is_screen_refresh: bool,
 ) -> PauseStatus {
     debug_assert!(!arg_buffer.is_null());
@@ -92,10 +92,9 @@ pub unsafe extern "C" fn call_screen_refresh(
     if is_screen_refresh {
         let ended = unsafe { script.tick(scripts, &mut *graphics) };
 
-        // The child thread has paused
+        // Child thread paused; save execution context so we can resume it later
         if !ended {
-            // Save the execution context for later resuming it
-            unsafe { *child_thread = Some(script) }
+            unsafe { *child_thread = Some(Box::new(script)) }
             return PauseStatus::Paused;
         }
     } else {
