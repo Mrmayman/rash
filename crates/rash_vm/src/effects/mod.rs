@@ -196,7 +196,7 @@ impl Effects {
     }
 
     pub fn then(mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
-        self.sequence(&other, var_type);
+        self.sequence(other, var_type);
         self
     }
 
@@ -262,7 +262,7 @@ impl Effects {
     }
 
     pub fn or(mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) -> Self {
-        self.merge(&other, var_type);
+        self.merge(other, var_type);
         self
     }
 
