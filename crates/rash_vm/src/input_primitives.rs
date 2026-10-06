@@ -9,7 +9,7 @@ use smol_str::SmolStr;
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock, VarTypeChecked},
+    compiler::{Compiler, FunctionArg, ScratchBlock, VarTypeChecked},
     config::ARITHMETIC_NAN_CHECK,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
@@ -117,10 +117,21 @@ impl From<Ptr> for Input {
 }
 
 impl Input {
-    pub(crate) fn could_be_nan(&self, vartype: impl FnMut(Ptr) -> VariableWrite) -> bool {
+    pub(crate) fn could_be_nan(
+        &self,
+        vartype: impl FnMut(Ptr) -> VariableWrite,
+        args_list: &[FunctionArg],
+    ) -> bool {
         match self {
             Input::Obj(obj) => obj.convert_to_number().is_nan(),
-            Input::Block(block) => block.return_type(vartype).is_none_or(|n| !n.skip_nan),
+            Input::Block(block) => {
+                if let ScratchBlock::FunctionGetArg(idx) = **block
+                    && let Some(arg) = args_list.get(idx as usize)
+                {
+                    return !arg.skip_nan;
+                }
+                block.return_type(vartype).is_none_or(|n| !n.skip_nan)
+            }
         }
     }
 
@@ -194,7 +205,9 @@ impl Input {
         builder: &mut FunctionBuilder<'_>,
         num: &mut Value,
     ) {
-        if ARITHMETIC_NAN_CHECK && self.could_be_nan(|ptr| compiler.vars.get_type(ptr)) {
+        if ARITHMETIC_NAN_CHECK
+            && self.could_be_nan(|ptr| compiler.vars.get_type(ptr), &compiler.args_list)
+        {
             let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, *num, *num);
             let zero_value = compiler.constants.get_float(0.0, builder);
             *num = builder.ins().select(is_not_nan, *num, zero_value);

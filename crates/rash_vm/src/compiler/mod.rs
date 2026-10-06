@@ -26,6 +26,7 @@ use crate::{
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::{Effects, VariableWrite, analyze},
     input_primitives::{Input, Ptr, ScratchValue},
+    jit_func::JitArgs,
     runtime::CustomBlockId,
     variable_storage::{GenericVarStore, SsaVarStore, VarStore},
 };
@@ -306,8 +307,14 @@ pub enum VarType {
     String,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct FunctionArg {
+    pub val: ScratchValue,
+    pub skip_nan: bool,
+}
+
 pub struct Compiler<'compiler> {
-    pub args_list: Vec<[Value; 4]>,
+    pub args_list: Vec<FunctionArg>,
     pub constants: ConstantMap,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
@@ -318,8 +325,17 @@ pub struct Compiler<'compiler> {
     pub static_strings: Vec<SmolStr>,
     pub clobber_stack: HashSet<Ptr>,
     pub vars: Box<dyn VarStore>,
-    pub temp_slot4: (Value, StackSlot),
+    pub jit_args: JitArgs,
+
+    /// A function that is called when a custom block is encountered.
+    ///
+    /// It returns the effects of that custom block. Useful for
+    /// type related optimizations, just put in a `|_| Effects::unknown()` to ignore.
     pub custom_block_effects: &'compiler mut dyn FnMut(CustomBlockId) -> Effects,
+
+    /// Temporary buffer to store some data.
+    /// Be careful, don't let multiple things write to this at the same time.
+    pub temp_slot4: (Value, StackSlot),
 
     /// Storing how many loops inside we are right now
     /// while compiling the current code.
@@ -343,17 +359,8 @@ pub struct Compiler<'compiler> {
     /// This is used with [`ScratchBlock::ControlRepeat`] and [`ScratchBlock::ControlRepeatUntil`]
     pub repeat_stack: usize,
 
-    /// A [`Value`] of `*mut Vec<LoopFrame>` representing the stack
-    /// of loops. This is a **compile-time handle to a runtime
-    /// value**. See `docs/JIT_SIGNATURE.md` for more info.
-    pub loop_stack_ptr: Value,
-    pub script_ptr: Value,
-    pub graphics_ptr: Value,
-    pub child_thread_ptr: Value,
-
     pub sprite_id: SpriteId,
-    pub is_screen_refresh: bool,
-    pub is_called_as_refresh: Value,
+    pub is_inherently_pausable: bool,
 }
 
 impl<'a> Compiler<'a> {
@@ -362,19 +369,15 @@ impl<'a> Compiler<'a> {
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
-        loop_stack_ptr: Value,
-        script_ptr: Value,
-        graphics_ptr: Value,
-        args_list: Vec<[Value; 4]>,
+        jit_args: JitArgs,
+        args_list: Vec<FunctionArg>,
         sprite_id: SpriteId,
-        is_screen_refresh: bool,
-        is_called_as_refresh: Value,
-        child_thread_ptr: Value,
+        is_inherently_pausable: bool,
         temp_slot4: (Value, StackSlot),
         func_map: FuncMap,
         call_conv: CallConv,
         mut custom_block_effects: &'a mut dyn FnMut(CustomBlockId) -> Effects,
-        external_env: &'a dyn Fn(Ptr) -> VariableWrite,
+        types_from_callsite: &'a dyn Fn(Ptr) -> VariableWrite,
     ) -> Self {
         let mut constants = ConstantMap::new();
 
@@ -394,11 +397,12 @@ impl<'a> Compiler<'a> {
                 &effects,
                 &mut constants,
                 memory,
-                external_env,
+                types_from_callsite,
             ))
         };
 
         Self {
+            jit_args,
             temp_slot4,
             vars,
             effects,
@@ -411,14 +415,9 @@ impl<'a> Compiler<'a> {
             static_strings: Vec::new(),
             clobber_stack: HashSet::new(),
             memory,
-            script_ptr,
-            loop_stack_ptr,
             args_list,
-            graphics_ptr,
             sprite_id,
-            is_screen_refresh,
-            is_called_as_refresh,
-            child_thread_ptr,
+            is_inherently_pausable,
             custom_block_effects,
         }
     }
@@ -530,9 +529,8 @@ impl<'a> Compiler<'a> {
                 self.call_custom_block(*custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
-                return Some(ScratchValue::Object(
-                    self.custom_block_get_arg(builder, *idx),
-                ));
+                let val = self.args_list[*idx];
+                return Some(val.val.clone_in_code(self, builder));
             }
             ScratchBlock::MotionGoToXY(x, y) => {
                 let x = x.get_number(self, builder);
@@ -545,7 +543,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_go_to as *const (),
                     &[I64, I64, F64, F64],
                     &[],
-                    &[self.graphics_ptr, id, x, y],
+                    &[self.jit_args.graphics_ptr, id, x, y],
                 );
             }
             ScratchBlock::MotionChangeX(x) => {
@@ -558,7 +556,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_change_x as *const (),
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, x],
+                    &[self.jit_args.graphics_ptr, id, x],
                 );
             }
             ScratchBlock::MotionChangeY(y) => {
@@ -571,7 +569,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_change_y as *const (),
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, y],
+                    &[self.jit_args.graphics_ptr, id, y],
                 );
             }
             ScratchBlock::MotionSetX(x) => {
@@ -584,7 +582,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_set_x as *const (),
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, x],
+                    &[self.jit_args.graphics_ptr, id, x],
                 );
             }
             ScratchBlock::MotionSetY(y) => {
@@ -597,7 +595,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_set_y as *const (),
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, y],
+                    &[self.jit_args.graphics_ptr, id, y],
                 );
             }
             ScratchBlock::MotionGetX => {
@@ -608,7 +606,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_get_x as *const (),
                     &[I64, I64],
                     &[F64],
-                    &[self.graphics_ptr, id],
+                    &[self.jit_args.graphics_ptr, id],
                 );
 
                 let val = builder.inst_results(inst)[0];
@@ -622,7 +620,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_get_y as *const (),
                     &[I64, I64],
                     &[F64],
-                    &[self.graphics_ptr, id],
+                    &[self.jit_args.graphics_ptr, id],
                 );
 
                 let val = builder.inst_results(inst)[0];
@@ -637,7 +635,7 @@ impl<'a> Compiler<'a> {
                     RunState::c_shown as *const (),
                     &[I64, I64, I64],
                     &[],
-                    &[self.graphics_ptr, id, shown],
+                    &[self.jit_args.graphics_ptr, id, shown],
                 );
             }
             ScratchBlock::SensingDaysSince2000 => {
@@ -650,31 +648,8 @@ impl<'a> Compiler<'a> {
         None
     }
 
-    fn custom_block_get_arg(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-        idx: usize,
-    ) -> [Value; 4] {
-        let [i1, i2, i3, i4] = self.args_list[idx];
-
-        self.call_function(
-            builder,
-            callbacks::types::CLONE_OBJ,
-            &[I64, I64, I64, I64, I64],
-            &[],
-            &[i1, i2, i3, i4, self.temp_slot4.0],
-        );
-
-        let slot = self.temp_slot4.1;
-        let i1 = builder.ins().stack_load(I64, slot, 0);
-        let i2 = builder.ins().stack_load(I64, slot, 8);
-        let i3 = builder.ins().stack_load(I64, slot, 16);
-        let i4 = builder.ins().stack_load(I64, slot, 24);
-        [i1, i2, i3, i4]
-    }
-
     pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
-        if !self.is_screen_refresh {
+        if !self.is_inherently_pausable {
             return;
         }
 

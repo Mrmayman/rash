@@ -186,7 +186,7 @@ impl Compiler<'_> {
             callbacks::repeat_stack::STACK_POP,
             &[I64],
             &[I64],
-            &[self.loop_stack_ptr],
+            &[self.jit_args.loop_stack_ptr],
         );
         builder.inst_results(inst)[0]
     }
@@ -197,7 +197,7 @@ impl Compiler<'_> {
             callbacks::repeat_stack::STACK_PUSH,
             &[I64, I64],
             &[],
-            &[self.loop_stack_ptr, incremented],
+            &[self.jit_args.loop_stack_ptr, incremented],
         );
     }
 

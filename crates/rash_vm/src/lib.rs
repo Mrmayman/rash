@@ -10,6 +10,7 @@ pub mod error;
 mod gapvec;
 mod input_primitives;
 mod ins_shortcuts;
+mod jit_func;
 pub mod runtime;
 mod variable_storage;
 

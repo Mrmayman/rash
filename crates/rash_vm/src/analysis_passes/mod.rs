@@ -12,12 +12,8 @@ mod tests;
 impl ProjectBuilder {
     pub(crate) fn analyze_custom_blocks(
         &mut self,
-    ) -> (
-        HashMap<CustomBlockId, Effects>,
-        HashMap<CustomBlockId, CallSiteInfo>,
-    ) {
+    ) -> HashMap<CustomBlockId, (Effects, CallSiteInfo)> {
         let mut resolved: HashMap<CustomBlockId, Effects> = HashMap::new();
-
         let mut call_sites: HashMap<CustomBlockId, CallSiteInfo> = HashMap::new();
 
         let mut changed = true;
@@ -67,6 +63,25 @@ impl ProjectBuilder {
         // adds significant complexity to the compiler and
         // is not worth it for the current use cases.
 
-        (resolved, call_sites)
+        let mut combined: HashMap<CustomBlockId, (Effects, CallSiteInfo)> = HashMap::new();
+        for (id, effects) in resolved {
+            combined.entry(id).or_insert_with(|| {
+                (
+                    effects,
+                    CallSiteInfo {
+                        call_site: Effects::unknown(),
+                        argument_types: Vec::new(),
+                    },
+                )
+            });
+        }
+        for (id, call_site_info) in call_sites {
+            combined
+                .entry(id)
+                .and_modify(|(_, existing)| *existing = call_site_info.clone())
+                .or_insert_with(|| (Effects::new(), call_site_info));
+        }
+
+        combined
     }
 }

@@ -5,7 +5,10 @@ use cranelift::{
         self, CompiledCode, FinalizedRelocTarget,
         binemit::Reloc,
         control::ControlPlane,
-        ir::{ExternalName, Function, StackSlotData, StackSlotKind, UserFuncName, types::I8},
+        ir::{
+            ExternalName, Function, StackSlotData, StackSlotKind, UserFuncName,
+            types::{F64, I8},
+        },
     },
     prelude::{
         AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
@@ -20,21 +23,30 @@ use smol_str::SmolStr;
 use crate::{
     Ptr,
     callbacks::{self, declare_callbacks},
-    compiler::{Compiler, FuncMap, ScratchBlock},
+    compiler::{Compiler, FuncMap, FunctionArg, ScratchBlock, VarTypeChecked},
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
+    input_primitives::ScratchValue,
+    jit_func::JitArgs,
     runtime::{CustomBlockId, ScratchThread},
 };
 use rash_core::SpriteId;
 
+/// Compiles a Scratch script into a `ScratchThread` that can be executed.
+///
+/// Also returns a list of strings to be dropped alongside the machine code.
+///
+/// Note that the last 3 arguments are optional extras, to provide
+/// the compiler with more info for optimizations.
 pub fn compile(
     script: &[ScratchBlock],
     memory: &[ScratchObject],
     id: SpriteId,
     num_args: usize,
-    is_screen_refresh: bool,
+    is_inherently_pausable: bool,
     custom_block_effects: &mut dyn FnMut(CustomBlockId) -> Effects,
     external_env: &dyn Fn(Ptr) -> VariableWrite,
+    arg_types: Vec<VariableWrite>,
 ) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
@@ -52,58 +64,23 @@ pub fn compile(
     let jmp1_block = builder.create_block();
     builder.append_block_param(jmp1_block, I64);
 
-    let jmp2_block = builder.create_block();
-    builder.append_block_params_for_function_params(jmp2_block);
-    builder.switch_to_block(jmp2_block);
+    let jit_args = get_call_args(&mut builder);
+    let jit_args = JitArgs::new(jit_args);
 
-    let fn_args = builder.block_params(jmp2_block);
-    let jump_id = fn_args[0];
-
-    let repeat_stack_ptr = fn_args[1];
-    let args_ptr = fn_args[2];
-    let script_ptr = fn_args[3];
-    let graphics_ptr = fn_args[4];
-
-    let child_thread_ptr = fn_args[6];
-
-    // For a function to be screen-refresh capable
-    // (pausable), it must both inherently be screen refresh
-    // AND must be called by a screen refresh function.
-    //
-    // If a pausable function is called by a non-pausable
-    // function then it will run as non-pausable.
-    let is_called_as_refresh = if is_screen_refresh {
-        fn_args[5]
-    } else {
-        builder.ins().iconst(I8, 0)
-    };
-
-    let mut args_list = Vec::new();
-    for _ in 0..num_args {
-        let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, 0);
-        let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
-        let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
-        let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
-
-        args_list.push([i1, i2, i3, i4]);
-    }
+    let args_list = fetch_function_arguments(num_args, &arg_types, &mut builder, jit_args.args_ptr);
 
     let temp_slot4 = create_main_slot(&mut builder);
-    builder.ins().jump(jmp1_block, &[jump_id.into()]);
+    builder.ins().jump(jmp1_block, &[jit_args.jump_id.into()]);
 
     let mut compiler = Compiler::new(
         false,
         &mut builder,
         script,
         memory,
-        repeat_stack_ptr,
-        script_ptr,
-        graphics_ptr,
+        jit_args,
         args_list,
         id,
-        is_screen_refresh,
-        is_called_as_refresh,
-        child_thread_ptr,
+        is_inherently_pausable,
         temp_slot4,
         func_map,
         call_conv,
@@ -135,10 +112,61 @@ pub fn compile(
             &compiler.func_store.func_map,
             &isa,
             id,
-            compiler.is_screen_refresh,
+            compiler.is_inherently_pausable,
         ),
         compiler.static_strings,
     )
+}
+
+fn get_call_args<'a>(builder: &'a mut FunctionBuilder<'_>) -> &'a [cranelift::prelude::Value] {
+    let jmp2_block = builder.create_block();
+    builder.append_block_params_for_function_params(jmp2_block);
+    builder.switch_to_block(jmp2_block);
+    builder.block_params(jmp2_block)
+}
+
+/// Fetches the actual Scratch value arguments.
+///
+/// Not to be confused with [`get_call_args`] which gets the JIT ABI
+/// *internal* arguments.
+fn fetch_function_arguments(
+    num_args: usize,
+    arg_types: &[VariableWrite],
+    builder: &mut FunctionBuilder<'_>,
+    args_ptr: cranelift::prelude::Value,
+) -> Vec<FunctionArg> {
+    let mut args_list = Vec::new();
+    for i in 0..num_args {
+        let datatype = arg_types.get(i).copied().unwrap_or_default();
+
+        let val = match datatype.ty {
+            VarTypeChecked::Number => {
+                ScratchValue::Num(builder.ins().load(F64, MemFlags::new(), args_ptr, 8))
+            }
+            VarTypeChecked::Bool => {
+                ScratchValue::Bool(builder.ins().load(I64, MemFlags::new(), args_ptr, 8))
+            }
+            VarTypeChecked::String => {
+                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
+                ScratchValue::String([i2, i3, i4])
+            }
+            VarTypeChecked::Object => {
+                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, 0);
+                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
+                ScratchValue::Object([i1, i2, i3, i4])
+            }
+        };
+
+        args_list.push(FunctionArg {
+            val,
+            skip_nan: datatype.skip_nan,
+        });
+    }
+    args_list
 }
 
 pub fn create_main_slot(
