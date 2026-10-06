@@ -277,28 +277,64 @@ impl ScratchBlock {
         }
     }
 
-    pub fn check_calls_custom_blocks(&self, on_call: &mut impl FnMut(CustomBlockId)) {
+    pub fn walk(&self, on_block: &mut impl FnMut(&ScratchBlock)) {
+        on_block(self);
         match self {
-            ScratchBlock::FunctionCallScreenRefresh(id, _)
-            | ScratchBlock::FunctionCallNoScreenRefresh(id, _) => on_call(*id),
-
             ScratchBlock::ControlIf(_, blocks)
             | ScratchBlock::ControlRepeat(_, blocks)
             | ScratchBlock::ControlRepeatUntil(_, blocks)
             | ScratchBlock::ControlForever(blocks) => {
                 for block in blocks {
-                    block.check_calls_custom_blocks(on_call);
+                    block.walk(on_block);
                 }
             }
             ScratchBlock::ControlIfElse(_, blocks1, blocks2) => {
                 for block in blocks1 {
-                    block.check_calls_custom_blocks(on_call);
+                    block.walk(on_block);
                 }
                 for block in blocks2 {
-                    block.check_calls_custom_blocks(on_call);
+                    block.walk(on_block);
                 }
             }
-            _ => {}
+            ScratchBlock::VarSet(_, _)
+            | ScratchBlock::VarChange(_, _)
+            | ScratchBlock::VarRead(_)
+            | ScratchBlock::OpAdd(_, _)
+            | ScratchBlock::OpSub(_, _)
+            | ScratchBlock::OpMul(_, _)
+            | ScratchBlock::OpDiv(_, _)
+            | ScratchBlock::OpRound(_)
+            | ScratchBlock::OpStrJoin(_, _)
+            | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpStrLen(_)
+            | ScratchBlock::OpBAnd(_, _)
+            | ScratchBlock::OpBNot(_)
+            | ScratchBlock::OpBOr(_, _)
+            | ScratchBlock::OpMFloor(_)
+            | ScratchBlock::OpMAbs(_)
+            | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::OpMSin(_)
+            | ScratchBlock::OpMCos(_)
+            | ScratchBlock::OpMTan(_)
+            | ScratchBlock::OpCmp(_, _, _)
+            | ScratchBlock::OpRandom(_, _)
+            | ScratchBlock::OpStrLetterOf(_, _)
+            | ScratchBlock::OpStrContains(_, _)
+            | ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionGetArg(_)
+            | ScratchBlock::ScreenRefresh
+            | ScratchBlock::MotionGoToXY(_, _)
+            | ScratchBlock::MotionChangeX(_)
+            | ScratchBlock::MotionChangeY(_)
+            | ScratchBlock::MotionSetX(_)
+            | ScratchBlock::MotionSetY(_)
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
+            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::FunctionCallScreenRefresh(_, _)
+            | ScratchBlock::Log(_) => {}
         }
     }
 }
