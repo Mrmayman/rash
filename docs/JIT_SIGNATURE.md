@@ -62,7 +62,7 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 This is used for propagating warp behavior through a long chain of calls.
 See top of this doc, "Execution model".
 
-## `*mut Option<ScratchThread>`
+## `*mut Option<Box<ScratchThread>>`
 - Place to store the state of any child function that is called by the parent.
 - Let's say we have a function `foo()` that calls `bar()`. If `bar()` yields while called by `foo()`, then `foo()` stores `bar()`'s [`ScratchThread`] inside this `Option` (`None` by default), before pausing itself. Then, on resume it recursively walks down this linked list of `ScratchThread`s until it finds the final element, the function to first resume.
 - Can be `null` if this function doesn't yield or doesn't call anything that yields.

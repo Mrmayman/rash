@@ -15,7 +15,7 @@ pub type JitFunction = unsafe extern "C" fn(
     *const SpawnableScripts,
     *mut RunState,
     u8, // Is screen refresh (1/0)
-    *mut Option<ScratchThread>,
+    *mut Option<Box<ScratchThread>>,
 ) -> JumpId;
 
 /// See [`crate::jit_func`] docs for more info.

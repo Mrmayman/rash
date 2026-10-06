@@ -239,7 +239,7 @@ fn create_function(isa: &dyn TargetIsa) -> (Function, CallConv) {
     sig.params.push(AbiParam::new(I64)); // SpawnableScripts
     sig.params.push(AbiParam::new(I64)); // RunState
     sig.params.push(AbiParam::new(I8)); // Is Screen Refresh?
-    sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)
+    sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<Box<ScratchThread>>)
     sig.returns.push(AbiParam::new(I64));
     (
         Function::with_name_signature(UserFuncName::default(), sig),
