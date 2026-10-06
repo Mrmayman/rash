@@ -19,7 +19,7 @@ pub fn load_textures(
         device,
         queue,
         &sampler,
-        &costume_layout,
+        costume_layout,
     );
     let textures = match textures {
         Ok(n) => n,
