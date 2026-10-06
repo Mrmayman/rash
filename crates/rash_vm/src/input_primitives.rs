@@ -282,34 +282,37 @@ impl Input {
             Input::Obj(scratch_object) => {
                 // Transmute to [i64; 4]
                 let scratch_object = scratch_object.clone();
-                let is_string = matches!(scratch_object, ScratchObject::String(_));
-                let [i1, i2, i3, i4] =
+                let is_str = scratch_object.is_heap_allocated();
+
+                let [i_id, i2, i3, i4] =
                     unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
-                if is_string {
+
+                let v_id = compiler.constants.get_int(i_id, builder);
+                let v2 = compiler.constants.get_int(i2, builder);
+                let v3 = compiler.constants.get_int(i3, builder);
+                let v4 = compiler.constants.get_int(i4, builder);
+
+                if is_str {
                     compiler
                         .static_strings
                         .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
+
+                    compiler.call_function(
+                        builder,
+                        callbacks::types::CLONE_STR,
+                        &[I64, I64, I64, I64],
+                        &[],
+                        &[v2, v3, v4, compiler.temp_slot4.0],
+                    );
+
+                    let o2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                    let o3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                    let o4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+
+                    [v_id, o2, o3, o4]
+                } else {
+                    [v_id, v2, v3, v4]
                 }
-
-                let i1 = compiler.constants.get_int(i1, builder);
-                let i2 = compiler.constants.get_int(i2, builder);
-                let i3 = compiler.constants.get_int(i3, builder);
-                let i4 = compiler.constants.get_int(i4, builder);
-
-                compiler.call_function(
-                    builder,
-                    callbacks::types::CLONE_OBJ,
-                    &[I64, I64, I64, I64, I64],
-                    &[],
-                    &[i1, i2, i3, i4, compiler.temp_slot4.0],
-                );
-
-                let o1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
-                let o2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
-                let o3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
-                let o4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
-
-                [o1, o2, o3, o4]
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();

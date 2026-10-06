@@ -73,6 +73,12 @@ impl std::fmt::Debug for ScratchObject {
 }
 
 impl ScratchObject {
+    /// Checks if the `ScratchObject` is heap allocated.
+    #[must_use]
+    pub fn is_heap_allocated(&self) -> bool {
+        matches!(self, ScratchObject::String(_))
+    }
+
     /// Gets the data type of the `ScratchObject`.
     #[must_use]
     pub fn get_type(&self) -> VarType {
