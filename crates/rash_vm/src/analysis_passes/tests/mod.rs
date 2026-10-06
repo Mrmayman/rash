@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rash_core::SpriteId;
 
 use crate::{
-    MEMORY, ProjectBuilder, Ptr, ScratchBlock, SpriteBuilder,
+    ProjectBuilder, Ptr, ScratchBlock, SpriteBuilder,
     builder::set,
     compiler::VarTypeChecked,
     effects::Effects,
@@ -65,12 +65,9 @@ fn custom_block(id: CustomBlockId, blocks: Vec<ScratchBlock>) -> Script {
 /// particular sprite/runtime structure, this is the only helper that
 /// should need adapting.
 fn project(custom_blocks: Vec<Script>) -> ProjectBuilder {
-    let memory = MEMORY.lock().unwrap();
-
     let mut sprite = SpriteBuilder::new(SpriteId(0));
-
     for script in custom_blocks {
-        sprite.add_script(script, &memory);
+        sprite.add_script(script);
     }
 
     let mut builder = ProjectBuilder::new();

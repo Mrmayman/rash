@@ -1,6 +1,6 @@
 use crate::{
     data_types::ScratchObject,
-    runtime::{CustomBlockFunc, CustomBlockId, JumpId, ScratchThread, SpawnableScripts},
+    runtime::{CustomBlockId, JumpId, MaybeCompiled, ScratchThread, SpawnableScripts},
 };
 use rash_core::RunState;
 
@@ -34,7 +34,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
         panic!("No custom block found with id {}", id.0)
     };
 
-    let CustomBlockFunc::Compiled(s) = &script.script else {
+    let MaybeCompiled::Compiled(s) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
     };
 
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn call_screen_refresh(
 
     let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
 
-    let CustomBlockFunc::Compiled(script) = &script.script else {
+    let MaybeCompiled::Compiled(script) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
     };
     let mut script = script.spawn(is_screen_refresh, args);

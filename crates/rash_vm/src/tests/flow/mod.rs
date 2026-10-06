@@ -29,14 +29,15 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
         }
     }
 
-    let memory = MEMORY.lock().unwrap();
     let mut builder = ProjectBuilder::new();
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
 
     for script in scripts {
-        sprite1.add_script(script, &memory);
+        sprite1.add_script(script);
     }
     builder.add_sprite(sprite1);
+
+    let memory = MEMORY.lock().unwrap();
     let mut runtime = builder.build(&memory);
 
     let mut num_ticks = 1;

@@ -11,7 +11,7 @@ use rash_core::{RunState, SpriteId};
 
 fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
     let mut sprite = SpriteBuilder::new(SpriteId(0));
-    sprite.add_script(Script::new_green_flag(program), &memory);
+    sprite.add_script(Script::new_green_flag(program));
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
     let mut vm = builder.build(&memory);

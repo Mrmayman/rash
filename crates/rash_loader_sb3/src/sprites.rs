@@ -6,7 +6,7 @@ use std::{
 use rash_core::{CostumeStore, RawCostumeData, SpriteId};
 use rash_loader_sb3_json::{JsonBlock, Target};
 use rash_vm::{
-    Ptr, ScratchBlock, ScratchObject, SpriteBuilder,
+    Ptr, ScratchBlock, SpriteBuilder,
     error::{ErrorConvert, RashError, Trace},
     runtime::Script,
 };
@@ -63,7 +63,6 @@ pub fn load_blocks(
     variable_map: &mut HashMap<String, Ptr>,
     custom_block_num: &mut usize,
     sprite: &mut SpriteBuilder,
-    memory: &[ScratchObject],
 ) -> Res<()> {
     const FN_N: &str = "sb3::load_blocks";
 
@@ -128,20 +127,17 @@ pub fn load_blocks(
         match hat_block.opcode.as_str() {
             "event_whenflagclicked" => {
                 let new_green_flag = Script::new_green_flag(blocks);
-                sprite.add_script(new_green_flag, memory);
+                sprite.add_script(new_green_flag);
             }
             "procedures_definition" => {
                 let custom_block = custom_block.unwrap();
 
-                sprite.add_script(
-                    Script::new_custom_block(
-                        blocks,
-                        custom_block.args.len(),
-                        custom_block.id,
-                        custom_block.is_screen_refresh,
-                    ),
-                    memory,
-                );
+                sprite.add_script(Script::new_custom_block(
+                    blocks,
+                    custom_block.args.len(),
+                    custom_block.id,
+                    custom_block.is_screen_refresh,
+                ));
             }
             _ => {
                 println!("Unknown hat block opcode: {}", hat_block.opcode);

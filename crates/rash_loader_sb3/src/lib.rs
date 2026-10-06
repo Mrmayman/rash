@@ -68,8 +68,6 @@ impl<R: Read + Seek> ProjectLoader<R> {
     pub fn build(mut self) -> Res<Runtime> {
         const FN_N: &str = "ProjectLoader::build";
 
-        let memory = MEMORY.lock().unwrap();
-
         let mut builder = ProjectBuilder::new();
         let mut costumes = CostumeStore::new();
         let mut variable_map = HashMap::new();
@@ -103,7 +101,6 @@ impl<R: Read + Seek> ProjectLoader<R> {
                 &mut variable_map,
                 &mut custom_block_num,
                 &mut sprite,
-                &memory,
             )?;
 
             sprite_order.push((id, sprite_json.layer_order));
@@ -117,6 +114,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         builder.set_costumes(costumes);
         builder.set_init_state(state_map);
 
+        let memory = MEMORY.lock().unwrap();
         Ok(builder.build(&memory))
     }
 }

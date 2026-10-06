@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ProjectBuilder,
     effects::{CallSiteInfo, Effects, VariableWrite, analyze},
-    runtime::{CustomBlockFunc, CustomBlockId},
+    runtime::{CustomBlockId, MaybeCompiled},
 };
 
 #[cfg(test)]
@@ -20,7 +20,7 @@ impl ProjectBuilder {
         while changed {
             changed = false;
             for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
-                let CustomBlockFunc::ToCompile(script) = &script.script else {
+                let MaybeCompiled::ToCompile(script) = &script.script else {
                     continue;
                 };
                 if resolved.contains_key(&CustomBlockId(id)) {

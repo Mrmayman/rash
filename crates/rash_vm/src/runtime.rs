@@ -39,13 +39,13 @@ impl Debug for JumpId {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
 
-pub enum CustomBlockFunc {
+pub enum MaybeCompiled {
     ToCompile(Script),
     Compiled(ScratchThread),
 }
 
 pub struct CustomBlock {
-    pub script: CustomBlockFunc,
+    pub script: MaybeCompiled,
     pub sprite_id: SpriteId,
     pub is_screen_refresh: bool,
     pub num_args: usize,
@@ -203,7 +203,7 @@ impl SpriteBuilder {
         }
     }
 
-    pub fn add_script(&mut self, mut script: Script, memory: &[ScratchObject]) {
+    pub fn add_script(&mut self, mut script: Script) {
         script.insert_refreshes();
 
         let num_args = match script.kind {
@@ -212,22 +212,23 @@ impl SpriteBuilder {
         };
         match script.kind {
             ScriptKind::GreenFlag => {
+                self.scripts.green_flags.push((self.id, script));
                 // This is where all your magic happens :D
-                let (thread, static_strings) = compile(
-                    &script.blocks,
-                    memory,
-                    self.id,
-                    num_args,
-                    script.kind.is_screen_refresh(),
-                    &mut |_| Effects::unknown(), // TODO: inter-function-analysis in green flag
-                    // You can't safely tell what a variable's type will be
-                    // before a green flag is run due to concurrent threads
-                    &|_| VariableWrite::default(),
-                    &[],
-                );
+                // let (thread, static_strings) = compile(
+                //     &script.blocks,
+                //     memory,
+                //     self.id,
+                //     num_args,
+                //     script.kind.is_screen_refresh(),
+                //     &mut |_| Effects::unknown(), // TODO: inter-function-analysis in green flag
+                //     // You can't safely tell what a variable's type will be
+                //     // before a green flag is run due to concurrent threads
+                //     &|_| VariableWrite::default(),
+                //     &[],
+                // );
 
-                self.static_strings.extend(static_strings);
-                self.scripts.green_flags.push(thread);
+                // self.static_strings.extend(static_strings);
+                // self.scripts.green_flags.push(thread);
             }
             ScriptKind::CustomBlock {
                 id,
@@ -238,7 +239,7 @@ impl SpriteBuilder {
                     id.0,
                     CustomBlock {
                         // Delaying this till later for intelligent analysis
-                        script: CustomBlockFunc::ToCompile(script),
+                        script: MaybeCompiled::ToCompile(script),
                         is_screen_refresh,
                         num_args,
                         sprite_id: self.id,
@@ -265,7 +266,13 @@ impl ProjectBuilder {
         self.runtime.static_strings.extend(sprite.static_strings);
 
         let this = &mut self.runtime.scripts;
-        this.green_flags.extend(sprite.scripts.green_flags);
+        this.green_flags.extend(
+            sprite
+                .scripts
+                .green_flags
+                .into_iter()
+                .map(|(id, s)| (id, MaybeCompiled::ToCompile(s))),
+        );
         sprite
             .scripts
             .custom_blocks
@@ -282,10 +289,17 @@ impl ProjectBuilder {
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
+        self.compile(memory);
+
+        self.runtime.init();
+        self.runtime
+    }
+
+    fn compile(&mut self, memory: &[ScratchObject]) {
         let custom_block_analysis = self.analyze_custom_blocks();
 
         for script in &mut self.runtime.scripts.custom_blocks {
-            let CustomBlockFunc::ToCompile(scr) = &script.script else {
+            let MaybeCompiled::ToCompile(scr) = &script.script else {
                 continue;
             };
             let ScriptKind::CustomBlock { id, .. } = &scr.kind else {
@@ -327,12 +341,42 @@ impl ProjectBuilder {
                     .unwrap_or_default(),
             );
 
-            script.script = CustomBlockFunc::Compiled(thread);
+            script.script = MaybeCompiled::Compiled(thread);
             self.runtime.static_strings.extend(static_strings);
         }
 
-        self.runtime.init();
-        self.runtime
+        for (sprite_id, script) in &mut self.runtime.scripts.green_flags {
+            let MaybeCompiled::ToCompile(scr) = script else {
+                continue;
+            };
+            let ScriptKind::GreenFlag = &scr.kind else {
+                debug_assert!(
+                    false,
+                    "non-green flag script found in self.runtime.green_flags!"
+                );
+                continue;
+            };
+
+            let (thread, static_strings) = compile(
+                &scr.blocks,
+                memory,
+                *sprite_id,
+                0,
+                scr.kind.is_screen_refresh(),
+                &mut |id| {
+                    custom_block_analysis
+                        .get(&id)
+                        .map_or(Effects::unknown(), |n| n.0.clone())
+                },
+                // You can't safely tell what a variable's type will be
+                // before a green flag is run due to concurrent threads
+                &|_| VariableWrite::default(),
+                &[],
+            );
+
+            *script = MaybeCompiled::Compiled(thread);
+            self.runtime.static_strings.extend(static_strings);
+        }
     }
 
     pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
@@ -360,7 +404,12 @@ impl Runtime {
 
         let mut green_flags = Vec::new();
         std::mem::swap(&mut self.scripts.green_flags, &mut green_flags);
-        self.threads.extend(green_flags);
+        for flag in green_flags {
+            let MaybeCompiled::Compiled(script) = flag.1 else {
+                continue;
+            };
+            self.threads.push(script);
+        }
     }
 
     pub fn update(&mut self, state: &mut RunState) -> bool {
@@ -395,13 +444,13 @@ impl Runtime {
 
 #[derive(Default)]
 pub struct SpawnableScripts {
-    pub green_flags: Vec<ScratchThread>,
+    pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
     pub custom_blocks: Vec<CustomBlock>,
 }
 
 #[derive(Default)]
 pub struct Scripts {
-    pub green_flags: Vec<ScratchThread>,
+    pub green_flags: Vec<(SpriteId, Script)>,
     pub custom_blocks: GapVec<CustomBlock>,
 }
 
