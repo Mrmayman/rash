@@ -136,3 +136,56 @@ fn call_environment_merges_call_site_and_argument_types_independently() {
         &[VarTypeChecked::Number, VarTypeChecked::Object],
     );
 }
+
+#[test]
+fn call_environment_argument_types_are_not_polluted_by_parent_context() {
+    // A writes X, then calls B. B calls C with one Bool argument.
+    // C's argument_types should be exactly [Bool], not affected by
+    // the X write propagating through the call-site context.
+    let mut builder = project(vec![
+        custom_block(C, vec![]),
+        custom_block(B, vec![call_with_args(C, vec![true.into()])]),
+        custom_block(A, vec![set(X, 1.0), call_with_args(B, vec![1.0.into()])]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    // B's arg types come from A's call to B.
+    assert_arg_types(&analysis[&B].1, &[VarTypeChecked::Number]);
+    // C's arg types come from B's call to C. A's context must not leak in.
+    assert_arg_types(&analysis[&C].1, &[VarTypeChecked::Bool]);
+}
+
+#[test]
+fn call_environment_argument_types_merge_across_depths() {
+    // Two callers at different depths call C: A directly, and B (which
+    // is called by A). Their arg types must merge.
+    let mut builder = project(vec![
+        custom_block(C, vec![]),
+        custom_block(B, vec![call_with_args(C, vec!["from_b".into()])]),
+        custom_block(
+            A,
+            vec![
+                call_with_args(B, Vec::new()),
+                call_with_args(C, vec![1.0.into()]),
+            ],
+        ),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    // Number from A's direct call merges with String from B's call.
+    assert_arg_types(&analysis[&C].1, &[VarTypeChecked::Object]);
+}
+
+#[test]
+fn recursive_block_has_no_argument_types_recorded() {
+    let mut builder = project(vec![custom_block(
+        A,
+        vec![call_with_args(A, vec![1.0.into()])],
+    )]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(!analysis.contains_key(&A));
+}

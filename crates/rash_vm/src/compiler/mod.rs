@@ -277,64 +277,203 @@ impl ScratchBlock {
         }
     }
 
-    pub fn walk(&self, on_block: &mut impl FnMut(&ScratchBlock)) {
+    pub fn walk(&self, on_block: &mut impl FnMut(&ScratchBlock), walk_inputs: bool) {
         on_block(self);
         match self {
-            ScratchBlock::ControlIf(_, blocks)
-            | ScratchBlock::ControlRepeat(_, blocks)
-            | ScratchBlock::ControlRepeatUntil(_, blocks)
-            | ScratchBlock::ControlForever(blocks) => {
+            ScratchBlock::ControlIf(i, blocks)
+            | ScratchBlock::ControlRepeat(i, blocks)
+            | ScratchBlock::ControlRepeatUntil(i, blocks) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk(on_block, walk_inputs);
+                }
                 for block in blocks {
-                    block.walk(on_block);
+                    block.walk(on_block, walk_inputs);
                 }
             }
-            ScratchBlock::ControlIfElse(_, blocks1, blocks2) => {
+            ScratchBlock::ControlForever(blocks) => {
+                for block in blocks {
+                    block.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlIfElse(i, blocks1, blocks2) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk(on_block, walk_inputs);
+                }
                 for block in blocks1 {
-                    block.walk(on_block);
+                    block.walk(on_block, walk_inputs);
                 }
                 for block in blocks2 {
-                    block.walk(on_block);
+                    block.walk(on_block, walk_inputs);
                 }
             }
-            ScratchBlock::VarSet(_, _)
-            | ScratchBlock::VarChange(_, _)
-            | ScratchBlock::VarRead(_)
-            | ScratchBlock::OpAdd(_, _)
-            | ScratchBlock::OpSub(_, _)
-            | ScratchBlock::OpMul(_, _)
-            | ScratchBlock::OpDiv(_, _)
-            | ScratchBlock::OpRound(_)
-            | ScratchBlock::OpStrJoin(_, _)
-            | ScratchBlock::OpMod(_, _)
-            | ScratchBlock::OpStrLen(_)
-            | ScratchBlock::OpBAnd(_, _)
-            | ScratchBlock::OpBNot(_)
-            | ScratchBlock::OpBOr(_, _)
-            | ScratchBlock::OpMFloor(_)
-            | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpMSqrt(_)
-            | ScratchBlock::OpMSin(_)
-            | ScratchBlock::OpMCos(_)
-            | ScratchBlock::OpMTan(_)
-            | ScratchBlock::OpCmp(_, _, _)
-            | ScratchBlock::OpRandom(_, _)
-            | ScratchBlock::OpStrLetterOf(_, _)
-            | ScratchBlock::OpStrContains(_, _)
-            | ScratchBlock::ControlStopThisScript
+            ScratchBlock::VarSet(_, i)
+            | ScratchBlock::VarChange(_, i)
+            | ScratchBlock::Log(i)
+            | ScratchBlock::MotionChangeX(i)
+            | ScratchBlock::MotionChangeY(i)
+            | ScratchBlock::MotionSetX(i)
+            | ScratchBlock::MotionSetY(i)
+            | ScratchBlock::OpRound(i)
+            | ScratchBlock::OpMAbs(i)
+            | ScratchBlock::OpMSqrt(i)
+            | ScratchBlock::OpMSin(i)
+            | ScratchBlock::OpMCos(i)
+            | ScratchBlock::OpMTan(i)
+            | ScratchBlock::OpStrLen(i)
+            | ScratchBlock::OpMFloor(i)
+            | ScratchBlock::OpBNot(i) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::MotionGoToXY(a, b)
+            | ScratchBlock::OpAdd(a, b)
+            | ScratchBlock::OpSub(a, b)
+            | ScratchBlock::OpMul(a, b)
+            | ScratchBlock::OpDiv(a, b)
+            | ScratchBlock::OpStrJoin(a, b)
+            | ScratchBlock::OpMod(a, b)
+            | ScratchBlock::OpBAnd(a, b)
+            | ScratchBlock::OpBOr(a, b)
+            | ScratchBlock::OpCmp(a, b, _)
+            | ScratchBlock::OpRandom(a, b)
+            | ScratchBlock::OpStrLetterOf(a, b)
+            | ScratchBlock::OpStrContains(a, b) => {
+                if walk_inputs {
+                    if let Input::Block(b) = a {
+                        b.walk(on_block, walk_inputs);
+                    }
+                    if let Input::Block(b) = b {
+                        b.walk(on_block, walk_inputs);
+                    }
+                }
+            }
+
+            ScratchBlock::FunctionCallNoScreenRefresh(_, l)
+            | ScratchBlock::FunctionCallScreenRefresh(_, l) => {
+                if walk_inputs {
+                    for i in l {
+                        if let Input::Block(b) = i {
+                            b.walk(on_block, walk_inputs);
+                        }
+                    }
+                }
+            }
+
+            ScratchBlock::ControlStopThisScript
             | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::ScreenRefresh
-            | ScratchBlock::MotionGoToXY(_, _)
-            | ScratchBlock::MotionChangeX(_)
-            | ScratchBlock::MotionChangeY(_)
-            | ScratchBlock::MotionSetX(_)
-            | ScratchBlock::MotionSetY(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::LooksShown(_)
             | ScratchBlock::SensingDaysSince2000
-            | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
-            | ScratchBlock::FunctionCallScreenRefresh(_, _)
-            | ScratchBlock::Log(_) => {}
+            | ScratchBlock::VarRead(_) => {}
+        }
+    }
+
+    pub fn walk_mut(&mut self, on_block: &mut impl FnMut(&mut ScratchBlock), walk_inputs: bool) {
+        on_block(self);
+        match self {
+            ScratchBlock::ControlIf(i, blocks)
+            | ScratchBlock::ControlRepeat(i, blocks)
+            | ScratchBlock::ControlRepeatUntil(i, blocks) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk_mut(on_block, walk_inputs);
+                }
+                for block in blocks {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlForever(blocks) => {
+                for block in blocks {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlIfElse(i, blocks1, blocks2) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk_mut(on_block, walk_inputs);
+                }
+                for block in blocks1 {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+                for block in blocks2 {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::VarSet(_, i)
+            | ScratchBlock::VarChange(_, i)
+            | ScratchBlock::Log(i)
+            | ScratchBlock::MotionChangeX(i)
+            | ScratchBlock::MotionChangeY(i)
+            | ScratchBlock::MotionSetX(i)
+            | ScratchBlock::MotionSetY(i)
+            | ScratchBlock::OpRound(i)
+            | ScratchBlock::OpMAbs(i)
+            | ScratchBlock::OpMSqrt(i)
+            | ScratchBlock::OpMSin(i)
+            | ScratchBlock::OpMCos(i)
+            | ScratchBlock::OpMTan(i)
+            | ScratchBlock::OpStrLen(i)
+            | ScratchBlock::OpMFloor(i)
+            | ScratchBlock::OpBNot(i) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::MotionGoToXY(a, b)
+            | ScratchBlock::OpAdd(a, b)
+            | ScratchBlock::OpSub(a, b)
+            | ScratchBlock::OpMul(a, b)
+            | ScratchBlock::OpDiv(a, b)
+            | ScratchBlock::OpStrJoin(a, b)
+            | ScratchBlock::OpMod(a, b)
+            | ScratchBlock::OpBAnd(a, b)
+            | ScratchBlock::OpBOr(a, b)
+            | ScratchBlock::OpCmp(a, b, _)
+            | ScratchBlock::OpRandom(a, b)
+            | ScratchBlock::OpStrLetterOf(a, b)
+            | ScratchBlock::OpStrContains(a, b) => {
+                if walk_inputs {
+                    if let Input::Block(b) = a {
+                        b.walk_mut(on_block, walk_inputs);
+                    }
+                    if let Input::Block(b) = b {
+                        b.walk_mut(on_block, walk_inputs);
+                    }
+                }
+            }
+
+            ScratchBlock::FunctionCallNoScreenRefresh(_, l)
+            | ScratchBlock::FunctionCallScreenRefresh(_, l) => {
+                if walk_inputs {
+                    for i in l {
+                        if let Input::Block(b) = i {
+                            b.walk_mut(on_block, walk_inputs);
+                        }
+                    }
+                }
+            }
+
+            ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionGetArg(_)
+            | ScratchBlock::ScreenRefresh
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
+            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::VarRead(_) => {}
         }
     }
 }
@@ -362,6 +501,7 @@ pub struct Compiler<'compiler> {
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
     pub static_strings: Vec<SmolStr>,
+    /// See [`Compiler::vars_to_avoid_clobbering`] for more info.
     pub clobber_stack: HashSet<Ptr>,
     pub vars: Box<dyn VarStore>,
     pub jit_args: JitArgs,
