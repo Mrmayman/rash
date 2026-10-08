@@ -19,7 +19,7 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CallSiteInfo {
     pub call_site: Effects,
     pub argument_types: Vec<VariableWrite>,
@@ -29,6 +29,8 @@ impl CallSiteInfo {
     pub fn merge(&mut self, other: &Self, var_type: &dyn Fn(Ptr) -> VariableWrite) {
         self.call_site.merge(&other.call_site, var_type);
 
+        // This assumes both have same no. of arguments.
+        // If Scratch ever gets variadic arguments, something to look out for.
         for (slf, othr) in self
             .argument_types
             .iter_mut()
@@ -36,6 +38,11 @@ impl CallSiteInfo {
         {
             *slf = slf.merge(*othr);
         }
+    }
+
+    pub fn sequence(&mut self, effects: &Self, var_type: &dyn Fn(Ptr) -> VariableWrite) {
+        self.call_site.sequence(&effects.call_site, var_type);
+        self.argument_types = effects.argument_types.clone();
     }
 }
 
@@ -183,15 +190,18 @@ impl Effects {
         self.union_reads(other);
 
         for (ptr, write) in &other.writes {
-            if self
+            let write = if self
                 .writes
                 .get(ptr)
                 .is_some_and(|old| old.direct && !write.direct)
             {
-                // Can't downgrade a write!
-                continue;
-            }
-            self.writes.insert(*ptr, *write);
+                let mut w = *write;
+                w.direct = true; // Can't downgrade a write so upgrade it back
+                w
+            } else {
+                *write
+            };
+            self.writes.insert(*ptr, write);
         }
     }
 

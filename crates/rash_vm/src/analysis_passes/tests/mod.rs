@@ -211,43 +211,6 @@ fn called_block_has_multiple_callers() {
 }
 
 // ---------------------------------------------------------------------
-// Fixed-point / recursive call graph
-// Disabled due to lack of recursion support
-// ---------------------------------------------------------------------
-
-/*#[test]
-fn mutually_recursive_custom_blocks_converge() {
-    let mut builder = project(vec![
-        // A writes X and calls B.
-        custom_block(A, vec![set(X, 1.0), call(B)]),
-        // B writes Y and calls A.
-        custom_block(B, vec![set(Y, true), call(A)]),
-    ]);
-
-    let analysis = builder.analyze_custom_blocks();
-
-    // The analysis must reach a fixed point instead of looping forever.
-    assert_writes(
-        &analysis[&A].0,
-        &[(X, VarTypeChecked::Number), (Y, VarTypeChecked::Bool)],
-    );
-
-    assert_writes(
-        &analysis[&B].0,
-        &[(X, VarTypeChecked::Number), (Y, VarTypeChecked::Bool)],
-    );
-}*/
-
-/*#[test]
-fn self_recursive_custom_block_converges() {
-    let mut builder = project(vec![custom_block(A, vec![set(X, 1.0), call(A)])]);
-
-    let analysis = builder.analyze_custom_blocks();
-
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Number)]);
-}*/
-
-// ---------------------------------------------------------------------
 // Call environments
 // ---------------------------------------------------------------------
 
@@ -437,4 +400,177 @@ fn if_else_merges_distinct_writes_as_optional() {
         &analysis[&A].0,
         &[(X, VarTypeChecked::Object), (Y, VarTypeChecked::Object)],
     );
+}
+
+// --- in the "Call environments" section, after
+//     call_environment_represents_state_before_call ---
+
+#[test]
+fn call_environment_propagates_through_call_chain() {
+    // A: set X; call B   → state at B's call is {X: Number}
+    // B: set Y; call C   → state at C's call is {X: Number, Y: Bool}
+    let mut builder = project(vec![
+        custom_block(C, vec![]),
+        custom_block(B, vec![set(Y, true), call(C)]),
+        custom_block(A, vec![set(X, 1.0), call(B)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert_writes(&analysis[&B].1.call_site, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis[&C].1.call_site,
+        &[(X, VarTypeChecked::Number), (Y, VarTypeChecked::Bool)],
+    );
+}
+
+#[test]
+fn call_environment_propagates_through_deep_chain() {
+    // A -> B -> C -> D, each block writing one distinct variable
+    // before calling the next.
+    let d_id = CustomBlockId(3);
+    let mut builder = project(vec![
+        custom_block(d_id, vec![]),
+        custom_block(C, vec![set(Z, "hi"), call(d_id)]),
+        custom_block(B, vec![set(Y, true), call(C)]),
+        custom_block(A, vec![set(X, 1.0), call(B)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert_writes(
+        &analysis[&d_id].1.call_site,
+        &[
+            (X, VarTypeChecked::Number),
+            (Y, VarTypeChecked::Bool),
+            (Z, VarTypeChecked::String),
+        ],
+    );
+}
+
+#[test]
+fn call_environment_merges_branches_at_different_depths() {
+    // C is reached both directly from A (state {X:Number}) and
+    // indirectly via B (state {X:Number} again). Both contributions
+    // should merge without duplicating or losing X.
+    let mut builder = project(vec![
+        custom_block(C, vec![]),
+        custom_block(B, vec![call(C)]),
+        custom_block(A, vec![set(X, 1.0), call(B), call(C)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert_writes(&analysis[&C].1.call_site, &[(X, VarTypeChecked::Number)]);
+}
+
+#[test]
+fn cycle_member_call_site_is_unknown() {
+    // C is only ever called from A, which is part of a cycle and so
+    // is never analyzed. C itself is still analyzed, but no call-site
+    // contribution reaches it.
+    let mut builder = project(vec![
+        custom_block(A, vec![call(B), call(C)]),
+        custom_block(B, vec![call(A)]),
+        custom_block(C, vec![]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(analysis.contains_key(&C), "C should still be analyzed");
+    assert!(
+        analysis[&C].1.call_site.is_unknown,
+        "no valid call site reaches C, so its call_site must be unknown"
+    );
+}
+
+// --- Recursion / cycle bail-out ---
+// Replaces the commented-out "converges" tests. The analysis does NOT
+// resolve recursive blocks; it drops them from every output map.
+
+#[test]
+fn self_recursive_block_is_not_analyzed() {
+    let mut builder = project(vec![custom_block(A, vec![set(X, 1.0), call(A)])]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(
+        !analysis.contains_key(&A),
+        "self-recursive block should be absent"
+    );
+}
+
+#[test]
+fn mutually_recursive_blocks_are_not_analyzed() {
+    let mut builder = project(vec![
+        custom_block(A, vec![set(X, 1.0), call(B)]),
+        custom_block(B, vec![set(Y, true), call(A)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(!analysis.contains_key(&A));
+    assert!(!analysis.contains_key(&B));
+}
+
+#[test]
+fn caller_of_recursive_block_is_not_analyzed() {
+    // B calls A, but A is self-recursive, so B is stuck too.
+    let mut builder = project(vec![
+        custom_block(A, vec![call(A)]),
+        custom_block(B, vec![call(A)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(!analysis.contains_key(&A));
+    assert!(!analysis.contains_key(&B));
+}
+
+#[test]
+fn non_recursive_leaf_called_from_cycle_is_still_analyzed() {
+    // A <-> B is a cycle; A also calls leaf C.
+    // C's analyzability depends only on its own callees, so it must
+    // still resolve even though its caller doesn't.
+    let mut builder = project(vec![
+        custom_block(A, vec![call(B), call(C)]),
+        custom_block(B, vec![call(A)]),
+        custom_block(C, vec![set(X, 1.0)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(!analysis.contains_key(&A));
+    assert!(!analysis.contains_key(&B));
+    assert_writes(&analysis[&C].0, &[(X, VarTypeChecked::Number)]);
+}
+
+#[test]
+fn cycle_analysis_terminates_without_hanging() {
+    // Single SCC {A, B, C}. Nothing resolves; loop must exit on the
+    // first pass with no changes.
+    let mut builder = project(vec![
+        custom_block(A, vec![call(B)]),
+        custom_block(B, vec![call(C)]),
+        custom_block(C, vec![call(A), call(B)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(!analysis.contains_key(&A));
+    assert!(!analysis.contains_key(&B));
+    assert!(!analysis.contains_key(&C));
+}
+
+#[test]
+fn all_recursive_project_terminates_immediately() {
+    // Degenerate case: no block is analyzable at all.
+    let mut builder = project(vec![
+        custom_block(A, vec![call(B)]),
+        custom_block(B, vec![call(A)]),
+    ]);
+
+    let analysis = builder.analyze_custom_blocks();
+
+    assert!(analysis.is_empty());
 }
