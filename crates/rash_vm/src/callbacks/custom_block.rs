@@ -17,6 +17,7 @@ pub enum PauseStatus {
     Paused = 1,
 }
 
+/// Fast path, functions that don't pause (no screen refresh)
 pub unsafe extern "C" fn call_no_screen_refresh(
     arg_buffer: *mut ScratchObject,
     id: i64,
@@ -57,6 +58,8 @@ pub unsafe extern "C" fn call_no_screen_refresh(
     }
 }
 
+/// Slow path, functions that can pause (screen refresh)
+/// AKA sort-of coroutines.
 pub unsafe extern "C" fn call_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,

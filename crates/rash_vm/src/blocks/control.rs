@@ -41,28 +41,7 @@ impl Compiler<'_> {
         let effects = self.effects(blocks);
 
         // TODO: apply this optimization to repeat until and forever
-        let clobber: HashMap<Ptr, VariableWrite> = effects
-            .writes
-            .iter()
-            .filter(|n| !n.1.direct)
-            .filter(|n| !self.clobber_stack.contains(n.0))
-            .map(|n| {
-                (
-                    *n.0,
-                    VariableWrite {
-                        direct: true,
-                        ..*n.1
-                    },
-                )
-            })
-            .collect();
-        self.clobber_stack.extend(clobber.iter().map(|n| *n.0));
-        let clobber = Effects {
-            writes: clobber,
-            ..Effects::new()
-        };
-        self.vars
-            .save(builder, &mut self.constants, self.memory, &clobber);
+        let clobber = self.vars_to_avoid_clobbering(builder, &effects);
 
         let zero = self.constants.get_int(0, builder);
         let old_constants = self.constants.clone();
@@ -372,5 +351,89 @@ impl Compiler<'_> {
         self.vars = old_vars;
         self.vars.extend(final_params);
         self.constants = old_constants;
+    }
+
+    /// An example is worth a thousand words:
+    ///
+    /// ```txt
+    /// fn bar() {
+    ///     x += 1;
+    /// }
+    ///
+    /// fn foo() {
+    ///     x = 0;
+    ///     repeat 1000000 {
+    ///         bar();
+    ///     }
+    ///     print(x);
+    /// }
+    /// ```
+    ///
+    /// The compiler knows that bar may change x (indirectly),
+    /// and that foo cares about x's value.
+    ///
+    /// Naively, this means we have to make x's current value visible
+    /// to bar and reload it after every call:
+    ///
+    /// ```txt
+    /// x = 0;
+    /// repeat 1000000 {
+    ///     save_to_global_memory(x);
+    ///     bar();
+    ///     x = load_from_global_memory(x);
+    /// }
+    /// print(x)
+    /// ```
+    ///
+    /// However, foo does not need to observe x's updated value until
+    /// after the loop. We can therefore save x once before entering the
+    /// loop and reload it once after:
+    ///
+    /// ```txt
+    /// x = 0;
+    /// save_to_global_memory(x);
+    /// repeat 1000000 {
+    ///     bar();
+    /// }
+    /// x = load_from_global_memory(x);
+    /// print(x);
+    /// ```
+    ///
+    /// This lets us avoid repeatedly saving and reloading variables whose
+    /// values are only needed after the loop.
+    fn vars_to_avoid_clobbering(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        effects: &Effects,
+    ) -> Effects {
+        let clobber: HashMap<Ptr, VariableWrite> = effects
+            .writes
+            .iter()
+            // Only optimize *indirect* writes. If x is directly
+            // accessed by `bar` within the loop body, we have to
+            // keep it up-to-date for every iteration.
+            .filter(|(_, write)| !write.direct)
+            // Skip this optimization if we already applied it in a higher scope
+            .filter(|(ptr, _)| !self.clobber_stack.contains(ptr))
+            .map(|(ptr, write)| {
+                (
+                    *ptr,
+                    VariableWrite {
+                        direct: true,
+                        ..*write
+                    },
+                )
+            })
+            .collect();
+
+        self.clobber_stack.extend(clobber.keys().cloned());
+        let clobber = Effects {
+            writes: clobber,
+            ..Effects::new()
+        };
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &clobber);
+
+        clobber
     }
 }
