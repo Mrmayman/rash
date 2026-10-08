@@ -124,7 +124,7 @@ impl ScratchObject {
         let decimal = match self {
             ScratchObject::Number(n) => n.fract() != 0.0,
             ScratchObject::String(s) => s.contains('.'),
-            ScratchObject::Bool(_) => true,
+            ScratchObject::Bool(_) => false,
         };
         (self.convert_to_number(), decimal)
     }
@@ -300,7 +300,7 @@ pub fn number_to_string(num: f64) -> SmolStr {
 #[inline]
 #[must_use]
 pub fn string_to_number(string: &str) -> f64 {
-    let s = string.parse().unwrap_or({
+    let s = string.parse().unwrap_or_else(|_| {
         // Couldn't parse the string normally, so it must be typed strangely.
         // Checking some edge cases.
 
@@ -326,7 +326,7 @@ pub fn string_to_number(string: &str) -> f64 {
 fn convert_base_literal(string: &str, base: u32) -> f64 {
     let hex_number = string.get(2..).unwrap_or_default(); // Cuts off the "0x" or "0b"
     if hex_number.starts_with('+') || hex_number.starts_with('-') {
-        return 0.0;
+        return 0.0; // Real Scratch behaviour btw
     }
     f64::from(u32::from_str_radix(hex_number, base).unwrap_or_default())
 }
