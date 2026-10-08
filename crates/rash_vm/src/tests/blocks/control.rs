@@ -270,6 +270,7 @@ pub fn branch_if() {
 #[test]
 pub fn repeated_sum() {
     let memory = run_code(vec![
+        set_var(Ptr(7), 0.0),
         set_var(Ptr(7), fadd(Ptr(7), false)),
         c_repeat(
             100_000.0,

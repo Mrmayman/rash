@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use cranelift::{
     codegen::ir::BlockArg,
     prelude::{FunctionBuilder, InstBuilder, IntCC, Value, types::I64},
@@ -6,7 +8,7 @@ use cranelift::{
 use crate::{
     callbacks,
     compiler::{Compiler, ScratchBlock},
-    effects::{CheckEffects, Effects},
+    effects::{CheckEffects, Effects, VariableWrite},
     input_primitives::{Input, Ptr, ScratchValue},
     variable_storage::VariableSlot,
 };
@@ -17,7 +19,7 @@ impl Compiler<'_> {
             self.call_stack_pop(builder);
         }
 
-        self.vars.save(builder, &mut self.constants, self.memory);
+        self.save_vars(builder);
         let minus_one = self.constants.get_int(-1, builder);
         builder.ins().return_(&[minus_one]);
         let new_block = builder.create_block();
@@ -37,6 +39,9 @@ impl Compiler<'_> {
         }
 
         let effects = self.effects(blocks);
+
+        // TODO: apply this optimization to repeat until and forever
+        let clobber = self.vars_to_avoid_clobbering(builder, &effects);
 
         let zero = self.constants.get_int(0, builder);
         let old_constants = self.constants.clone();
@@ -115,6 +120,11 @@ impl Compiler<'_> {
         } else {
             self.constants = old_constants;
         }
+
+        self.clobber_stack
+            .retain(|n| !clobber.writes.contains_key(n));
+        self.vars
+            .reinit(builder, &mut self.constants, self.memory, &clobber);
     }
 
     pub fn control_forever(&mut self, builder: &mut FunctionBuilder<'_>, blocks: &[ScratchBlock]) {
@@ -122,14 +132,16 @@ impl Compiler<'_> {
         let end_block = builder.create_block();
 
         let effects = self.effects(blocks);
-
         let final_params = effects.generate_params(builder, loop_block, &*self.vars);
-
         let entry_params = self.generate_params(builder, &final_params);
 
         builder.ins().jump(loop_block, &entry_params);
         builder.switch_to_block(loop_block);
         self.vars.extend(final_params.clone());
+
+        if effects.yields {
+            self.constants.clear();
+        }
 
         for block in blocks {
             self.compile_block(block, builder);
@@ -142,9 +154,10 @@ impl Compiler<'_> {
 
     fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
         blocks.effects(
-            &mut |_| Effects::unknown(), // TODO: inter-function analysis
+            &mut self.custom_block_effects,
             &|v| self.vars.get_type(v),
             &mut |_| {}, // We don't care if it returns early
+            &mut |_, _| {},
         )
     }
 
@@ -154,7 +167,7 @@ impl Compiler<'_> {
             callbacks::repeat_stack::STACK_POP,
             &[I64],
             &[I64],
-            &[self.loop_stack_ptr],
+            &[self.jit_args.loop_stack_ptr],
         );
         builder.inst_results(inst)[0]
     }
@@ -165,7 +178,7 @@ impl Compiler<'_> {
             callbacks::repeat_stack::STACK_PUSH,
             &[I64, I64],
             &[],
-            &[self.loop_stack_ptr, incremented],
+            &[self.jit_args.loop_stack_ptr, incremented],
         );
     }
 
@@ -260,7 +273,7 @@ impl Compiler<'_> {
     ) {
         let effects = self
             .effects(then_blocks)
-            .or(self.effects(else_blocks), &|v| self.vars.get_type(v));
+            .or(&self.effects(else_blocks), &|v| self.vars.get_type(v));
 
         let then_block = builder.create_block();
         let else_block = builder.create_block();
@@ -338,5 +351,89 @@ impl Compiler<'_> {
         self.vars = old_vars;
         self.vars.extend(final_params);
         self.constants = old_constants;
+    }
+
+    /// An example is worth a thousand words:
+    ///
+    /// ```txt
+    /// fn bar() {
+    ///     x += 1;
+    /// }
+    ///
+    /// fn foo() {
+    ///     x = 0;
+    ///     repeat 1000000 {
+    ///         bar();
+    ///     }
+    ///     print(x);
+    /// }
+    /// ```
+    ///
+    /// The compiler knows that bar may change x (indirectly),
+    /// and that foo cares about x's value.
+    ///
+    /// Naively, this means we have to make x's current value visible
+    /// to bar and reload it after every call:
+    ///
+    /// ```txt
+    /// x = 0;
+    /// repeat 1000000 {
+    ///     save_to_global_memory(x);
+    ///     bar();
+    ///     x = load_from_global_memory(x);
+    /// }
+    /// print(x)
+    /// ```
+    ///
+    /// However, foo does not need to observe x's updated value until
+    /// after the loop. We can therefore save x once before entering the
+    /// loop and reload it once after:
+    ///
+    /// ```txt
+    /// x = 0;
+    /// save_to_global_memory(x);
+    /// repeat 1000000 {
+    ///     bar();
+    /// }
+    /// x = load_from_global_memory(x);
+    /// print(x);
+    /// ```
+    ///
+    /// This lets us avoid repeatedly saving and reloading variables whose
+    /// values are only needed after the loop.
+    fn vars_to_avoid_clobbering(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        effects: &Effects,
+    ) -> Effects {
+        let clobber: HashMap<Ptr, VariableWrite> = effects
+            .writes
+            .iter()
+            // Only optimize *indirect* writes. If x is directly
+            // accessed by `bar` within the loop body, we have to
+            // keep it up-to-date for every iteration.
+            .filter(|(_, write)| !write.direct)
+            // Skip this optimization if we already applied it in a higher scope
+            .filter(|(ptr, _)| !self.clobber_stack.contains(ptr))
+            .map(|(ptr, write)| {
+                (
+                    *ptr,
+                    VariableWrite {
+                        direct: true,
+                        ..*write
+                    },
+                )
+            })
+            .collect();
+
+        self.clobber_stack.extend(clobber.keys().cloned());
+        let clobber = Effects {
+            writes: clobber,
+            ..Effects::new()
+        };
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &clobber);
+
+        clobber
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     ScratchObject,
     constant_set::ConstantMap,
     data_types::ID_STRING,
-    effects::VariableWrite,
+    effects::{Effects, VariableWrite},
     input_primitives::{Ptr, ScratchValue},
 };
 
@@ -41,6 +41,7 @@ pub trait VarStore {
         builder: &mut FunctionBuilder,
         constants: &mut ConstantMap,
         memory: &[ScratchObject],
+        effects: &Effects,
     );
 
     fn reinit(
@@ -48,6 +49,7 @@ pub trait VarStore {
         builder: &mut FunctionBuilder,
         constants: &mut ConstantMap,
         memory: &[ScratchObject],
+        effects: &Effects,
     );
 
     fn store_f64(

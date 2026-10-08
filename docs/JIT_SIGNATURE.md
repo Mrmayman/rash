@@ -16,7 +16,9 @@ Terminology:
 
 This terminology may not match scratch-specific terms, I'm using clearer ones.
 
-Any function can indirectly inherit warp-ness (non-yielding) when called by a warp function.
+Any function, including yielding ones, become warp (inherited)
+when called by a warp function.
+
 # Safety
 
 > Note: When I talk about safety here, I'm talking about memory safety, not logical/semantical correctness.
@@ -43,7 +45,7 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 - **WARNING:** If the Custom Block requires arguments, this *must* be valid and have the right number of elements. There is no bounds checking for performance reasons.
   - If the Custom Block doesn't require arguments, it doesn't matter what you pass here, though.
 
-## `*const Scripts`
+## `*const SpawnableScripts`
 - Compiled functions ready to be spawned/executed.
 - This is used for "spawning" Custom Blocks to be called, ie. getting a handle to another JIT function to be called from a JIT function.
 - Can be `null` if you aren't calling any Custom Blocks.
@@ -52,13 +54,15 @@ The execution state to resume from. Pass [`JumpId::default`] to start from begin
 - Access to any sprite-specific data and global miscellaneous state, especially for things like graphics.
 - Can be `null` if this function doesn't do any graphical or audio operations.
 
-## `bool`
-- Is yielding enabled (pausable)? (1 or 0)
-- (Also known as "Screen Refresh" in Scratch)
-- Default `1`. Opt in to false (`0`) for better performance if you know the functions won't yield.
-- This is used for propagating non-yielding behavior through a long chain of calls (see top of this doc, "Execution model").
+## `u8`
 
-## `*mut Option<ScratchThread>`
+- Allow yielding? (1 or 0, also known as "Screen Refresh" in Scratch)
+- Disabling gives better performance
+
+This is used for propagating warp behavior through a long chain of calls.
+See top of this doc, "Execution model".
+
+## `*mut Option<Box<ScratchThread>>`
 - Place to store the state of any child function that is called by the parent.
 - Let's say we have a function `foo()` that calls `bar()`. If `bar()` yields while called by `foo()`, then `foo()` stores `bar()`'s [`ScratchThread`] inside this `Option` (`None` by default), before pausing itself. Then, on resume it recursively walks down this linked list of `ScratchThread`s until it finds the final element, the function to first resume.
 - Can be `null` if this function doesn't yield or doesn't call anything that yields.

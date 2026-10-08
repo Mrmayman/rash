@@ -2,6 +2,19 @@ use std::cmp::Ordering;
 
 use crate::{compiler::ScratchBlock, input_primitives::Input};
 
+fn pad(indent: usize) -> String {
+    " ".repeat(indent * 4)
+}
+
+fn body(blocks: &[ScratchBlock], indent: usize) -> String {
+    let mut out = String::new();
+    for block in blocks {
+        out.push_str(&block.format(indent + 1));
+        out.push('\n');
+    }
+    out
+}
+
 impl ScratchBlock {
     #[must_use]
     pub fn format(&self, indent: usize) -> String {
@@ -38,94 +51,38 @@ impl ScratchBlock {
                 func_call_inner("str.contains", &[input, input1])
             }
             ScratchBlock::Log(input) => func_call_inner("log", &[input]),
-            ScratchBlock::ControlIf(input, vec) => {
-                let mut out = format!("if {} {{\n", input.format(0));
-                for block in vec {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push('}');
-
-                out
+            ScratchBlock::ControlIf(cond, blocks) => format!(
+                "if {} {{\n{}{}}}",
+                cond.format(0),
+                body(blocks, indent),
+                pad(indent),
+            ),
+            ScratchBlock::ControlIfElse(cond, then_, else_) => format!(
+                "if {} {{\n{}{}}} else {{\n{}{}}}",
+                cond.format(0),
+                body(then_, indent),
+                pad(indent),
+                body(else_, indent),
+                pad(indent),
+            ),
+            ScratchBlock::ControlRepeat(times, blocks) => format!(
+                "repeat {} {{\n{}{}}}",
+                times.format(0),
+                body(blocks, indent),
+                pad(indent),
+            ),
+            ScratchBlock::ControlForever(blocks) => {
+                format!("forever {{\n{}{}}}", body(blocks, indent), pad(indent))
             }
-            ScratchBlock::ControlIfElse(input, vec, vec1) => {
-                let mut out = format!("if {} {{\n", input.format(0));
-                for block in vec {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push_str("} else {\n");
-                for block in vec1 {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push('}');
-
-                out
-            }
-            ScratchBlock::ControlRepeat(input, vec) => {
-                let mut out = format!("repeat {} {{\n", input.format(0));
-                for block in vec {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push('}');
-
-                out
-            }
-            ScratchBlock::ControlForever(vec) => {
-                let mut out = "forever {\n".to_owned();
-                for block in vec {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push('}');
-
-                out
-            }
-            ScratchBlock::ControlRepeatUntil(input, vec) => {
-                let mut out = format!("repeat until {} {{\n", input.format(0));
-                for block in vec {
-                    out.push_str(&block.format(indent + 1));
-                    out.push('\n');
-                }
-                out.push_str(&" ".repeat(indent * 4));
-                out.push('}');
-
-                out
-            }
+            ScratchBlock::ControlRepeatUntil(cond, blocks) => format!(
+                "repeat until {} {{\n{}{}}}",
+                cond.format(0),
+                body(blocks, indent),
+                pad(indent),
+            ),
             ScratchBlock::ControlStopThisScript => "return".to_owned(),
-            ScratchBlock::FunctionCallNoScreenRefresh(custom_block_id, vec) => {
-                let mut out = format!("call ({})(", custom_block_id.0);
-                let len = vec.len();
-                for (i, arg) in vec.iter().enumerate() {
-                    out.push_str(&arg.format(0));
-                    if i < len - 1 {
-                        out.push_str(", ");
-                    }
-                }
-                out.push(')');
-
-                out
-            }
-            ScratchBlock::FunctionCallScreenRefresh(custom_block_id, vec) => {
-                let mut out = format!("call ({})(", custom_block_id.0);
-                let len = vec.len();
-                for (i, arg) in vec.iter().enumerate() {
-                    out.push_str(&arg.format(0));
-                    if i < len - 1 {
-                        out.push_str(", ");
-                    }
-                }
-                out.push_str(").await");
-
-                out
-            }
+            ScratchBlock::FunctionCallNoScreenRefresh(id, args) => format_call(id.0, args, false),
+            ScratchBlock::FunctionCallScreenRefresh(id, args) => format_call(id.0, args, true),
             ScratchBlock::FunctionGetArg(idx) => {
                 format!("get_arg({idx})")
             }
@@ -133,10 +90,10 @@ impl ScratchBlock {
             ScratchBlock::MotionGoToXY(input, input1) => {
                 func_call_inner("motion.go_to_xy", &[input, input1])
             }
-            ScratchBlock::MotionChangeX(input) => func_call_inner("motion.x += ", &[input]),
-            ScratchBlock::MotionChangeY(input) => func_call_inner("motion.y += ", &[input]),
-            ScratchBlock::MotionSetX(input) => func_call_inner("motion.x = ", &[input]),
-            ScratchBlock::MotionSetY(input) => func_call_inner("motion.y = ", &[input]),
+            ScratchBlock::MotionChangeX(input) => format!("motion.x += {}", input.format(0)),
+            ScratchBlock::MotionChangeY(input) => format!("motion.y += {}", input.format(0)),
+            ScratchBlock::MotionSetX(input) => format!("motion.x = {}", input.format(0)),
+            ScratchBlock::MotionSetY(input) => format!("motion.y = {}", input.format(0)),
             ScratchBlock::MotionGetX => "motion.x".to_owned(),
             ScratchBlock::MotionGetY => "motion.y".to_owned(),
             ScratchBlock::LooksShown(show) => if *show {
@@ -149,6 +106,22 @@ impl ScratchBlock {
 
         format!("{}{out}", " ".repeat(indent * 4))
     }
+}
+
+fn format_call(id: usize, args: &[Input], await_: bool) -> String {
+    let mut out = format!("call ({id})(");
+    let len = args.len();
+    for (i, arg) in args.iter().enumerate() {
+        out.push_str(&arg.format(0));
+        if i < len - 1 {
+            out.push_str(", ");
+        }
+    }
+    out.push(')');
+    if await_ {
+        out.push_str(".await");
+    }
+    out
 }
 
 fn func_call_inner(name: &str, inputs: &[&Input]) -> String {

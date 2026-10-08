@@ -29,14 +29,15 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
         }
     }
 
-    let memory = MEMORY.lock().unwrap();
     let mut builder = ProjectBuilder::new();
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
 
     for script in scripts {
-        sprite1.add_script(script, &memory);
+        sprite1.add_script(script);
     }
     builder.add_sprite(sprite1);
+
+    let memory = MEMORY.lock().unwrap();
     let mut runtime = builder.build(&memory);
 
     let mut num_ticks = 1;
@@ -124,10 +125,10 @@ fn warp_custom_block_does_not_refresh() {
                 CustomBlockId(0),
                 true, // warp
             ),
-            Script::new_green_flag(vec![ScratchBlock::FunctionCallScreenRefresh(
-                CustomBlockId(0),
-                vec![],
-            )]),
+            Script::new_green_flag(vec![
+                set(X, 0.0),
+                ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), vec![]),
+            ]),
         ],
         |m| assert_eq!(m[0].convert_to_number(), 2.0),
         2,

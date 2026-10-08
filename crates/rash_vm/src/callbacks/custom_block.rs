@@ -1,6 +1,6 @@
 use crate::{
     data_types::ScratchObject,
-    runtime::{CustomBlockFunc, CustomBlockId, ScratchThread, Scripts},
+    runtime::{CustomBlockId, JumpId, MaybeCompiled, ScratchThread, SpawnableScripts},
 };
 use rash_core::RunState;
 
@@ -17,10 +17,11 @@ pub enum PauseStatus {
     Paused = 1,
 }
 
+/// Fast path, functions that don't pause (no screen refresh)
 pub unsafe extern "C" fn call_no_screen_refresh(
-    arg_buffer: *const ScratchObject,
+    arg_buffer: *mut ScratchObject,
     id: i64,
-    scripts: *const Scripts,
+    scripts: *const SpawnableScripts,
     graphics: *mut RunState,
 ) {
     debug_assert!(!arg_buffer.is_null());
@@ -30,26 +31,41 @@ pub unsafe extern "C" fn call_no_screen_refresh(
     // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
-    let Some(script) = scripts.custom_blocks.get(&id) else {
+    let Some(script) = scripts.custom_blocks.get(id.0) else {
         panic!("No custom block found with id {}", id.0)
     };
 
-    let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
-
-    let CustomBlockFunc::Compiled(script) = &script.script else {
+    let MaybeCompiled::Compiled(s) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
     };
 
-    let mut script = script.spawn(false, args);
-    while !unsafe { script.tick(scripts, &mut *graphics) } {}
+    let result = unsafe {
+        (s.func)(
+            JumpId::default(),
+            std::ptr::null_mut(),
+            arg_buffer,
+            scripts,
+            graphics,
+            0,
+            std::ptr::null_mut(),
+        )
+    };
+    debug_assert!(result.is_done());
+
+    for offset in 0..script.num_args {
+        let arg = unsafe { arg_buffer.add(offset) };
+        unsafe { std::ptr::drop_in_place(arg) };
+    }
 }
 
+/// Slow path, functions that can pause (screen refresh)
+/// AKA sort-of coroutines.
 pub unsafe extern "C" fn call_screen_refresh(
     arg_buffer: *const ScratchObject,
     id: i64,
-    scripts: *const Scripts,
+    scripts: *const SpawnableScripts,
     graphics: *mut RunState,
-    child_thread: *mut Option<ScratchThread>,
+    child_thread: *mut Option<Box<ScratchThread>>,
     parent_is_screen_refresh: bool,
 ) -> PauseStatus {
     debug_assert!(!arg_buffer.is_null());
@@ -63,7 +79,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
-    let Some(script) = scripts.custom_blocks.get(&id) else {
+    let Some(script) = scripts.custom_blocks.get(id.0) else {
         panic!("No custom block found with id {}", id.0)
     };
 
@@ -71,7 +87,7 @@ pub unsafe extern "C" fn call_screen_refresh(
 
     let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
 
-    let CustomBlockFunc::Compiled(script) = &script.script else {
+    let MaybeCompiled::Compiled(script) = &script.script else {
         panic!("Custom block {} hasn't been compiled yet", id.0)
     };
     let mut script = script.spawn(is_screen_refresh, args);
@@ -79,10 +95,9 @@ pub unsafe extern "C" fn call_screen_refresh(
     if is_screen_refresh {
         let ended = unsafe { script.tick(scripts, &mut *graphics) };
 
-        // The child thread has paused
+        // Child thread paused; save execution context so we can resume it later
         if !ended {
-            // Save the execution context for later resuming it
-            unsafe { *child_thread = Some(script) }
+            unsafe { *child_thread = Some(Box::new(script)) }
             return PauseStatus::Paused;
         }
     } else {

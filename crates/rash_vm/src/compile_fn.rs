@@ -6,7 +6,8 @@ use cranelift::{
         binemit::Reloc,
         control::ControlPlane,
         ir::{
-            ExternalName, Function, LibCall, StackSlotData, StackSlotKind, UserFuncName, types::I8,
+            ExternalName, Function, StackSlotData, StackSlotKind, UserFuncName,
+            types::{F64, I8},
         },
     },
     prelude::{
@@ -20,19 +21,32 @@ use cranelift::{
 use smol_str::SmolStr;
 
 use crate::{
+    Ptr,
     callbacks::{self, declare_callbacks},
-    compiler::{Compiler, FuncMap, ScratchBlock},
+    compiler::{Compiler, FuncMap, FunctionArg, ScratchBlock, VarTypeChecked},
     data_types::ScratchObject,
-    runtime::ScratchThread,
+    effects::{Effects, VariableWrite},
+    input_primitives::ScratchValue,
+    jit_func::JitArgs,
+    runtime::{CustomBlockId, ScratchThread},
 };
 use rash_core::SpriteId;
 
+/// Compiles a Scratch script into a `ScratchThread` that can be executed.
+///
+/// Also returns a list of strings to be dropped alongside the machine code.
+///
+/// Note that the last 3 arguments are optional extras, to provide
+/// the compiler with more info for optimizations.
 pub fn compile(
     script: &[ScratchBlock],
     memory: &[ScratchObject],
     id: SpriteId,
     num_args: usize,
-    is_screen_refresh: bool,
+    is_inherently_pausable: bool,
+    custom_block_effects: &mut dyn FnMut(CustomBlockId) -> Effects,
+    external_env: &dyn Fn(Ptr) -> VariableWrite,
+    arg_types: &[VariableWrite],
 ) -> (ScratchThread, Vec<SmolStr>) {
     println!();
     for block in script {
@@ -50,70 +64,35 @@ pub fn compile(
     let jmp1_block = builder.create_block();
     builder.append_block_param(jmp1_block, I64);
 
-    let jmp2_block = builder.create_block();
-    builder.append_block_params_for_function_params(jmp2_block);
-    builder.switch_to_block(jmp2_block);
+    let jit_args = get_call_args(&mut builder);
+    let jit_args = JitArgs::new(jit_args);
 
-    let fn_args = builder.block_params(jmp2_block);
-    let jump_id = fn_args[0];
-
-    let repeat_stack_ptr = fn_args[1];
-    let args_ptr = fn_args[2];
-    let script_ptr = fn_args[3];
-    let graphics_ptr = fn_args[4];
-
-    let child_thread_ptr = fn_args[6];
-
-    // For a function to be screen-refresh capable
-    // (pausable), it must both inherently be screen refresh
-    // AND must be called by a screen refresh function.
-    //
-    // If a pausable function is called by a non-pausable
-    // function then it will run as non-pausable.
-    let is_called_as_refresh = if is_screen_refresh {
-        fn_args[5]
-    } else {
-        builder.ins().iconst(I8, 0)
-    };
-
-    let mut args_list = Vec::new();
-    for _ in 0..num_args {
-        let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, 0);
-        let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
-        let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
-        let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
-
-        args_list.push([i1, i2, i3, i4]);
-    }
+    let args_list = fetch_function_arguments(num_args, arg_types, &mut builder, jit_args.args_ptr);
 
     let temp_slot4 = create_main_slot(&mut builder);
-    builder.ins().jump(jmp1_block, &[jump_id.into()]);
+    builder.ins().jump(jmp1_block, &[jit_args.jump_id.into()]);
 
     let mut compiler = Compiler::new(
         false,
         &mut builder,
         script,
         memory,
-        repeat_stack_ptr,
-        script_ptr,
-        graphics_ptr,
+        jit_args,
         args_list,
         id,
-        is_screen_refresh,
-        is_called_as_refresh,
-        child_thread_ptr,
+        is_inherently_pausable,
         temp_slot4,
         func_map,
         call_conv,
+        custom_block_effects,
+        external_env,
     );
 
     for block in script {
         compiler.compile_block(block, &mut builder);
     }
 
-    compiler
-        .vars
-        .save(&mut builder, &mut compiler.constants, compiler.memory);
+    compiler.save_vars(&mut builder);
 
     let return_value = builder.ins().iconst(I64, -1);
     builder.ins().return_(&[return_value]);
@@ -133,10 +112,61 @@ pub fn compile(
             &compiler.func_store.func_map,
             &isa,
             id,
-            compiler.is_screen_refresh,
+            compiler.is_inherently_pausable,
         ),
         compiler.static_strings,
     )
+}
+
+fn get_call_args<'a>(builder: &'a mut FunctionBuilder<'_>) -> &'a [cranelift::prelude::Value] {
+    let jmp2_block = builder.create_block();
+    builder.append_block_params_for_function_params(jmp2_block);
+    builder.switch_to_block(jmp2_block);
+    builder.block_params(jmp2_block)
+}
+
+/// Fetches the actual Scratch value arguments.
+///
+/// Not to be confused with [`get_call_args`] which gets the JIT ABI
+/// *internal* arguments.
+fn fetch_function_arguments(
+    num_args: usize,
+    arg_types: &[VariableWrite],
+    builder: &mut FunctionBuilder<'_>,
+    args_ptr: cranelift::prelude::Value,
+) -> Vec<FunctionArg> {
+    let mut args_list = Vec::new();
+    for i in 0..num_args {
+        let datatype = arg_types.get(i).copied().unwrap_or_default();
+
+        let val = match datatype.ty {
+            VarTypeChecked::Number => {
+                ScratchValue::Num(builder.ins().load(F64, MemFlags::new(), args_ptr, 8))
+            }
+            VarTypeChecked::Bool => {
+                ScratchValue::Bool(builder.ins().load(I64, MemFlags::new(), args_ptr, 8))
+            }
+            VarTypeChecked::String => {
+                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
+                ScratchValue::String([i2, i3, i4])
+            }
+            VarTypeChecked::Object => {
+                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, 0);
+                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
+                ScratchValue::Object([i1, i2, i3, i4])
+            }
+        };
+
+        args_list.push(FunctionArg {
+            val,
+            skip_nan: datatype.skip_nan,
+        });
+    }
+    args_list
 }
 
 pub fn create_main_slot(
@@ -206,10 +236,10 @@ fn create_function(isa: &dyn TargetIsa) -> (Function, CallConv) {
     sig.params.push(AbiParam::new(I64)); // Jump ID
     sig.params.push(AbiParam::new(I64)); // Repeat Stack
     sig.params.push(AbiParam::new(I64)); // Args pointer
-    sig.params.push(AbiParam::new(I64)); // Scripts
+    sig.params.push(AbiParam::new(I64)); // SpawnableScripts
     sig.params.push(AbiParam::new(I64)); // RunState
     sig.params.push(AbiParam::new(I8)); // Is Screen Refresh?
-    sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<ScratchThread>)
+    sig.params.push(AbiParam::new(I64)); // Child Thread (*mut Option<Box<ScratchThread>>)
     sig.returns.push(AbiParam::new(I64));
     (
         Function::with_name_signature(UserFuncName::default(), sig),
@@ -226,10 +256,7 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
             continue;
         };
         let target_addr: usize = match target_name {
-            ExternalName::LibCall(LibCall::FloorF64) => callbacks::op::floor as *const () as usize,
-            ExternalName::LibCall(other) => {
-                panic!("unhandled libcall: {other:?}")
-            }
+            ExternalName::LibCall(libcall) => resolve_libcall(*libcall),
             ExternalName::User(name_ref) => {
                 let name = func_map.get_by_left(name_ref).unwrap();
                 let funcs = &callbacks::FUNCS;
@@ -305,4 +332,59 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
             eprintln!("WARNING: Failed to clear_cache");
         }
     };
+}
+
+/// Maps a Cranelift [`LibCall`] to the address of our Rust implementation.
+///
+/// Cranelift emits these when the target ISA doesn't have a native
+/// instruction for the operation. The full list of variants lives in
+/// `cranelift_codegen::ir::LibCall`; we handle every variant that can
+/// realistically be emitted by our IR.
+///
+/// Variants that are impossible for our compiler to produce (TLS,
+/// stack probing, etc.) still panic with a clear message rather than
+/// silently miscompiling.
+fn resolve_libcall(libcall: cranelift::codegen::ir::LibCall) -> usize {
+    use cranelift::codegen::ir::LibCall;
+
+    match libcall {
+        // ── float rounding (f32) ────────────────────────────────
+        LibCall::CeilF32 => callbacks::op::ceil_f32 as *const () as usize,
+        LibCall::FloorF32 => callbacks::op::floor_f32 as *const () as usize,
+        LibCall::TruncF32 => callbacks::op::trunc_f32 as *const () as usize,
+        LibCall::NearestF32 => callbacks::op::nearest_f32 as *const () as usize,
+
+        // ── float rounding (f64) ────────────────────────────────
+        LibCall::CeilF64 => callbacks::op::ceil as *const () as usize,
+        LibCall::FloorF64 => callbacks::op::floor as *const () as usize, // existing
+        LibCall::TruncF64 => callbacks::op::trunc as *const () as usize,
+        LibCall::NearestF64 => callbacks::op::nearest as *const () as usize,
+
+        // ── fused multiply-add ──────────────────────────────────
+        LibCall::FmaF32 => callbacks::op::fma_f32 as *const () as usize,
+        LibCall::FmaF64 => callbacks::op::fma as *const () as usize,
+
+        // ── libc memory routines ────────────────────────────────
+        // These are emitted for bulk memory ops (e.g. large memcpy
+        // lowering). Our IR doesn't produce them today, but if a
+        // future optimisation pass does, these libc symbols are
+        // already linked into the process.
+        LibCall::Memcpy => libc::memcpy as *const () as usize,
+        LibCall::Memset => libc::memset as *const () as usize,
+        LibCall::Memmove => libc::memmove as *const () as usize,
+        LibCall::Memcmp => libc::memcmp as *const () as usize,
+
+        // ── things we should never emit ─────────────────────────
+        LibCall::Probestack => panic!(
+            "Probestack libcall emitted — enable_probestack should be disabled \
+             or the stack size limit raised"
+        ),
+        LibCall::ElfTlsGetAddr | LibCall::ElfTlsGetOffset => {
+            panic!("TLS libcall emitted — we don't support thread-local storage")
+        }
+        LibCall::X86Pshufb => panic!(
+            "X86Pshufb libcall emitted — enable SSSE3 in the target ISA flags \
+             or avoid byte-shuffle SIMD ops"
+        ),
+    }
 }

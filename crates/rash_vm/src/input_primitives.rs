@@ -1,5 +1,5 @@
 use cranelift::{
-    codegen::ir::MemFlags,
+    codegen::ir::{MemFlags, condcodes::IntCC},
     prelude::{
         FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
         types::{F64, I64},
@@ -9,7 +9,7 @@ use smol_str::SmolStr;
 
 use crate::{
     callbacks,
-    compiler::{Compiler, ScratchBlock, VarTypeChecked},
+    compiler::{Compiler, FunctionArg, ScratchBlock, VarTypeChecked},
     config::ARITHMETIC_NAN_CHECK,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
@@ -21,7 +21,7 @@ pub struct Ptr(pub usize);
 
 impl std::fmt::Debug for Ptr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "*({})", self.0)
+        write!(f, "var{}", self.0)
     }
 }
 
@@ -52,7 +52,7 @@ impl Ptr {
 ///     ScratchBlock::OpAdd(5.0.into(), 3.0.into()).into()
 /// );
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Input {
     Obj(ScratchObject),
     Block(Box<ScratchBlock>),
@@ -117,10 +117,21 @@ impl From<Ptr> for Input {
 }
 
 impl Input {
-    pub(crate) fn could_be_nan(&self, vartype: impl FnMut(Ptr) -> VariableWrite) -> bool {
+    pub(crate) fn could_be_nan(
+        &self,
+        vartype: impl FnMut(Ptr) -> VariableWrite,
+        args_list: &[FunctionArg],
+    ) -> bool {
         match self {
             Input::Obj(obj) => obj.convert_to_number().is_nan(),
-            Input::Block(block) => block.return_type(vartype).is_none_or(|n| !n.skip_nan),
+            Input::Block(block) => {
+                if let ScratchBlock::FunctionGetArg(idx) = **block
+                    && let Some(arg) = args_list.get(idx)
+                {
+                    return !arg.skip_nan;
+                }
+                block.return_type(vartype).is_none_or(|n| !n.skip_nan)
+            }
         }
     }
 
@@ -194,7 +205,9 @@ impl Input {
         builder: &mut FunctionBuilder<'_>,
         num: &mut Value,
     ) {
-        if ARITHMETIC_NAN_CHECK && self.could_be_nan(|ptr| compiler.vars.get_type(ptr)) {
+        if ARITHMETIC_NAN_CHECK
+            && self.could_be_nan(|ptr| compiler.vars.get_type(ptr), &compiler.args_list)
+        {
             let is_not_nan = builder.ins().fcmp(FloatCC::Ordered, *num, *num);
             let zero_value = compiler.constants.get_float(0.0, builder);
             *num = builder.ins().select(is_not_nan, *num, zero_value);
@@ -269,34 +282,37 @@ impl Input {
             Input::Obj(scratch_object) => {
                 // Transmute to [i64; 4]
                 let scratch_object = scratch_object.clone();
-                let is_string = matches!(scratch_object, ScratchObject::String(_));
-                let [i1, i2, i3, i4] =
+                let is_str = scratch_object.is_heap_allocated();
+
+                let [i_id, i2, i3, i4] =
                     unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
-                if is_string {
+
+                let v_id = compiler.constants.get_int(i_id, builder);
+                let v2 = compiler.constants.get_int(i2, builder);
+                let v3 = compiler.constants.get_int(i3, builder);
+                let v4 = compiler.constants.get_int(i4, builder);
+
+                if is_str {
                     compiler
                         .static_strings
                         .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
+
+                    compiler.call_function(
+                        builder,
+                        callbacks::types::CLONE_STR,
+                        &[I64, I64, I64, I64],
+                        &[],
+                        &[v2, v3, v4, compiler.temp_slot4.0],
+                    );
+
+                    let o2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                    let o3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                    let o4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+
+                    [v_id, o2, o3, o4]
+                } else {
+                    [v_id, v2, v3, v4]
                 }
-
-                let i1 = compiler.constants.get_int(i1, builder);
-                let i2 = compiler.constants.get_int(i2, builder);
-                let i3 = compiler.constants.get_int(i3, builder);
-                let i4 = compiler.constants.get_int(i4, builder);
-
-                compiler.call_function(
-                    builder,
-                    callbacks::types::CLONE_OBJ,
-                    &[I64, I64, I64, I64, I64],
-                    &[],
-                    &[i1, i2, i3, i4, compiler.temp_slot4.0],
-                );
-
-                let o1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
-                let o2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
-                let o3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
-                let o4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
-
-                [o1, o2, o3, o4]
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
@@ -307,7 +323,7 @@ impl Input {
                         [i1, i2, i3, i4]
                     }
                     ScratchValue::Num(value) => {
-                        let id = builder.ins().iconst(I64, ID_NUMBER);
+                        let id = compiler.constants.get_int(ID_NUMBER, builder);
                         let zero = compiler.constants.get_int(0, builder);
                         let value = builder.ins().bitcast(
                             I64,
@@ -317,7 +333,7 @@ impl Input {
                         [id, value, zero, zero]
                     }
                     ScratchValue::Bool(value) => {
-                        let id = builder.ins().iconst(I64, ID_BOOL);
+                        let id = compiler.constants.get_int(ID_BOOL, builder);
                         let zero = compiler.constants.get_int(0, builder);
                         [id, value, zero, zero]
                     }
@@ -363,6 +379,7 @@ impl Input {
             Input::Obj(o) => VariableWrite {
                 ty: Some(o.get_type()).into(),
                 skip_nan: !o.convert_to_number().is_nan(),
+                direct: true,
             },
             Input::Block(b) => b
                 .return_type(vartype)
@@ -470,12 +487,17 @@ impl ScratchValue {
         match self {
             ScratchValue::Num(value) => {
                 // (*n != 0.0 && !n.is_nan()) as i64
-                let zero = compiler.constants.get_float(0.0, builder);
-                let is_not_zero = builder.ins().fcmp(FloatCC::NotEqual, *value, zero);
+
+                // In Scratch, -0.0 is truthy. But IEEE 754 says -0.0 == +0.0.
+                // So we bitcast and check against raw bits of +0.0 (which is just 0)
+                let bits = builder.ins().bitcast(I64, MemFlags::new(), *value);
+                let is_not_zero = builder.ins().icmp_imm(IntCC::NotEqual, bits, 0);
                 let is_not_nan = builder.ins().fcmp(FloatCC::Equal, *value, *value);
+
                 let res = builder.ins().band(is_not_zero, is_not_nan);
                 let one = compiler.constants.get_int(1, builder);
                 let zero = compiler.constants.get_int(0, builder);
+
                 builder.ins().select(res, one, zero)
             }
             ScratchValue::Bool(value) => *value,
@@ -497,12 +519,32 @@ impl ScratchValue {
         match self {
             ScratchValue::Num(value) => ScratchValue::Num(*value),
             ScratchValue::Bool(value) => ScratchValue::Bool(*value),
-            ScratchValue::String([i2, i3, i4]) => {
-                let i1 = compiler.constants.get_int(ID_STRING, builder);
-                obj_clone(compiler, builder, i1, *i2, *i3, *i4)
+            ScratchValue::String([i1, i2, i3]) => {
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_STR,
+                    &[I64, I64, I64, I64],
+                    &[],
+                    &[*i1, *i2, *i3, compiler.temp_slot4.0],
+                );
+                let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                ScratchValue::String([i1, i2, i3])
             }
             ScratchValue::Object([i1, i2, i3, i4]) => {
-                obj_clone(compiler, builder, *i1, *i2, *i3, *i4)
+                compiler.call_function(
+                    builder,
+                    callbacks::types::CLONE_OBJ,
+                    &[I64, I64, I64, I64, I64],
+                    &[],
+                    &[*i1, *i2, *i3, *i4, compiler.temp_slot4.0],
+                );
+                let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
+                let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
+                ScratchValue::Object([i1, i2, i3, i4])
             }
         }
     }
@@ -531,28 +573,6 @@ impl ScratchValue {
             ScratchValue::Object(n) => *n,
         }
     }
-}
-
-fn obj_clone(
-    compiler: &mut Compiler<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    i1: Value,
-    i2: Value,
-    i3: Value,
-    i4: Value,
-) -> ScratchValue {
-    compiler.call_function(
-        builder,
-        callbacks::types::CLONE_OBJ,
-        &[I64, I64, I64, I64, I64],
-        &[],
-        &[i1, i2, i3, i4, compiler.temp_slot4.0],
-    );
-    let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
-    let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
-    let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
-    let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
-    ScratchValue::Object([i1, i2, i3, i4])
 }
 
 fn obj_to_bool(

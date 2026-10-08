@@ -16,9 +16,15 @@ impl Compiler<'_> {
         args: &[Input],
         is_screen_refresh: bool,
     ) {
+        let mut effects = (self.custom_block_effects)(custom_block_id);
+        effects.set_direct(true);
+        effects
+            .writes
+            .retain(|p, _| !self.clobber_stack.contains(p));
         let custom_block_id = self.constants.get_int(custom_block_id.0 as i64, builder);
 
-        self.vars.save(builder, &mut self.constants, self.memory);
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &effects);
         let args: Vec<[Value; 4]> = args
             .iter()
             .map(|n| n.get_object(self, builder))
@@ -31,8 +37,7 @@ impl Compiler<'_> {
             key: None,
         });
         for [i1, i2, i3, i4] in args {
-            // This will later be moved into a Vec
-            // (inside the callback) and dropped
+            // This will later be dropped inside the callback
             builder.ins().stack_store(i1, stack_slot, 0);
             builder.ins().stack_store(i2, stack_slot, 8);
             builder.ins().stack_store(i3, stack_slot, 16);
@@ -40,7 +45,7 @@ impl Compiler<'_> {
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
-        if is_screen_refresh && self.is_screen_refresh {
+        if is_screen_refresh && self.is_inherently_pausable {
             let inst = self.call_function(
                 builder,
                 callbacks::custom_block::CALL_SCREEN_REFRESH,
@@ -49,10 +54,10 @@ impl Compiler<'_> {
                 &[
                     slot_ptr,
                     custom_block_id,
-                    self.script_ptr,
-                    self.graphics_ptr,
-                    self.child_thread_ptr,
-                    self.is_called_as_refresh,
+                    self.jit_args.script_ptr,
+                    self.jit_args.graphics_ptr,
+                    self.jit_args.child_thread_ptr,
+                    self.jit_args.is_called_by_pausable,
                 ],
             );
 
@@ -84,12 +89,13 @@ impl Compiler<'_> {
                 &[
                     slot_ptr,
                     custom_block_id,
-                    self.script_ptr,
-                    self.graphics_ptr,
+                    self.jit_args.script_ptr,
+                    self.jit_args.graphics_ptr,
                 ],
             );
         }
 
-        self.vars.reinit(builder, &mut self.constants, self.memory);
+        self.vars
+            .reinit(builder, &mut self.constants, self.memory, &effects);
     }
 }

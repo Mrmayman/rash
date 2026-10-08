@@ -1,8 +1,10 @@
 use image::{GenericImageView, ImageError};
-use rash_core::CostumeData;
+use rash_core::RawCostumeData;
+
+pub mod load;
 
 #[allow(unused)]
-pub struct Costume {
+pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub bind_group: wgpu::BindGroup,
@@ -10,13 +12,13 @@ pub struct Costume {
     pub hash: String,
     pub rotation_center_x: f64,
     pub rotation_center_y: f64,
-    pub texture_width: u32,
-    pub texture_height: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
-impl Costume {
+impl Texture {
     pub fn from_bytes(
-        costume: &CostumeData,
+        costume: &RawCostumeData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         sampler: &wgpu::Sampler,
@@ -29,7 +31,7 @@ impl Costume {
     }
 
     pub fn from_image(
-        costume: &CostumeData,
+        costume: &RawCostumeData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
@@ -104,8 +106,8 @@ impl Costume {
             bind_group,
             rotation_center_x,
             rotation_center_y,
-            texture_width: dimensions.0,
-            texture_height: dimensions.1,
+            width: dimensions.0,
+            height: dimensions.1,
         }
     }
 

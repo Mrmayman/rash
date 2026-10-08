@@ -1,8 +1,13 @@
-use std::{cmp::Ordering, collections::HashMap, path::Path};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    io::{Read, Seek},
+    path::Path,
+};
 
 use json::{Block, JsonBlock, JsonStruct};
 
-use rash_core::{SpriteId, SpriteLoadData, costumes::Costumes};
+use rash_core::{CostumeStore, SpriteId, SpriteLoadData};
 use rash_vm::{
     Input, MEMORY, Ptr, ScratchBlock,
     error::{ErrorConvert, RashError, Trace},
@@ -12,7 +17,7 @@ use zip::ZipArchive;
 
 use crate::{
     blocks::{control, op},
-    error::{ErrExt, ErrorConvertPath},
+    error::ErrExt,
     sprites::{load_blocks, load_costumes},
 };
 use rash_loader_sb3_json as json;
@@ -25,20 +30,31 @@ mod sprites;
 
 pub use error::{FieldType, Sb3ErrorKind};
 
-pub type Res<T> = Result<T, error::Error>;
+type Res<T> = Result<T, error::Error>;
 
-pub struct ProjectLoader {
-    json: json::JsonStruct,
-    archive: ZipArchive<std::fs::File>,
+pub fn load_from_path(path: impl AsRef<Path>) -> Res<Runtime> {
+    let path = path.as_ref();
+    let file = std::fs::File::open(path)
+        .to("std::fs::File::open", "load_from_path")
+        .trace(&format!("(path: {})", path.display()))?;
+    load_from_reader(file)
 }
 
-impl ProjectLoader {
-    pub fn new(file_path: &Path) -> Res<Self> {
-        const FN_N: &str = "ProjectLoader::new";
-        println!("[info] Loading file from {}", file_path.display());
+pub fn load_from_reader<R: Read + Seek>(r: R) -> Res<Runtime> {
+    let loader = ProjectLoader::new(r)?;
+    loader.build()
+}
 
-        let file = std::fs::File::open(file_path).to_p(file_path, "std::fs::File::open", FN_N)?;
-        let mut archive = zip::ZipArchive::new(file).to("zip::ZipArchive::new", FN_N)?;
+struct ProjectLoader<R: Read + Seek> {
+    json: json::JsonStruct,
+    archive: ZipArchive<R>,
+}
+
+impl<R: Read + Seek> ProjectLoader<R> {
+    pub fn new(r: R) -> Res<Self> {
+        const FN_N: &str = "ProjectLoader::new";
+
+        let mut archive = zip::ZipArchive::new(r).to("zip::ZipArchive::new", FN_N)?;
 
         let json = archive
             .by_name("project.json")
@@ -46,20 +62,20 @@ impl ProjectLoader {
         let json: JsonStruct =
             serde_json::from_reader(json).to("serde_json::from_reader (project.json)", FN_N)?;
 
-        Ok(Self { archive, json })
+        Ok(Self { json, archive })
     }
 
     pub fn build(mut self) -> Res<Runtime> {
         const FN_N: &str = "ProjectLoader::build";
 
-        let memory = MEMORY.lock().unwrap();
-
         let mut builder = ProjectBuilder::new();
-        let mut costumes = Costumes::new();
+        let mut costumes = CostumeStore::new();
         let mut variable_map = HashMap::new();
         let mut state_map = HashMap::new();
 
         let mut custom_block_num = 0;
+
+        let mut sprite_order = Vec::new();
 
         for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
             let id = SpriteId(sprite_i as i64);
@@ -67,9 +83,8 @@ impl ProjectLoader {
 
             load_costumes(&mut self.archive, sprite_json, &mut costumes, id).trace(FN_N)?;
 
-            println!("currentCostume: {}", sprite_json.currentCostume);
             let costume = costumes
-                .get_by_number(id, sprite_json.currentCostume as usize)
+                .index_to_id(id, sprite_json.current_costume as usize)
                 .unwrap();
             let state = SpriteLoadData {
                 x: sprite_json.x.unwrap_or_default(),
@@ -86,28 +101,33 @@ impl ProjectLoader {
                 &mut variable_map,
                 &mut custom_block_num,
                 &mut sprite,
-                &memory,
             )?;
 
+            sprite_order.push((id, sprite_json.layer_order));
             builder.add_sprite(sprite);
         }
+
+        sprite_order.sort_by_key(|(_, order)| *order);
+        let sprite_order = sprite_order.into_iter().map(|(id, _)| id).collect();
+        builder.set_sprite_order(sprite_order);
 
         builder.set_costumes(costumes);
         builder.set_init_state(state_map);
 
+        let memory = MEMORY.lock().unwrap();
         Ok(builder.build(&memory))
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CustomBlockDef {
+struct CustomBlockDef {
     args: Vec<String>,
     args_name_to_id: Option<HashMap<String, String>>,
     is_screen_refresh: bool,
     id: CustomBlockId,
 }
 
-pub struct CompileContext<'a> {
+struct CompileContext<'a> {
     sprite_json: json::Target,
     variable_map: &'a mut HashMap<String, Ptr>,
 

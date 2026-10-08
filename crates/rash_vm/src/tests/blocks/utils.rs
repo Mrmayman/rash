@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::MutexGuard};
+use std::sync::MutexGuard;
 
 use crate::{
     ProjectBuilder, SpriteBuilder,
@@ -7,18 +7,15 @@ use crate::{
     print_function_addresses, print_memory,
     runtime::Script,
 };
-use rash_core::{RunState, SpriteData, SpriteId};
+use rash_core::{RunState, SpriteId};
 
 fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
     let mut sprite = SpriteBuilder::new(SpriteId(0));
-    sprite.add_script(Script::new_green_flag(program), &memory);
+    sprite.add_script(Script::new_green_flag(program));
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
     let mut vm = builder.build(&memory);
-    let mut state = RunState {
-        // We won't do any graphics operations here
-        sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
-    };
+    let mut state = RunState::new(); // No graphics operations here
 
     while !vm.update(&mut state) {}
 }
@@ -39,9 +36,8 @@ fn run(program: Vec<ScratchBlock>, memory: &[ScratchObject]) {
 /// As long as the compiler is functioning correctly,
 /// this will be safe, as the machine code under correct
 /// circumstances would function correctly.
-#[allow(unused)]
 pub fn run_code<'a>(code: Vec<ScratchBlock>) -> MutexGuard<'a, Box<[ScratchObject]>> {
-    let mut memory = MEMORY.lock().unwrap();
+    let memory = MEMORY.lock().unwrap();
     if std::env::var("RASH_PRINT_FUNCTIONS").is_ok() {
         print_function_addresses();
     }

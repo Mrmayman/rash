@@ -1,9 +1,12 @@
-use std::{collections::HashMap, fs::File, io::Read};
+use std::{
+    collections::HashMap,
+    io::{Read, Seek},
+};
 
-use rash_core::{CostumeData, SpriteId, costumes::Costumes};
+use rash_core::{CostumeStore, RawCostumeData, SpriteId};
 use rash_loader_sb3_json::{JsonBlock, Target};
 use rash_vm::{
-    Ptr, ScratchBlock, ScratchObject, SpriteBuilder,
+    Ptr, ScratchBlock, SpriteBuilder,
     error::{ErrorConvert, RashError, Trace},
     runtime::Script,
 };
@@ -11,10 +14,10 @@ use zip::ZipArchive;
 
 use crate::{CompileContext, Res, Sb3ErrorKind, error::ErrExt, get, load_block};
 
-pub fn load_costumes(
-    archive: &mut ZipArchive<File>,
+pub fn load_costumes<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
     sprite_json: &Target,
-    costumes: &mut Costumes,
+    costumes: &mut CostumeStore,
     id: SpriteId,
 ) -> Res<()> {
     const FN_N: &str = "ProjectLoader::load_costumes";
@@ -26,22 +29,22 @@ pub fn load_costumes(
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"));
 
-        let data = CostumeData {
+        let data = RawCostumeData {
             bytes,
             name: costume.name.clone(),
-            hash: costume.assetId.clone(),
-            rotation_center_x: costume.rotationCenterX,
-            rotation_center_y: costume.rotationCenterY,
+            hash: costume.asset_id.clone(),
+            rotation_center_x: costume.rotation_center_x,
+            rotation_center_y: costume.rotation_center_y,
             is_svg,
         };
 
-        costumes.add_costume(data, costume.name.clone(), costume.assetId.clone(), id);
+        costumes.add_costume(data, costume.name.clone(), costume.asset_id.clone(), id);
     }
     Ok(())
 }
 
-fn get_costume_bytes(
-    archive: &mut ZipArchive<File>,
+fn get_costume_bytes<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
     costume: &rash_loader_sb3_json::TargetCostume,
 ) -> Result<Vec<u8>, RashError<Sb3ErrorKind>> {
     const F: &str = "ProjectLoader::get_costume_bytes";
@@ -60,7 +63,6 @@ pub fn load_blocks(
     variable_map: &mut HashMap<String, Ptr>,
     custom_block_num: &mut usize,
     sprite: &mut SpriteBuilder,
-    memory: &[ScratchObject],
 ) -> Res<()> {
     const FN_N: &str = "sb3::load_blocks";
 
@@ -125,20 +127,17 @@ pub fn load_blocks(
         match hat_block.opcode.as_str() {
             "event_whenflagclicked" => {
                 let new_green_flag = Script::new_green_flag(blocks);
-                sprite.add_script(new_green_flag, memory);
+                sprite.add_script(new_green_flag);
             }
             "procedures_definition" => {
                 let custom_block = custom_block.unwrap();
 
-                sprite.add_script(
-                    Script::new_custom_block(
-                        blocks,
-                        custom_block.args.len(),
-                        custom_block.id,
-                        custom_block.is_screen_refresh,
-                    ),
-                    memory,
-                );
+                sprite.add_script(Script::new_custom_block(
+                    blocks,
+                    custom_block.args.len(),
+                    custom_block.id,
+                    custom_block.is_screen_refresh,
+                ));
             }
             _ => {
                 println!("Unknown hat block opcode: {}", hat_block.opcode);

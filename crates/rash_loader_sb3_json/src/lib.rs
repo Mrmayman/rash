@@ -6,15 +6,17 @@
 //! Scratch `.sb3` files are just ZIP files that
 //! contain a JSON file called `project.json`,
 //! as well as the costumes and sounds.
-
-#![allow(unused)]
+//!
+//! # Why
+//!
+//! This would have been part of `rash_loader_sb3`
+//! had it not been for compile time issues.
 
 use std::{collections::BTreeMap, fmt::Debug};
 
 use serde::Deserialize;
 use serde_json::Value;
 
-#[allow(unused)]
 pub mod json_id {
     pub const NUMBER: i64 = 4;
     pub const POSITIVE_NUMBER: i64 = 5;
@@ -46,20 +48,23 @@ pub struct JsonStruct {
 
 /// # A Scratch sprite.
 #[derive(Deserialize, Debug, Clone)]
-#[allow(non_snake_case)]
+
 pub struct Target {
-    pub isStage: bool,
+    #[serde(rename = "isStage")]
+    pub is_stage: bool,
     pub name: String,
     pub variables: BTreeMap<String, Vec<Value>>,
     pub lists: Value,
     pub broadcasts: Value,
     pub blocks: BTreeMap<String, JsonBlock>,
     pub comments: Value,
-    pub currentCostume: i64,
+    #[serde(rename = "currentCostume")]
+    pub current_costume: i64,
     pub costumes: Vec<TargetCostume>,
     pub sounds: Vec<Value>,
     pub volume: f64,
-    pub layerOrder: i64,
+    #[serde(rename = "layerOrder")]
+    pub layer_order: i64,
     pub tempo: Option<f64>,
     pub visible: Option<bool>,
     pub x: Option<f64>,
@@ -67,10 +72,14 @@ pub struct Target {
     pub size: Option<f64>,
     pub direction: Option<f64>,
     pub draggable: Option<bool>,
-    pub rotationStyle: Option<String>,
-    pub videoTransparency: Option<f64>,
-    pub videoState: Option<String>,
-    pub textToSpeechLanguage: Option<Value>,
+    #[serde(rename = "rotationStyle")]
+    pub rotation_style: Option<String>,
+    #[serde(rename = "videoTransparency")]
+    pub video_transparency: Option<f64>,
+    #[serde(rename = "videoState")]
+    pub video_state: Option<String>,
+    #[serde(rename = "textToSpeechLanguage")]
+    pub text_to_speech_language: Option<Value>,
 }
 
 impl Target {
@@ -91,7 +100,6 @@ impl Target {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[allow(non_snake_case)]
 pub struct Block {
     pub opcode: String,
     pub next: Option<String>,
@@ -99,7 +107,8 @@ pub struct Block {
     pub inputs: BTreeMap<String, Value>,
     pub fields: BlockFields,
     pub shadow: bool,
-    pub topLevel: bool,
+    #[serde(rename = "topLevel")]
+    pub top_level: bool,
 
     pub mutation: Option<BlockMutation>,
 
@@ -123,13 +132,13 @@ pub struct BlockFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<Value>,
     #[serde(flatten)]
-    others: BTreeMap<String, serde_json::Value>,
+    pub others: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[allow(non_snake_case)]
 pub struct BlockMutation {
-    pub tagName: String,
+    #[serde(rename = "tagName")]
+    pub tag_name: String,
     pub children: Vec<Value>,
     pub proccode: Option<String>,
     pub argumentids: Option<String>,
@@ -166,39 +175,45 @@ impl<'de> Deserialize<'de> for JsonBlock {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[allow(non_snake_case)]
 pub struct TargetCostume {
     pub name: String,
-    pub dataFormat: String,
-    pub assetId: String,
+    #[serde(rename = "dataFormat")]
+    pub data_format: String,
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
     pub md5ext: String,
-    pub rotationCenterX: f64,
-    pub rotationCenterY: f64,
+    #[serde(rename = "rotationCenterX")]
+    pub rotation_center_x: f64,
+    #[serde(rename = "rotationCenterY")]
+    pub rotation_center_y: f64,
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
 pub struct Monitor {
     pub id: String,
     pub mode: String,
     pub opcode: String,
     pub params: Value,
-    pub spriteName: Option<String>,
+    #[serde(rename = "spriteName")]
+    pub sprite_name: Option<String>,
     pub value: Value,
     pub width: Option<f64>,
     pub height: Option<f64>,
     pub x: f64,
     pub y: f64,
     pub visible: bool,
-    pub sliderMin: Option<f64>,
-    pub sliderMax: Option<f64>,
-    pub isDiscrete: Option<bool>,
+    #[serde(rename = "sliderMin")]
+    pub slider_min: Option<f64>,
+    #[serde(rename = "sliderMax")]
+    pub slider_max: Option<f64>,
+    #[serde(rename = "isDiscrete")]
+    pub is_discrete: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
 pub struct MonitorParams {
-    VARIABLE: String,
+    #[serde(rename = "VARIABLE")]
+    pub variable: String,
 }
 
 #[derive(Deserialize, Debug)]

@@ -12,7 +12,7 @@ use crate::{
     Ptr, ScratchObject,
     compiler::VarTypeChecked,
     constant_set::ConstantMap,
-    effects::VariableWrite,
+    effects::{Effects, VariableWrite},
     input_primitives::ScratchValue,
     variable_storage::{VarStore, VariableSlot},
 };
@@ -133,6 +133,14 @@ impl VarStore for GenericVarStore {
     }
 
     // `GenericVarStore` doesn't have persistent state
-    fn save(&self, _: &mut FunctionBuilder, _: &mut ConstantMap, _: &[ScratchObject]) {}
-    fn reinit(&mut self, _: &mut FunctionBuilder, _: &mut ConstantMap, _: &[ScratchObject]) {}
+    fn save(&self, _: &mut FunctionBuilder, _: &mut ConstantMap, _: &[ScratchObject], _: &Effects) {
+    }
+    fn reinit(
+        &mut self,
+        _: &mut FunctionBuilder,
+        _: &mut ConstantMap,
+        _: &[ScratchObject],
+        _: &Effects,
+    ) {
+    }
 }

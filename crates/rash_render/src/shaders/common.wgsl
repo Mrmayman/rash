@@ -1,3 +1,6 @@
+// WARNING: If you change this,
+// update the shader-side definition too in
+// `crates/rash_core/src/lib.rs`
 struct Sprite {
     pos: vec2<f32>,
     texture_size: vec2<f32>,

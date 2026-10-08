@@ -1,3 +1,5 @@
+# valgrind --leak-check=full --show-leak-kinds=all --suppressions=valgrind.supp target/debug/deps/rash_vm-*
+
 {
    compiler_ignore1
    Memcheck:Cond

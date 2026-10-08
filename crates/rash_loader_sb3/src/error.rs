@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    path::{Path, PathBuf},
-};
+use std::fmt::Display;
 
 use rash_vm::error::{ErrorConvert, RashError};
 use zip::result::ZipError;
@@ -47,19 +44,6 @@ impl ErrExt for Error {
     }
 }
 
-pub(crate) trait ErrorConvertPath<T, E> {
-    fn to_p(self, path: &Path, a: &str, b: &str) -> Result<T, RashError<E>>;
-}
-
-impl<T> ErrorConvertPath<T, Sb3ErrorKind> for Result<T, std::io::Error> {
-    fn to_p(self, path: &Path, a: &str, b: &str) -> Result<T, Error> {
-        self.map_err(|n| RashError {
-            trace: vec![a.to_owned(), b.to_owned()],
-            kind: Sb3ErrorKind::IoError(n, Some(path.to_owned())),
-        })
-    }
-}
-
 #[derive(Debug)]
 pub enum Sb3ErrorKind {
     Zip(ZipError),
@@ -67,7 +51,7 @@ pub enum Sb3ErrorKind {
     FieldNotFound(String),
     FieldNotTyped(String, FieldType),
     InvalidWarpKind(String),
-    IoError(std::io::Error, Option<PathBuf>),
+    Io(std::io::Error),
     CurrentCustomBlockNotFound,
 }
 
@@ -89,18 +73,14 @@ impl Display for Sb3ErrorKind {
             Sb3ErrorKind::FieldNotFound(field) => {
                 write!(f, "field not found: {field}")?;
             }
+            Sb3ErrorKind::Io(error) => {
+                write!(f, "io error: {error}")?;
+            }
             Sb3ErrorKind::FieldNotTyped(field, ty) => {
                 write!(f, "field not correct datatype: {field}, expected {ty:?}")?;
             }
             Sb3ErrorKind::InvalidWarpKind(val) => {
                 write!(f, "invalid value for self.mutation.warp: {val}")?;
-            }
-            Sb3ErrorKind::IoError(error, path_buf) => {
-                if let Some(path) = path_buf {
-                    write!(f, "io error: at {}: {error}", path.display())?;
-                } else {
-                    write!(f, "io error: {error}")?;
-                }
             }
             Sb3ErrorKind::CurrentCustomBlockNotFound => {
                 write!(f, "could not get info of current custom block!")?;
@@ -124,10 +104,7 @@ macro_rules! err_convert {
 }
 
 type IoErr = std::io::Error;
-fn io_err_cvt(n: std::io::Error) -> Sb3ErrorKind {
-    Sb3ErrorKind::IoError(n, None)
-}
-err_convert!(IoErr, io_err_cvt);
+err_convert!(IoErr, Sb3ErrorKind::Io);
 err_convert!(ZipError, Sb3ErrorKind::Zip);
 type SerdeErr = serde_json::Error;
 err_convert!(SerdeErr, Sb3ErrorKind::Serde);

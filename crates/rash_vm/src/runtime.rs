@@ -8,28 +8,20 @@ use crate::{
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
+    effects::{Effects, VariableWrite},
+    gapvec::GapVec,
+    jit_func::JitFunction,
 };
-use rash_core::{RunState, SpriteId, SpriteLoadData, costumes::Costumes};
-
-#[doc = include_str!("../../../docs/JIT_SIGNATURE.md")]
-type JitFunction = unsafe extern "C" fn(
-    JumpId,
-    *mut Vec<i64>, // Stack repeat
-    *const ScratchObject,
-    *const Scripts,
-    *mut RunState,
-    bool, // Is screen refresh
-    *mut Option<ScratchThread>,
-) -> JumpId;
+use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
-struct JumpId(i64);
+pub(crate) struct JumpId(i64);
 
 impl JumpId {
     const DONE: Self = Self(-1);
 
-    fn is_done(self) -> bool {
+    pub fn is_done(self) -> bool {
         self == Self::DONE
     }
 }
@@ -47,18 +39,21 @@ impl Debug for JumpId {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CustomBlockId(pub usize);
 
-pub enum CustomBlockFunc {
+#[derive(Clone)]
+pub enum MaybeCompiled {
     ToCompile(Script),
     Compiled(ScratchThread),
 }
 
+#[derive(Clone)]
 pub struct CustomBlock {
-    pub script: CustomBlockFunc,
+    pub script: MaybeCompiled,
     pub sprite_id: SpriteId,
     pub is_screen_refresh: bool,
     pub num_args: usize,
 }
 
+#[derive(Clone)]
 pub struct Script {
     pub blocks: Vec<ScratchBlock>,
     pub kind: ScriptKind,
@@ -174,6 +169,7 @@ impl Script {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum ScriptKind {
     GreenFlag,
     CustomBlock {
@@ -195,6 +191,7 @@ impl ScriptKind {
     }
 }
 
+#[derive(Clone)]
 pub struct SpriteBuilder {
     id: SpriteId,
     scripts: Scripts,
@@ -211,7 +208,7 @@ impl SpriteBuilder {
         }
     }
 
-    pub fn add_script(&mut self, mut script: Script, memory: &[ScratchObject]) {
+    pub fn add_script(&mut self, mut script: Script) {
         script.insert_refreshes();
 
         let num_args = match script.kind {
@@ -220,17 +217,7 @@ impl SpriteBuilder {
         };
         match script.kind {
             ScriptKind::GreenFlag => {
-                // This is where all your magic happens :D
-                let (thread, static_strings) = compile(
-                    &script.blocks,
-                    memory,
-                    self.id,
-                    num_args,
-                    script.kind.is_screen_refresh(),
-                );
-
-                self.static_strings.extend(static_strings);
-                self.scripts.green_flags.push(thread);
+                self.scripts.green_flags.push((self.id, script));
             }
             ScriptKind::CustomBlock {
                 id,
@@ -238,10 +225,10 @@ impl SpriteBuilder {
                 ..
             } => {
                 self.scripts.custom_blocks.insert(
-                    id,
+                    id.0,
                     CustomBlock {
                         // Delaying this till later for intelligent analysis
-                        script: CustomBlockFunc::ToCompile(script),
+                        script: MaybeCompiled::ToCompile(script),
                         is_screen_refresh,
                         num_args,
                         sprite_id: self.id,
@@ -254,7 +241,18 @@ impl SpriteBuilder {
 
 #[derive(Default)]
 pub struct ProjectBuilder {
-    runtime: Runtime,
+    pub(crate) runtime: Runtime,
+}
+
+impl Clone for ProjectBuilder {
+    fn clone(&self) -> Self {
+        Self {
+            // Cloning here is fine because the unsafe
+            // structures in runtime (like ScratchThread)
+            // haven't been initialized yet
+            runtime: self.runtime.clone_private(),
+        }
+    }
 }
 
 impl ProjectBuilder {
@@ -264,22 +262,55 @@ impl ProjectBuilder {
     }
 
     pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
-        // TODO: Implement proper sprite ordering
         self.runtime.sprite_order.push(sprite.id);
         self.runtime.static_strings.extend(sprite.static_strings);
-        self.runtime.scripts.push(sprite.scripts);
+
+        let this = &mut self.runtime.scripts;
+        this.green_flags.extend(
+            sprite
+                .scripts
+                .green_flags
+                .into_iter()
+                .map(|(id, s)| (id, MaybeCompiled::ToCompile(s))),
+        );
+        sprite
+            .scripts
+            .custom_blocks
+            .push_to(&mut this.custom_blocks);
     }
 
-    pub fn set_costumes(&mut self, costumes: Costumes) {
+    pub fn set_sprite_order(&mut self, order: Vec<SpriteId>) {
+        self.runtime.sprite_order = order;
+    }
+
+    pub fn set_costumes(&mut self, costumes: CostumeStore) {
         self.runtime.costumes = costumes;
     }
 
     #[must_use]
     pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
-        for script in self.runtime.scripts.custom_blocks.values_mut() {
-            let CustomBlockFunc::ToCompile(scr) = &script.script else {
+        // This is where all your magic happens :D
+        self.compile(memory);
+
+        self.runtime.init();
+        self.runtime
+    }
+
+    fn compile(&mut self, memory: &[ScratchObject]) {
+        let custom_block_analysis = self.analyze_custom_blocks();
+
+        for script in &mut self.runtime.scripts.custom_blocks {
+            let MaybeCompiled::ToCompile(scr) = &script.script else {
                 continue;
             };
+            let ScriptKind::CustomBlock { id, .. } = &scr.kind else {
+                debug_assert!(
+                    false,
+                    "non-custom block script found in self.runtime.custom_blocks!"
+                );
+                continue;
+            };
+            let analysis = custom_block_analysis.get(id);
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
@@ -289,14 +320,64 @@ impl ProjectBuilder {
                 script.sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
+                &mut |id| {
+                    custom_block_analysis
+                        .get(&id)
+                        .map_or(Effects::unknown(), |n| n.0.clone())
+                },
+                &|ptr| {
+                    if let Some((_, call_env)) = analysis {
+                        call_env
+                            .call_site
+                            .writes
+                            .get(&ptr)
+                            .copied()
+                            .unwrap_or_default()
+                    } else {
+                        VariableWrite::default()
+                    }
+                },
+                analysis
+                    .map(|n| n.1.argument_types.as_slice())
+                    .unwrap_or_default(),
             );
 
-            script.script = CustomBlockFunc::Compiled(thread);
+            script.script = MaybeCompiled::Compiled(thread);
             self.runtime.static_strings.extend(static_strings);
         }
 
-        self.runtime.init();
-        self.runtime
+        for (sprite_id, script) in &mut self.runtime.scripts.green_flags {
+            let MaybeCompiled::ToCompile(scr) = script else {
+                continue;
+            };
+            let ScriptKind::GreenFlag = &scr.kind else {
+                debug_assert!(
+                    false,
+                    "non-green flag script found in self.runtime.green_flags!"
+                );
+                continue;
+            };
+
+            let (thread, static_strings) = compile(
+                &scr.blocks,
+                memory,
+                *sprite_id,
+                0,
+                scr.kind.is_screen_refresh(),
+                &mut |id| {
+                    custom_block_analysis
+                        .get(&id)
+                        .map_or(Effects::unknown(), |n| n.0.clone())
+                },
+                // You can't safely tell what a variable's type will be
+                // before a green flag is run due to concurrent threads
+                &|_| VariableWrite::default(),
+                &[],
+            );
+
+            *script = MaybeCompiled::Compiled(thread);
+            self.runtime.static_strings.extend(static_strings);
+        }
     }
 
     pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
@@ -308,9 +389,9 @@ impl ProjectBuilder {
 pub struct Runtime {
     pub sprite_order: Vec<SpriteId>,
     threads: Vec<ScratchThread>,
-    scripts: Scripts,
+    pub(crate) scripts: SpawnableScripts,
 
-    pub costumes: Costumes,
+    pub costumes: CostumeStore,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
     static_strings: Vec<SmolStr>,
@@ -324,7 +405,12 @@ impl Runtime {
 
         let mut green_flags = Vec::new();
         std::mem::swap(&mut self.scripts.green_flags, &mut green_flags);
-        self.threads.extend(green_flags);
+        for flag in green_flags {
+            let MaybeCompiled::Compiled(script) = flag.1 else {
+                continue;
+            };
+            self.threads.push(script);
+        }
     }
 
     pub fn update(&mut self, state: &mut RunState) -> bool {
@@ -355,21 +441,34 @@ impl Runtime {
                 .rposition(|&id| id == thread.sprite_id)
         });
     }
-}
 
-#[derive(Default)]
-pub struct Scripts {
-    pub green_flags: Vec<ScratchThread>,
-    pub custom_blocks: HashMap<CustomBlockId, CustomBlock>,
-}
-
-impl Scripts {
-    pub fn push(&mut self, script: Self) {
-        self.green_flags.extend(script.green_flags);
-        self.custom_blocks.extend(script.custom_blocks);
+    // Our runtime holds on to pointers and other unsafe stuff,
+    // wouldn't want to clone *that* in public.
+    fn clone_private(&self) -> Self {
+        Self {
+            sprite_order: self.sprite_order.clone(),
+            threads: self.threads.clone(),
+            scripts: self.scripts.clone(),
+            costumes: self.costumes.clone(),
+            sprite_load_info: self.sprite_load_info.clone(),
+            static_strings: self.static_strings.clone(),
+        }
     }
 }
 
+#[derive(Default, Clone)]
+pub struct SpawnableScripts {
+    pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
+    pub custom_blocks: Vec<CustomBlock>,
+}
+
+#[derive(Default, Clone)]
+pub struct Scripts {
+    pub green_flags: Vec<(SpriteId, Script)>,
+    pub custom_blocks: GapVec<CustomBlock>,
+}
+
+#[derive(Clone)]
 pub struct ScratchThread {
     sprite_id: SpriteId,
     is_screen_refresh: bool,
@@ -377,10 +476,11 @@ pub struct ScratchThread {
 
     stack_repeat: Vec<i64>,
     jumped_point: JumpId,
-    child_thread: Box<Option<ScratchThread>>,
+    child_thread: Option<Box<ScratchThread>>,
 
     buffer: Arc<Mmap>,
-    func: JitFunction,
+    // Used by `callbacks::custom_block::call_no_screen_refresh`
+    pub(crate) func: JitFunction,
 }
 
 impl Debug for ScratchThread {
@@ -408,7 +508,7 @@ impl ScratchThread {
             jumped_point: JumpId::default(),
             sprite_id: self.sprite_id,
             is_screen_refresh,
-            child_thread: Box::new(None),
+            child_thread: None,
             arguments,
         }
     }
@@ -445,7 +545,7 @@ impl ScratchThread {
             jumped_point: JumpId::default(),
             sprite_id,
             is_screen_refresh,
-            child_thread: Box::new(None),
+            child_thread: None,
             arguments: Vec::new(),
         }
     }
@@ -462,7 +562,7 @@ impl ScratchThread {
     ///   may result in panics or undefined behaviour).
     /// - There hopefully aren't any compiler bugs
     ///   creating broken code
-    pub unsafe fn tick(&mut self, scripts: &Scripts, state: &mut RunState) -> bool {
+    pub unsafe fn tick(&mut self, scripts: &SpawnableScripts, state: &mut RunState) -> bool {
         if self.jumped_point.is_done() {
             return true;
         }
@@ -470,10 +570,10 @@ impl ScratchThread {
         // If the parent (current) thread paused while
         // running a child thread which also paused,
         // then tick the child thread instead until it ends,
-        if let Some(thread) = &mut *self.child_thread {
+        if let Some(thread) = &mut self.child_thread {
             let child_ended = unsafe { thread.tick(scripts, state) };
             if child_ended {
-                *self.child_thread = None;
+                self.child_thread = None;
             } else {
                 return false;
             }
@@ -486,8 +586,8 @@ impl ScratchThread {
                 self.arguments.as_ptr(),
                 scripts,
                 state,
-                self.is_screen_refresh,
-                &raw mut *self.child_thread,
+                self.is_screen_refresh as u8,
+                &raw mut self.child_thread,
             )
         };
         self.jumped_point = result;

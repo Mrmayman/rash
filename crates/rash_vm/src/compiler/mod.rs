@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{LazyLock, Mutex},
 };
 
@@ -21,23 +21,26 @@ use cranelift::{
 use smol_str::SmolStr;
 
 use crate::{
-    callbacks,
+    callbacks::{
+        self,
+        external::{looks, motion},
+    },
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
-    effects::{CheckEffects, Effects, VariableWrite},
+    effects::{Effects, VariableWrite, analyze},
     input_primitives::{Input, Ptr, ScratchValue},
+    jit_func::JitArgs,
     runtime::CustomBlockId,
     variable_storage::{GenericVarStore, SsaVarStore, VarStore},
 };
-use rash_core::{RunState, SpriteId};
+use rash_core::SpriteId;
 
 mod display;
 
 pub static MEMORY: LazyLock<Mutex<Box<[ScratchObject]>>> =
     LazyLock::new(|| Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice()));
 
-#[allow(unused)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ScratchBlock {
     /// Sets a variable to a value.
     VarSet(Ptr, Input),
@@ -273,6 +276,206 @@ impl ScratchBlock {
             | ScratchBlock::MotionSetY(_) => true,
         }
     }
+
+    pub fn walk(&self, on_block: &mut impl FnMut(&ScratchBlock), walk_inputs: bool) {
+        on_block(self);
+        match self {
+            ScratchBlock::ControlIf(i, blocks)
+            | ScratchBlock::ControlRepeat(i, blocks)
+            | ScratchBlock::ControlRepeatUntil(i, blocks) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk(on_block, walk_inputs);
+                }
+                for block in blocks {
+                    block.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlForever(blocks) => {
+                for block in blocks {
+                    block.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlIfElse(i, blocks1, blocks2) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk(on_block, walk_inputs);
+                }
+                for block in blocks1 {
+                    block.walk(on_block, walk_inputs);
+                }
+                for block in blocks2 {
+                    block.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::VarSet(_, i)
+            | ScratchBlock::VarChange(_, i)
+            | ScratchBlock::Log(i)
+            | ScratchBlock::MotionChangeX(i)
+            | ScratchBlock::MotionChangeY(i)
+            | ScratchBlock::MotionSetX(i)
+            | ScratchBlock::MotionSetY(i)
+            | ScratchBlock::OpRound(i)
+            | ScratchBlock::OpMAbs(i)
+            | ScratchBlock::OpMSqrt(i)
+            | ScratchBlock::OpMSin(i)
+            | ScratchBlock::OpMCos(i)
+            | ScratchBlock::OpMTan(i)
+            | ScratchBlock::OpStrLen(i)
+            | ScratchBlock::OpMFloor(i)
+            | ScratchBlock::OpBNot(i) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::MotionGoToXY(a, b)
+            | ScratchBlock::OpAdd(a, b)
+            | ScratchBlock::OpSub(a, b)
+            | ScratchBlock::OpMul(a, b)
+            | ScratchBlock::OpDiv(a, b)
+            | ScratchBlock::OpStrJoin(a, b)
+            | ScratchBlock::OpMod(a, b)
+            | ScratchBlock::OpBAnd(a, b)
+            | ScratchBlock::OpBOr(a, b)
+            | ScratchBlock::OpCmp(a, b, _)
+            | ScratchBlock::OpRandom(a, b)
+            | ScratchBlock::OpStrLetterOf(a, b)
+            | ScratchBlock::OpStrContains(a, b) => {
+                if walk_inputs {
+                    if let Input::Block(b) = a {
+                        b.walk(on_block, walk_inputs);
+                    }
+                    if let Input::Block(b) = b {
+                        b.walk(on_block, walk_inputs);
+                    }
+                }
+            }
+
+            ScratchBlock::FunctionCallNoScreenRefresh(_, l)
+            | ScratchBlock::FunctionCallScreenRefresh(_, l) => {
+                if walk_inputs {
+                    for i in l {
+                        if let Input::Block(b) = i {
+                            b.walk(on_block, walk_inputs);
+                        }
+                    }
+                }
+            }
+
+            ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionGetArg(_)
+            | ScratchBlock::ScreenRefresh
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
+            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::VarRead(_) => {}
+        }
+    }
+
+    pub fn walk_mut(&mut self, on_block: &mut impl FnMut(&mut ScratchBlock), walk_inputs: bool) {
+        on_block(self);
+        match self {
+            ScratchBlock::ControlIf(i, blocks)
+            | ScratchBlock::ControlRepeat(i, blocks)
+            | ScratchBlock::ControlRepeatUntil(i, blocks) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk_mut(on_block, walk_inputs);
+                }
+                for block in blocks {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlForever(blocks) => {
+                for block in blocks {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::ControlIfElse(i, blocks1, blocks2) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk_mut(on_block, walk_inputs);
+                }
+                for block in blocks1 {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+                for block in blocks2 {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::VarSet(_, i)
+            | ScratchBlock::VarChange(_, i)
+            | ScratchBlock::Log(i)
+            | ScratchBlock::MotionChangeX(i)
+            | ScratchBlock::MotionChangeY(i)
+            | ScratchBlock::MotionSetX(i)
+            | ScratchBlock::MotionSetY(i)
+            | ScratchBlock::OpRound(i)
+            | ScratchBlock::OpMAbs(i)
+            | ScratchBlock::OpMSqrt(i)
+            | ScratchBlock::OpMSin(i)
+            | ScratchBlock::OpMCos(i)
+            | ScratchBlock::OpMTan(i)
+            | ScratchBlock::OpStrLen(i)
+            | ScratchBlock::OpMFloor(i)
+            | ScratchBlock::OpBNot(i) => {
+                if let Input::Block(b) = i
+                    && walk_inputs
+                {
+                    b.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::MotionGoToXY(a, b)
+            | ScratchBlock::OpAdd(a, b)
+            | ScratchBlock::OpSub(a, b)
+            | ScratchBlock::OpMul(a, b)
+            | ScratchBlock::OpDiv(a, b)
+            | ScratchBlock::OpStrJoin(a, b)
+            | ScratchBlock::OpMod(a, b)
+            | ScratchBlock::OpBAnd(a, b)
+            | ScratchBlock::OpBOr(a, b)
+            | ScratchBlock::OpCmp(a, b, _)
+            | ScratchBlock::OpRandom(a, b)
+            | ScratchBlock::OpStrLetterOf(a, b)
+            | ScratchBlock::OpStrContains(a, b) => {
+                if walk_inputs {
+                    if let Input::Block(b) = a {
+                        b.walk_mut(on_block, walk_inputs);
+                    }
+                    if let Input::Block(b) = b {
+                        b.walk_mut(on_block, walk_inputs);
+                    }
+                }
+            }
+
+            ScratchBlock::FunctionCallNoScreenRefresh(_, l)
+            | ScratchBlock::FunctionCallScreenRefresh(_, l) => {
+                if walk_inputs {
+                    for i in l {
+                        if let Input::Block(b) = i {
+                            b.walk_mut(on_block, walk_inputs);
+                        }
+                    }
+                }
+            }
+
+            ScratchBlock::ControlStopThisScript
+            | ScratchBlock::FunctionGetArg(_)
+            | ScratchBlock::ScreenRefresh
+            | ScratchBlock::MotionGetX
+            | ScratchBlock::MotionGetY
+            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::VarRead(_) => {}
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -282,17 +485,35 @@ pub enum VarType {
     String,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct FunctionArg {
+    pub val: ScratchValue,
+    pub skip_nan: bool,
+}
+
 pub struct Compiler<'compiler> {
-    pub args_list: Vec<[Value; 4]>,
+    pub args_list: Vec<FunctionArg>,
     pub constants: ConstantMap,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
-    pub program_analysis: Effects,
+    pub effects: Effects,
     pub func_store: FunctionStore,
     pub call_conv: CallConv,
     pub static_strings: Vec<SmolStr>,
+    /// See [`Compiler::vars_to_avoid_clobbering`] for more info.
+    pub clobber_stack: HashSet<Ptr>,
     pub vars: Box<dyn VarStore>,
+    pub jit_args: JitArgs,
+
+    /// A function that is called when a custom block is encountered.
+    ///
+    /// It returns the effects of that custom block. Useful for
+    /// type related optimizations, just put in a `|_| Effects::unknown()` to ignore.
+    pub custom_block_effects: &'compiler mut dyn FnMut(CustomBlockId) -> Effects,
+
+    /// Temporary buffer to store some data.
+    /// Be careful, don't let multiple things write to this at the same time.
     pub temp_slot4: (Value, StackSlot),
 
     /// Storing how many loops inside we are right now
@@ -317,17 +538,8 @@ pub struct Compiler<'compiler> {
     /// This is used with [`ScratchBlock::ControlRepeat`] and [`ScratchBlock::ControlRepeatUntil`]
     pub repeat_stack: usize,
 
-    /// A [`Value`] of `*mut Vec<LoopFrame>` representing the stack
-    /// of loops. This is a **compile-time handle to a runtime
-    /// value**. See `docs/JIT_SIGNATURE.md` for more info.
-    pub loop_stack_ptr: Value,
-    pub script_ptr: Value,
-    pub graphics_ptr: Value,
-    pub child_thread_ptr: Value,
-
     pub sprite_id: SpriteId,
-    pub is_screen_refresh: bool,
-    pub is_called_as_refresh: Value,
+    pub is_inherently_pausable: bool,
 }
 
 impl<'a> Compiler<'a> {
@@ -336,17 +548,15 @@ impl<'a> Compiler<'a> {
         builder: &mut FunctionBuilder<'_>,
         code: &[ScratchBlock],
         memory: &'a [ScratchObject],
-        loop_stack_ptr: Value,
-        script_ptr: Value,
-        graphics_ptr: Value,
-        args_list: Vec<[Value; 4]>,
+        jit_args: JitArgs,
+        args_list: Vec<FunctionArg>,
         sprite_id: SpriteId,
-        is_screen_refresh: bool,
-        is_called_as_refresh: Value,
-        child_thread_ptr: Value,
+        is_inherently_pausable: bool,
         temp_slot4: (Value, StackSlot),
         func_map: FuncMap,
         call_conv: CallConv,
+        mut custom_block_effects: &'a mut dyn FnMut(CustomBlockId) -> Effects,
+        types_from_callsite: &'a dyn Fn(Ptr) -> VariableWrite,
     ) -> Self {
         let mut constants = ConstantMap::new();
 
@@ -356,34 +566,25 @@ impl<'a> Compiler<'a> {
         }
         builder.switch_to_block(code_block);
 
-        let mut other_eff: Option<Effects> = None;
-        let var_ty = &|_| VariableWrite::default();
-        let mut program_analysis = code.effects(&mut |_| Effects::unknown(), var_ty, &mut |e| {
-            if let Some(other) = &mut other_eff {
-                other.merge(&e, var_ty);
-            } else {
-                other_eff = Some(e);
-            }
-        });
-        if let Some(other_eff) = other_eff {
-            program_analysis.merge(&other_eff, var_ty);
-        }
+        let effects = analyze(&code, &mut custom_block_effects, &mut |_, _| {});
 
-        let vars: Box<dyn VarStore> = if program_analysis.is_unknown {
+        let vars: Box<dyn VarStore> = if effects.is_unknown {
             Box::new(GenericVarStore::new(memory))
         } else {
             Box::new(SsaVarStore::new(
                 builder,
-                &program_analysis,
+                &effects,
                 &mut constants,
                 memory,
+                types_from_callsite,
             ))
         };
 
         Self {
+            jit_args,
             temp_slot4,
             vars,
-            program_analysis,
+            effects,
             constants,
             call_conv,
             break_points: vec![code_block],
@@ -391,15 +592,12 @@ impl<'a> Compiler<'a> {
             break_counter: 0,
             repeat_stack: 0,
             static_strings: Vec::new(),
+            clobber_stack: HashSet::new(),
             memory,
-            script_ptr,
-            loop_stack_ptr,
             args_list,
-            graphics_ptr,
             sprite_id,
-            is_screen_refresh,
-            is_called_as_refresh,
-            child_thread_ptr,
+            is_inherently_pausable,
+            custom_block_effects,
         }
     }
 
@@ -411,6 +609,9 @@ impl<'a> Compiler<'a> {
         match block {
             ScratchBlock::VarSet(ptr, obj) => {
                 self.var_set(obj, builder, *ptr);
+            }
+            ScratchBlock::VarRead(ptr) => {
+                return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpAdd(a, b) => {
                 return Some(ScratchValue::Num(self.op_add(a, b, builder)));
@@ -426,9 +627,6 @@ impl<'a> Compiler<'a> {
             }
             ScratchBlock::OpMod(a, b) => {
                 return Some(ScratchValue::Num(self.op_modulo(a, b, builder)));
-            }
-            ScratchBlock::VarRead(ptr) => {
-                return Some(self.var_read(builder, *ptr));
             }
             ScratchBlock::OpStrJoin(a, b) => {
                 return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));
@@ -510,9 +708,8 @@ impl<'a> Compiler<'a> {
                 self.call_custom_block(*custom_block_id, builder, args, true);
             }
             ScratchBlock::FunctionGetArg(idx) => {
-                return Some(ScratchValue::Object(
-                    self.custom_block_get_arg(builder, *idx),
-                ));
+                let val = self.args_list[*idx];
+                return Some(val.val.clone_in_code(self, builder));
             }
             ScratchBlock::MotionGoToXY(x, y) => {
                 let x = x.get_number(self, builder);
@@ -520,12 +717,12 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_go_to as *const (),
+                    motion::C_GO_TO,
                     &[I64, I64, F64, F64],
                     &[],
-                    &[self.graphics_ptr, id, x, y],
+                    &[self.jit_args.graphics_ptr, id, x, y],
                 );
             }
             ScratchBlock::MotionChangeX(x) => {
@@ -533,12 +730,12 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_change_x as *const (),
+                    motion::C_CHANGE_X,
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, x],
+                    &[self.jit_args.graphics_ptr, id, x],
                 );
             }
             ScratchBlock::MotionChangeY(y) => {
@@ -546,12 +743,12 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_change_y as *const (),
+                    motion::C_CHANGE_Y,
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, y],
+                    &[self.jit_args.graphics_ptr, id, y],
                 );
             }
             ScratchBlock::MotionSetX(x) => {
@@ -559,12 +756,12 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_set_x as *const (),
+                    motion::C_SET_X,
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, x],
+                    &[self.jit_args.graphics_ptr, id, x],
                 );
             }
             ScratchBlock::MotionSetY(y) => {
@@ -572,23 +769,23 @@ impl<'a> Compiler<'a> {
 
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_set_y as *const (),
+                    motion::C_SET_Y,
                     &[I64, I64, F64],
                     &[],
-                    &[self.graphics_ptr, id, y],
+                    &[self.jit_args.graphics_ptr, id, y],
                 );
             }
             ScratchBlock::MotionGetX => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function_indirect(
+                let inst = self.call_function(
                     builder,
-                    RunState::c_get_x as *const (),
+                    motion::C_GET_X,
                     &[I64, I64],
                     &[F64],
-                    &[self.graphics_ptr, id],
+                    &[self.jit_args.graphics_ptr, id],
                 );
 
                 let val = builder.inst_results(inst)[0];
@@ -597,12 +794,12 @@ impl<'a> Compiler<'a> {
             ScratchBlock::MotionGetY => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
 
-                let inst = self.call_function_indirect(
+                let inst = self.call_function(
                     builder,
-                    RunState::c_get_y as *const (),
+                    motion::C_GET_Y,
                     &[I64, I64],
                     &[F64],
-                    &[self.graphics_ptr, id],
+                    &[self.jit_args.graphics_ptr, id],
                 );
 
                 let val = builder.inst_results(inst)[0];
@@ -612,12 +809,12 @@ impl<'a> Compiler<'a> {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
                 let shown = self.constants.get_int(i64::from(*shown), builder);
 
-                self.call_function_indirect(
+                self.call_function(
                     builder,
-                    RunState::c_shown as *const (),
+                    looks::C_SHOWN,
                     &[I64, I64, I64],
                     &[],
-                    &[self.graphics_ptr, id, shown],
+                    &[self.jit_args.graphics_ptr, id, shown],
                 );
             }
             ScratchBlock::SensingDaysSince2000 => {
@@ -630,38 +827,15 @@ impl<'a> Compiler<'a> {
         None
     }
 
-    fn custom_block_get_arg(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-        idx: usize,
-    ) -> [Value; 4] {
-        let [i1, i2, i3, i4] = self.args_list[idx];
-
-        self.call_function(
-            builder,
-            callbacks::types::CLONE_OBJ,
-            &[I64, I64, I64, I64, I64],
-            &[],
-            &[i1, i2, i3, i4, self.temp_slot4.0],
-        );
-
-        let slot = self.temp_slot4.1;
-        let i1 = builder.ins().stack_load(I64, slot, 0);
-        let i2 = builder.ins().stack_load(I64, slot, 8);
-        let i3 = builder.ins().stack_load(I64, slot, 16);
-        let i4 = builder.ins().stack_load(I64, slot, 24);
-        [i1, i2, i3, i4]
-    }
-
     pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
-        if !self.is_screen_refresh {
+        if !self.is_inherently_pausable {
             return;
         }
 
         for _ in 0..2 {
             // TODO: Hacky workaround for too-fast timing
             self.break_counter += 1;
-            self.vars.save(builder, &mut self.constants, self.memory);
+            self.save_vars(builder);
             let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
             builder.ins().return_(&[break_counter]);
@@ -671,8 +845,18 @@ impl<'a> Compiler<'a> {
             self.break_points.push(b);
             builder.switch_to_block(b);
 
-            self.vars.reinit(builder, &mut self.constants, self.memory);
+            self.vars.reinit(
+                builder,
+                &mut self.constants,
+                self.memory,
+                &Effects::unknown(),
+            );
         }
+    }
+
+    pub fn save_vars(&mut self, builder: &mut FunctionBuilder<'_>) {
+        self.vars
+            .save(builder, &mut self.constants, self.memory, &self.effects);
     }
 }
 
@@ -693,6 +877,7 @@ impl FunctionStore {
         }
     }
 
+    #[track_caller]
     pub fn get_function(
         &mut self,
         call_conv: CallConv,
@@ -723,7 +908,7 @@ impl FunctionStore {
 
         let Some(func_ref) = self.func_map.get_by_right(&name) else {
             crate::print_function_addresses();
-            panic!("Function not found: {}", name);
+            panic!("Function not found: {name}");
         };
         let func = ExtFuncData {
             name: ExternalName::User(*func_ref),
