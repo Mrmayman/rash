@@ -460,6 +460,7 @@ impl Runtime {
 pub struct SpawnableScripts {
     pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
     pub custom_blocks: Vec<CustomBlock>,
+    // If you add more here, make sure to update analysis passes too
 }
 
 #[derive(Default, Clone)]
