@@ -276,7 +276,7 @@ impl ProjectBuilder {
         sprite
             .scripts
             .custom_blocks
-            .push_to(&mut this.custom_blocks);
+            .into_regular_vec(&mut this.custom_blocks);
     }
 
     pub fn set_sprite_order(&mut self, order: Vec<SpriteId>) {
@@ -363,7 +363,7 @@ impl ProjectBuilder {
                 memory,
                 *sprite_id,
                 0,
-                scr.kind.is_screen_refresh(),
+                true,
                 &mut |id| {
                     custom_block_analysis
                         .get(&id)

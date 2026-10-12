@@ -39,18 +39,25 @@ pub unsafe extern "C" fn call_no_screen_refresh(
         panic!("Custom block {} hasn't been compiled yet", id.0)
     };
 
-    let result = unsafe {
-        (s.func)(
-            JumpId::default(),
-            std::ptr::null_mut(),
-            arg_buffer,
-            scripts,
-            graphics,
-            0,
-            std::ptr::null_mut(),
-        )
-    };
-    debug_assert!(result.is_done());
+    let mut repeat_stack = Vec::new();
+    let mut child_thread = None;
+    let mut result = JumpId::default();
+    // TODO: Warp timer
+    // Poorly written code could loop infinitely and hang the runtime.
+    // If a check is added, ensure it is optional (can be disabled for performance)
+    while !result.is_done() {
+        result = unsafe {
+            (s.func)(
+                result,
+                &raw mut repeat_stack,
+                arg_buffer,
+                scripts,
+                graphics,
+                0,
+                &raw mut child_thread,
+            )
+        };
+    }
 
     for offset in 0..script.num_args {
         let arg = unsafe { arg_buffer.add(offset) };

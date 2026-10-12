@@ -31,7 +31,7 @@ impl<T> GapVec<T> {
         self.inner.push(Some(item));
     }
 
-    pub fn push_to(self, out: &mut Vec<T>) {
+    pub fn into_regular_vec(self, out: &mut Vec<T>) {
         if self.inner.len() <= out.len() {
             if cfg!(debug_assertions) {
                 for i in &self.inner {
