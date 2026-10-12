@@ -43,7 +43,7 @@ impl CostumeStore {
     /// uploaded them to the GPU.
     pub fn free_memory(&mut self) {
         for c in &mut self.costumes {
-            c.bytes.clear();
+            c.bytes = Vec::new();
         }
     }
 
