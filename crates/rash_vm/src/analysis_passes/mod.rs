@@ -34,6 +34,29 @@ impl ProjectBuilder {
             // Start fresh on every cycle to achieve proper convergence (and prevent infinite looping)
             let previous_call_sites = std::mem::take(&mut call_sites);
 
+            for (_, script) in &self.runtime.scripts.green_flags {
+                let MaybeCompiled::ToCompile(script) = &script else {
+                    continue;
+                };
+
+                analyze(
+                    &script.blocks,
+                    &mut |child| {
+                        effects_by_block
+                            .get(&child)
+                            .cloned()
+                            .unwrap_or(Effects::unknown())
+                    },
+                    &mut |child, local_effects| {
+                        // Fresh entry this pass ⇒ this is a genuine replace, not accumulate.
+                        call_sites
+                            .entry(child)
+                            .and_modify(|existing| existing.merge(&local_effects, fallback_write))
+                            .or_insert(local_effects);
+                    },
+                );
+            }
+
             for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
                 let MaybeCompiled::ToCompile(script) = &script.script else {
                     continue;
