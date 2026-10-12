@@ -4,12 +4,15 @@ use rash_vm::{
     error::{RashError, Trace},
 };
 
-use crate::{CompileContext, Res, error::ErrExt, helpers::get_expect_str};
+use crate::{CompileContext, Sb3Error, error::ErrExt, helpers::get_expect_str};
 
 pub mod control;
 pub mod op;
 
-pub fn argument_reporter(b: &Block, ctx: &mut CompileContext<'_>) -> Res<ScratchBlock> {
+pub fn argument_reporter(
+    b: &Block,
+    ctx: &mut CompileContext<'_>,
+) -> Result<ScratchBlock, Sb3Error> {
     const F: &str = "blocks::argument_reporter";
     let arg = b
         .fields

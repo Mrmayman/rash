@@ -12,14 +12,14 @@ use rash_vm::{
 };
 use zip::ZipArchive;
 
-use crate::{CompileContext, Res, Sb3ErrorKind, error::ErrExt, get, load_block};
+use crate::{CompileContext, Sb3Error, Sb3ErrorKind, error::ErrExt, get, load_block};
 
 pub fn load_costumes<R: Read + Seek>(
     archive: &mut ZipArchive<R>,
     sprite_json: &Target,
     costumes: &mut CostumeStore,
     id: SpriteId,
-) -> Res<()> {
+) -> Result<(), Sb3Error> {
     const FN_N: &str = "ProjectLoader::load_costumes";
 
     for costume in &sprite_json.costumes {
@@ -63,7 +63,7 @@ pub fn load_blocks(
     variable_map: &mut HashMap<String, Ptr>,
     custom_block_num: &mut usize,
     sprite: &mut SpriteBuilder,
-) -> Res<()> {
+) -> Result<(), Sb3Error> {
     const FN_N: &str = "sb3::load_blocks";
 
     let mut ctx = CompileContext {
