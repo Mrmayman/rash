@@ -3,7 +3,7 @@ use std::fmt::Display;
 use rash_vm::error::{ErrorConvert, RashError};
 use zip::result::ZipError;
 
-pub type Error = RashError<Sb3ErrorKind>;
+pub type Sb3Error = RashError<Sb3ErrorKind>;
 
 pub(crate) trait ErrExt {
     fn field_not_found(field: &str) -> Self;
@@ -12,7 +12,7 @@ pub(crate) trait ErrExt {
     fn blockdef_not_found(trace: &str) -> Self;
 }
 
-impl ErrExt for Error {
+impl ErrExt for Sb3Error {
     fn field_not_found(field: &str) -> Self {
         RashError {
             trace: vec![],
@@ -93,7 +93,7 @@ impl Display for Sb3ErrorKind {
 macro_rules! err_convert {
     ($ty:ident, $variant:path) => {
         impl<T> ErrorConvert<Sb3ErrorKind, T> for Result<T, $ty> {
-            fn to(self, a: &str, b: &str) -> Result<T, Error> {
+            fn to(self, a: &str, b: &str) -> Result<T, Sb3Error> {
                 self.map_err(|n| RashError {
                     trace: vec![a.to_owned(), b.to_owned()],
                     kind: $variant(n),

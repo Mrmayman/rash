@@ -5,7 +5,7 @@ use rash_vm::{
 };
 
 use crate::{
-    Res,
+    Sb3Error,
     error::ErrExt,
     helpers::{
         expect_array, expect_str, get_expect_array, get_expect_str, get_idx_array, idx_array,
@@ -22,7 +22,7 @@ pub fn substack(
     b: &Block,
     ctx: &mut CompileContext,
     substack_name: &str,
-) -> Res<Vec<ScratchBlock>> {
+) -> Result<Vec<ScratchBlock>, Sb3Error> {
     const F: &str = "get::substack";
     let Some(substack) = b.inputs.get(substack_name) else {
         return Ok(Vec::new());
@@ -49,13 +49,13 @@ pub fn substack(
     Ok(compiled_blocks)
 }
 
-pub fn variable_field(b: &Block) -> Res<&str> {
+pub fn variable_field(b: &Block) -> Result<&str, Sb3Error> {
     const F: &str = "get::variable_field";
     let variable = get_idx_array(b.fields.variable.as_ref(), 1, "b.fields.VARIABLE").trace(F)?;
     expect_str(variable, "b.fields.VARIABLE").trace(F)
 }
 
-pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
+pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Result<Input, Sb3Error> {
     const F: &str = "get::boolean";
     let Some(input) = b.inputs.get(name) else {
         return Ok(false.into());
@@ -112,7 +112,7 @@ pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     Ok(input)
 }
 
-pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
+pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Result<Input, Sb3Error> {
     const F: &str = "get::number";
 
     let input = get_expect_array(b.inputs.get(name), || format!("b.inputs.{name}")).trace(F)?;
@@ -171,7 +171,7 @@ pub fn number(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     Ok(input)
 }
 
-pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
+pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Result<Input, Sb3Error> {
     const F: &str = "get::string";
 
     let input = get_expect_array(b.inputs.get(name), || format!("b.inputs.{name}")).trace(F)?;
@@ -224,7 +224,7 @@ pub fn string(b: &Block, ctx: &mut CompileContext, name: &str) -> Res<Input> {
     Ok(input)
 }
 
-pub fn custom_block_prototype(b: &Block) -> Res<&str> {
+pub fn custom_block_prototype(b: &Block) -> Result<&str, Sb3Error> {
     b.inputs
         .get("custom_block")
         .ok_or(RashError::field_not_found(

@@ -28,11 +28,9 @@ mod get;
 mod helpers;
 mod sprites;
 
-pub use error::{FieldType, Sb3ErrorKind};
+pub use error::{FieldType, Sb3Error, Sb3ErrorKind};
 
-type Res<T> = Result<T, error::Error>;
-
-pub fn load_from_path(path: impl AsRef<Path>) -> Res<Runtime> {
+pub fn load_from_path(path: impl AsRef<Path>) -> Result<Runtime, Sb3Error> {
     let path = path.as_ref();
     let file = std::fs::File::open(path)
         .to("std::fs::File::open", "load_from_path")
@@ -40,7 +38,7 @@ pub fn load_from_path(path: impl AsRef<Path>) -> Res<Runtime> {
     load_from_reader(file)
 }
 
-pub fn load_from_reader<R: Read + Seek>(r: R) -> Res<Runtime> {
+pub fn load_from_reader<R: Read + Seek>(r: R) -> Result<Runtime, Sb3Error> {
     let loader = ProjectLoader::new(r)?;
     loader.build()
 }
@@ -51,7 +49,7 @@ struct ProjectLoader<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> ProjectLoader<R> {
-    pub fn new(r: R) -> Res<Self> {
+    pub fn new(r: R) -> Result<Self, Sb3Error> {
         const FN_N: &str = "ProjectLoader::new";
 
         let mut archive = zip::ZipArchive::new(r).to("zip::ZipArchive::new", FN_N)?;
@@ -65,7 +63,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         Ok(Self { json, archive })
     }
 
-    pub fn build(mut self) -> Res<Runtime> {
+    pub fn build(mut self) -> Result<Runtime, Sb3Error> {
         const FN_N: &str = "ProjectLoader::build";
 
         let mut builder = ProjectBuilder::new();
@@ -152,7 +150,7 @@ impl CompileContext<'_> {
         self.sprite_json.blocks.get(id)
     }
 
-    fn get_custom_block(&mut self, block: &Block) -> Res<CustomBlockDef> {
+    fn get_custom_block(&mut self, block: &Block) -> Result<CustomBlockDef, Sb3Error> {
         const FN_N: &str = "CompileContext::get_custom_block";
 
         let block_mutation = block
@@ -215,7 +213,7 @@ impl CompileContext<'_> {
     }
 }
 
-fn build_argument_names(args: &[String], names: &str) -> Res<HashMap<String, String>> {
+fn build_argument_names(args: &[String], names: &str) -> Result<HashMap<String, String>, Sb3Error> {
     const FN_N: &str = "build_argument_names";
 
     let arg_names: Vec<String> =
@@ -228,7 +226,7 @@ fn build_argument_names(args: &[String], names: &str) -> Res<HashMap<String, Str
     Ok(collect)
 }
 
-fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
+fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Error> {
     match b.opcode.as_str() {
         "data_setvariableto" => {
             // b.fields.VARIABLE[1]
@@ -327,7 +325,7 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         "procedures_call" => {
             let block = ctx.get_custom_block(b)?;
 
-            let args: Res<Vec<Input>> = block
+            let args: Result<Vec<Input>, Sb3Error> = block
                 .args
                 .iter()
                 .map(|n| get::number(b, ctx, n).trace("Block::compile.procedures_call"))
