@@ -412,7 +412,7 @@ impl Compiler<'_> {
             // Only optimize *indirect* writes. If x is directly
             // accessed by `bar` within the loop body, we have to
             // keep it up-to-date for every iteration.
-            .filter(|(_, write)| !write.direct)
+            .filter(|(ptr, write)| !write.direct && !effects.reads.contains(ptr))
             // Skip this optimization if we already applied it in a higher scope
             .filter(|(ptr, _)| !self.clobber_stack.contains(ptr))
             .map(|(ptr, write)| {

@@ -137,6 +137,9 @@ fn fetch_function_arguments(
 ) -> Vec<FunctionArg> {
     let mut args_list = Vec::new();
     for i in 0..num_args {
+        let args_ptr = builder
+            .ins()
+            .iadd_imm(args_ptr, (i * std::mem::size_of::<ScratchObject>()) as i64);
         let datatype = arg_types.get(i).copied().unwrap_or_default();
 
         let val = match datatype.ty {
