@@ -7,7 +7,7 @@ use utils::run_code;
 
 use crate::{
     Input, Ptr, ScratchBlock, ScratchObject,
-    builder::{c_if, c_repeat, fadd, fdiv, fmod, fmul, fsub},
+    builder::{c_if, c_repeat, fadd, fdiv, fmod, fmul, fsub, set},
     compiler::VarType,
 };
 
@@ -17,12 +17,8 @@ fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
     input
         .into_iter()
         .enumerate()
-        .map(|(i, input)| set_var(Ptr(i), input))
+        .map(|(i, input)| set(Ptr(i), input))
         .collect()
-}
-
-fn set_var(ptr: Ptr, input: impl Into<Input>) -> ScratchBlock {
-    ScratchBlock::VarSet(ptr, input.into())
 }
 
 #[test]
@@ -80,13 +76,13 @@ pub fn pi() {
 #[test]
 pub fn random() {
     let memory = run_code(vec![
-        set_var(Ptr(0), ScratchBlock::OpRandom(0.0.into(), 100.0.into())),
-        set_var(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
-        set_var(Ptr(2), ScratchBlock::OpRandom("1".into(), "2".into())),
-        set_var(Ptr(3), ScratchBlock::OpRandom("1.0".into(), "2".into())),
+        set(Ptr(0), ScratchBlock::OpRandom(0.0.into(), 100.0.into())),
+        set(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
+        set(Ptr(2), ScratchBlock::OpRandom("1".into(), "2".into())),
+        set(Ptr(3), ScratchBlock::OpRandom("1.0".into(), "2".into())),
         c_repeat(
             100_000.0,
-            vec![set_var(
+            vec![set(
                 Ptr(4),
                 ScratchBlock::OpRandom(0.0.into(), 100.0.into()),
             )],
@@ -316,10 +312,10 @@ pub fn math_div() {
 pub fn negative_zero_is_truthy() {
     // Real bug btw
     let memory = run_code(vec![
-        set_var(Ptr(0), -0.0),
-        c_if(Ptr(0), vec![set_var(Ptr(1), 1.0)]),
+        set(Ptr(0), -0.0),
+        c_if(Ptr(0), vec![set(Ptr(1), 1.0)]),
         // Also verify the literal path
-        c_if(-0.0, vec![set_var(Ptr(2), 1.0)]),
+        c_if(-0.0, vec![set(Ptr(2), 1.0)]),
     ]);
     assert_eq!(memory[1].convert_to_number(), 1.0);
     assert_eq!(memory[2].convert_to_number(), 1.0);
@@ -625,7 +621,7 @@ pub fn math_trig() {
 
 #[test]
 fn bool_return() {
-    let memory = run_code(vec![set_var(
+    let memory = run_code(vec![set(
         Ptr(0),
         ScratchBlock::OpBAnd(
             ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),

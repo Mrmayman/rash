@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use rash_core::{RunState, SpriteId};
 use rash_render::{Renderer, WindowSize};
-use rash_vm::{MEMORY, ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
+use rash_vm::{ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -22,7 +22,6 @@ fn main() {
             return;
         } else if arg == "--demo" {
             run_demo();
-            rash_vm::print_memory();
             return;
         }
         PathBuf::from(arg)
@@ -64,19 +63,20 @@ fn main() {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => control_flow.exit(),
+            } => {
+                if std::env::var("RASH_PRINT_MEMORY").is_ok() {
+                    rash_vm::print_memory(&app.vm.memory);
+                }
+                control_flow.exit()
+            }
             _ => app.tick(event),
         })
         .unwrap();
-
-    if std::env::var("RASH_PRINT_MEMORY").is_ok() {
-        rash_vm::print_memory();
-    }
 }
 
 pub struct App {
     renderer: Renderer,
-    vm: Runtime,
+    pub vm: Runtime,
     window: Arc<Window>,
 
     surface: wgpu::Surface<'static>,
@@ -191,11 +191,10 @@ fn run_demo() {
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
 
-    // TODO: All memory is a global variable
-    // I *will* refactor this in the future
-    let memory = MEMORY.lock().unwrap();
-    let mut vm = builder.build(&memory);
+    let mut vm = builder.build();
 
     let mut state = RunState::new(); // No graphics operations here
     while !vm.update(&mut state) {}
+
+    rash_vm::print_memory(&vm.memory);
 }

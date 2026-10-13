@@ -12,12 +12,12 @@ fn call_with_args(id: CustomBlockId, args: Vec<Input>) -> ScratchBlock {
 }
 
 fn assert_arg_types(info: &CallSiteInfo, expected: &[VarTypeChecked]) {
-    let actual: Vec<_> = info.argument_types.iter().map(|w| w.ty).collect();
+    let actual: Vec<_> = info.arguments.iter().map(|w| w.ty).collect();
     assert_eq!(
         actual.as_slice(),
         expected,
         "unexpected argument types: {:?}",
-        info.argument_types
+        info.arguments
     );
 }
 
@@ -37,7 +37,7 @@ fn call_environment_records_argument_types_for_single_call() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_arg_types(
-        &analysis[&B].1,
+        &analysis.custom_blocks[&B].call_site,
         &[
             VarTypeChecked::Number,
             VarTypeChecked::String,
@@ -69,7 +69,7 @@ fn call_environment_merges_argument_types_across_call_sites() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_arg_types(
-        &analysis[&C].1,
+        &analysis.custom_blocks[&C].call_site,
         &[
             VarTypeChecked::Number,
             VarTypeChecked::String,
@@ -88,7 +88,10 @@ fn call_environment_argument_types_downgrade_on_mismatch() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_arg_types(&analysis[&C].1, &[VarTypeChecked::Object]);
+    assert_arg_types(
+        &analysis.custom_blocks[&C].call_site,
+        &[VarTypeChecked::Object],
+    );
 }
 
 #[test]
@@ -101,9 +104,9 @@ fn call_environment_with_no_arguments_has_empty_argument_types() {
     let analysis = builder.analyze_custom_blocks();
 
     assert!(
-        analysis[&B].1.argument_types.is_empty(),
+        analysis.custom_blocks[&B].call_site.arguments.is_empty(),
         "expected no argument types, got {:?}",
-        analysis[&B].1.argument_types
+        analysis.custom_blocks[&B].call_site.arguments
     );
 }
 
@@ -129,10 +132,13 @@ fn call_environment_merges_call_site_and_argument_types_independently() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&C].1.call_site, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&C].call_site.at_site,
+        &[(X, VarTypeChecked::Number)],
+    );
 
     assert_arg_types(
-        &analysis[&C].1,
+        &analysis.custom_blocks[&C].call_site,
         &[VarTypeChecked::Number, VarTypeChecked::Object],
     );
 }
@@ -151,9 +157,15 @@ fn call_environment_argument_types_are_not_polluted_by_parent_context() {
     let analysis = builder.analyze_custom_blocks();
 
     // B's arg types come from A's call to B.
-    assert_arg_types(&analysis[&B].1, &[VarTypeChecked::Number]);
+    assert_arg_types(
+        &analysis.custom_blocks[&B].call_site,
+        &[VarTypeChecked::Number],
+    );
     // C's arg types come from B's call to C. A's context must not leak in.
-    assert_arg_types(&analysis[&C].1, &[VarTypeChecked::Bool]);
+    assert_arg_types(
+        &analysis.custom_blocks[&C].call_site,
+        &[VarTypeChecked::Bool],
+    );
 }
 
 #[test]
@@ -175,7 +187,10 @@ fn call_environment_argument_types_merge_across_depths() {
     let analysis = builder.analyze_custom_blocks();
 
     // Number from A's direct call merges with String from B's call.
-    assert_arg_types(&analysis[&C].1, &[VarTypeChecked::Object]);
+    assert_arg_types(
+        &analysis.custom_blocks[&C].call_site,
+        &[VarTypeChecked::Object],
+    );
 }
 
 #[test]
@@ -187,5 +202,5 @@ fn recursive_block_has_no_argument_types_recorded() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(!analysis.contains_key(&A));
+    assert!(!analysis.custom_blocks.contains_key(&A));
 }

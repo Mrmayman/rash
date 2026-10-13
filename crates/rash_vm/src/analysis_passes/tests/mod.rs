@@ -86,7 +86,7 @@ fn custom_block_empty() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    let a = &analysis[&A].0;
+    let a = &analysis.custom_blocks[&A].effects;
 
     assert!(!a.is_unknown);
     assert!(a.is_fully_direct());
@@ -94,9 +94,9 @@ fn custom_block_empty() {
     assert!(a.writes.is_empty());
     assert!(a.reads.is_empty());
 
-    for (_, callsite) in analysis.values() {
-        assert!(callsite.call_site.is_unknown);
-        assert!(callsite.argument_types.is_empty());
+    for a in analysis.custom_blocks.values() {
+        assert!(a.call_site.at_site.is_unknown);
+        assert!(a.call_site.arguments.is_empty());
     }
 }
 
@@ -106,9 +106,12 @@ fn custom_block_direct_write() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 
-    assert!(analysis[&A].0.is_fully_direct());
+    assert!(analysis.custom_blocks[&A].effects.is_fully_direct());
 }
 
 #[test]
@@ -121,7 +124,7 @@ fn custom_block_multiple_direct_writes() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_writes(
-        &analysis[&A].0,
+        &analysis.custom_blocks[&A].effects,
         &[
             (X, VarTypeChecked::Number),
             (Y, VarTypeChecked::Bool),
@@ -145,9 +148,15 @@ fn caller_inherits_called_block_effects() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 
-    assert_writes(&analysis[&B].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&B].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 }
 
 #[test]
@@ -163,11 +172,20 @@ fn transitive_effects_propagate() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&C].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&C].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 
-    assert_writes(&analysis[&B].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&B].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 }
 
 #[test]
@@ -182,7 +200,7 @@ fn direct_and_called_effects_are_merged() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_writes(
-        &analysis[&A].0,
+        &analysis.custom_blocks[&A].effects,
         &[(X, VarTypeChecked::Number), (Y, VarTypeChecked::Bool)],
     );
 }
@@ -203,11 +221,20 @@ fn called_block_has_multiple_callers() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 
-    assert_writes(&analysis[&B].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&B].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 
-    assert_writes(&analysis[&C].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&C].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 }
 
 // ---------------------------------------------------------------------
@@ -224,11 +251,17 @@ fn call_environment_contains_effects_at_call_site() {
     let analysis = builder.analyze_custom_blocks();
 
     assert!(
-        analysis.get(&B).is_some_and(|n| !n.1.call_site.is_unknown),
+        analysis
+            .custom_blocks
+            .get(&B)
+            .is_some_and(|n| !n.call_site.at_site.is_unknown),
         "B should have a call environment"
     );
 
-    assert_writes(&analysis[&B].1.call_site, &[(Y, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&B].call_site.at_site,
+        &[(Y, VarTypeChecked::Number)],
+    );
 }
 
 #[test]
@@ -242,12 +275,15 @@ fn call_environment_merges_multiple_call_sites() {
     let analysis = builder.analyze_custom_blocks();
 
     assert!(
-        analysis.get(&C).is_some_and(|n| !n.1.call_site.is_unknown),
+        analysis
+            .custom_blocks
+            .get(&C)
+            .is_some_and(|n| !n.call_site.at_site.is_unknown),
         "C should have a call environment"
     );
 
     assert_writes(
-        &analysis[&C].1.call_site,
+        &analysis.custom_blocks[&C].call_site.at_site,
         &[
             (X, VarTypeChecked::Number),
             (Y, VarTypeChecked::Object),
@@ -267,7 +303,7 @@ fn call_environment_represents_state_before_call() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_writes(
-        &analysis[&B].1.call_site,
+        &analysis.custom_blocks[&B].call_site.at_site,
         &[(X, VarTypeChecked::Number), (Y, VarTypeChecked::Bool)],
     );
 }
@@ -289,7 +325,10 @@ fn called_block_is_reanalyzed_after_callee_changes() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&A].0, &[(Z, VarTypeChecked::String)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(Z, VarTypeChecked::String)],
+    );
 }
 
 // ---------------------------------------------------------------------
@@ -305,9 +344,9 @@ fn called_effects_are_indirect_in_caller() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(analysis[&A].0.writes[&X].direct);
-    assert!(!analysis[&B].0.writes[&X].direct);
-    assert!(!analysis[&B].0.is_fully_direct());
+    assert!(analysis.custom_blocks[&A].effects.writes[&X].direct);
+    assert!(!analysis.custom_blocks[&B].effects.writes[&X].direct);
+    assert!(!analysis.custom_blocks[&B].effects.is_fully_direct());
 }
 
 #[test]
@@ -319,11 +358,11 @@ fn yielding_callee_makes_caller_yield() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(analysis[&A].0.yields);
-    assert!(analysis[&A].0.is_unknown);
+    assert!(analysis.custom_blocks[&A].effects.yields);
+    assert!(analysis.custom_blocks[&A].effects.is_unknown);
 
-    assert!(analysis[&B].0.yields);
-    assert!(analysis[&B].0.is_unknown);
+    assert!(analysis.custom_blocks[&B].effects.yields);
+    assert!(analysis.custom_blocks[&B].effects.is_unknown);
 }
 
 #[test]
@@ -335,7 +374,13 @@ fn call_environment_excludes_writes_after_call() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(analysis[&B].1.call_site.writes.is_empty());
+    assert!(
+        analysis.custom_blocks[&B]
+            .call_site
+            .at_site
+            .writes
+            .is_empty()
+    );
 }
 
 #[test]
@@ -351,7 +396,10 @@ fn if_else_writes_same_type_preserved() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Number)],
+    );
 }
 
 #[test]
@@ -364,7 +412,10 @@ fn if_without_else_makes_write_optional() {
     let analysis = builder.analyze_custom_blocks();
 
     // X may be written as Number, or it may keep its previous value (Object).
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Object)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Object)],
+    );
 }
 
 #[test]
@@ -380,7 +431,10 @@ fn if_else_writes_different_types_downgrade_to_object() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&A].0, &[(X, VarTypeChecked::Object)]);
+    assert_writes(
+        &analysis.custom_blocks[&A].effects,
+        &[(X, VarTypeChecked::Object)],
+    );
 }
 
 #[test]
@@ -397,7 +451,7 @@ fn if_else_merges_distinct_writes_as_optional() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_writes(
-        &analysis[&A].0,
+        &analysis.custom_blocks[&A].effects,
         &[(X, VarTypeChecked::Object), (Y, VarTypeChecked::Object)],
     );
 }
@@ -417,9 +471,12 @@ fn call_environment_propagates_through_call_chain() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&B].1.call_site, &[(X, VarTypeChecked::Number)]);
     assert_writes(
-        &analysis[&C].1.call_site,
+        &analysis.custom_blocks[&B].call_site.at_site,
+        &[(X, VarTypeChecked::Number)],
+    );
+    assert_writes(
+        &analysis.custom_blocks[&C].call_site.at_site,
         &[(X, VarTypeChecked::Number), (Y, VarTypeChecked::Bool)],
     );
 }
@@ -439,7 +496,7 @@ fn call_environment_propagates_through_deep_chain() {
     let analysis = builder.analyze_custom_blocks();
 
     assert_writes(
-        &analysis[&d_id].1.call_site,
+        &analysis.custom_blocks[&d_id].call_site.at_site,
         &[
             (X, VarTypeChecked::Number),
             (Y, VarTypeChecked::Bool),
@@ -461,7 +518,10 @@ fn call_environment_merges_branches_at_different_depths() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert_writes(&analysis[&C].1.call_site, &[(X, VarTypeChecked::Number)]);
+    assert_writes(
+        &analysis.custom_blocks[&C].call_site.at_site,
+        &[(X, VarTypeChecked::Number)],
+    );
 }
 
 #[test]
@@ -477,9 +537,12 @@ fn cycle_member_call_site_is_unknown() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(analysis.contains_key(&C), "C should still be analyzed");
     assert!(
-        analysis[&C].1.call_site.is_unknown,
+        analysis.custom_blocks.contains_key(&C),
+        "C should still be analyzed"
+    );
+    assert!(
+        analysis.custom_blocks[&C].call_site.at_site.is_unknown,
         "no valid call site reaches C, so its call_site must be unknown"
     );
 }
@@ -495,7 +558,7 @@ fn self_recursive_block_is_not_analyzed() {
     let analysis = builder.analyze_custom_blocks();
 
     assert!(
-        !analysis.contains_key(&A),
+        !analysis.custom_blocks.contains_key(&A),
         "self-recursive block should be absent"
     );
 }
@@ -509,8 +572,8 @@ fn mutually_recursive_blocks_are_not_analyzed() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(!analysis.contains_key(&A));
-    assert!(!analysis.contains_key(&B));
+    assert!(!analysis.custom_blocks.contains_key(&A));
+    assert!(!analysis.custom_blocks.contains_key(&B));
 }
 
 #[test]
@@ -523,8 +586,8 @@ fn caller_of_recursive_block_is_not_analyzed() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(!analysis.contains_key(&A));
-    assert!(!analysis.contains_key(&B));
+    assert!(!analysis.custom_blocks.contains_key(&A));
+    assert!(!analysis.custom_blocks.contains_key(&B));
 }
 
 #[test]
@@ -540,9 +603,9 @@ fn non_recursive_leaf_called_from_cycle_is_still_analyzed() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(!analysis.contains_key(&A));
-    assert!(!analysis.contains_key(&B));
-    assert_writes(&analysis[&C].0, &[(X, VarTypeChecked::Number)]);
+    assert!(!analysis.custom_blocks.contains_key(&A));
+    assert!(!analysis.custom_blocks.contains_key(&B));
+    assert_writes(&analysis[&C].effects, &[(X, VarTypeChecked::Number)]);
 }
 
 #[test]
@@ -557,9 +620,9 @@ fn cycle_analysis_terminates_without_hanging() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(!analysis.contains_key(&A));
-    assert!(!analysis.contains_key(&B));
-    assert!(!analysis.contains_key(&C));
+    assert!(!analysis.custom_blocks.contains_key(&A));
+    assert!(!analysis.custom_blocks.contains_key(&B));
+    assert!(!analysis.custom_blocks.contains_key(&C));
 }
 
 #[test]
@@ -572,5 +635,5 @@ fn all_recursive_project_terminates_immediately() {
 
     let analysis = builder.analyze_custom_blocks();
 
-    assert!(analysis.is_empty());
+    assert!(analysis.custom_blocks.is_empty());
 }

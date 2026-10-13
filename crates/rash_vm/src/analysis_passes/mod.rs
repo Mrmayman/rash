@@ -16,10 +16,26 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
+pub struct CustomBlockAnalysis {
+    pub effects: Effects,
+    pub call_site: CallSiteInfo,
+}
+
+pub struct AnalysisOutput {
+    pub custom_blocks: HashMap<CustomBlockId, CustomBlockAnalysis>,
+    pub var_buf_len: usize,
+}
+
+impl std::ops::Index<&CustomBlockId> for AnalysisOutput {
+    type Output = CustomBlockAnalysis;
+
+    fn index(&self, index: &CustomBlockId) -> &Self::Output {
+        self.custom_blocks.index(index)
+    }
+}
+
 impl ProjectBuilder {
-    pub(crate) fn analyze_custom_blocks(
-        &mut self,
-    ) -> HashMap<CustomBlockId, (Effects, CallSiteInfo)> {
+    pub(crate) fn analyze_custom_blocks(&mut self) -> AnalysisOutput {
         let mut effects_by_block: HashMap<CustomBlockId, Effects> = HashMap::new();
         let mut call_sites: HashMap<CustomBlockId, CallSiteInfo> = HashMap::new();
 
@@ -133,28 +149,53 @@ impl ProjectBuilder {
         // Recursive/cyclic blocks remain intentionally unresolved
         // and resort to runtime checks rather than compile time.
 
-        let mut combined: HashMap<CustomBlockId, (Effects, CallSiteInfo)> = HashMap::new();
+        let mut combined = HashMap::new();
 
         for (id, effects) in effects_by_block {
             combined.insert(
                 id,
-                (
+                CustomBlockAnalysis {
                     effects,
-                    CallSiteInfo {
-                        call_site: Effects::unknown(),
-                        argument_types: Vec::new(),
+                    call_site: CallSiteInfo {
+                        at_site: Effects::unknown(),
+                        arguments: Vec::new(),
                     },
-                ),
+                },
             );
         }
-        for (id, call_site_info) in call_sites {
+        for (id, call_site) in call_sites {
             combined
                 .entry(id)
-                .and_modify(|(_, existing)| *existing = call_site_info.clone())
-                .or_insert_with(|| (Effects::unknown(), call_site_info));
+                .and_modify(|c| c.call_site = call_site.clone())
+                .or_insert_with(|| CustomBlockAnalysis {
+                    effects: Effects::unknown(),
+                    call_site,
+                });
         }
 
-        combined
+        AnalysisOutput {
+            custom_blocks: combined,
+            var_buf_len: self.get_var_buf_len(),
+        }
+    }
+
+    fn get_var_buf_len(&mut self) -> usize {
+        let mut accessed_vars = HashSet::new();
+        for s in self.runtime.scripts.iter() {
+            let MaybeCompiled::ToCompile(script) = &s else {
+                continue;
+            };
+
+            let eff = analyze(&script.blocks, &mut |_| Effects::unknown(), &mut |_, _| {});
+            accessed_vars.extend(eff.reads);
+            accessed_vars.extend(eff.writes.into_keys());
+        }
+        let var_buf_len = if let Some(max) = accessed_vars.iter().max_by_key(|a| a.0) {
+            max.0 + 1
+        } else {
+            accessed_vars.len()
+        };
+        var_buf_len
     }
 
     fn collect_custom_block_calls(

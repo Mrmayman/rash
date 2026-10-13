@@ -5,6 +5,7 @@ use memmap2::Mmap;
 use smol_str::SmolStr;
 
 use crate::{
+    Ptr,
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
     data_types::ScratchObject,
@@ -242,6 +243,8 @@ impl SpriteBuilder {
 #[derive(Default)]
 pub struct ProjectBuilder {
     pub(crate) runtime: Runtime,
+    // TODO: Read original values from SB3
+    pub original_values: HashMap<Ptr, ScratchObject>,
 }
 
 impl Clone for ProjectBuilder {
@@ -251,6 +254,7 @@ impl Clone for ProjectBuilder {
             // structures in runtime (like ScratchThread)
             // haven't been initialized yet
             runtime: self.runtime.clone_private(),
+            original_values: HashMap::new(),
         }
     }
 }
@@ -288,16 +292,26 @@ impl ProjectBuilder {
     }
 
     #[must_use]
-    pub fn build(mut self, memory: &[ScratchObject]) -> Runtime {
+    pub fn build(mut self) -> Runtime {
         // This is where all your magic happens :D
-        self.compile(memory);
+        self.compile();
 
         self.runtime.init();
         self.runtime
     }
 
-    fn compile(&mut self, memory: &[ScratchObject]) {
-        let custom_block_analysis = self.analyze_custom_blocks();
+    fn compile(&mut self) {
+        let analysis = self.analyze_custom_blocks();
+
+        self.runtime.memory = (0..analysis.var_buf_len)
+            .into_iter()
+            .map(|n| {
+                self.original_values
+                    .get(&Ptr(n))
+                    .cloned()
+                    .unwrap_or(ScratchObject::Number(0.0))
+            })
+            .collect();
 
         for script in &mut self.runtime.scripts.custom_blocks {
             let MaybeCompiled::ToCompile(scr) = &script.script else {
@@ -310,25 +324,26 @@ impl ProjectBuilder {
                 );
                 continue;
             };
-            let analysis = custom_block_analysis.get(id);
+            let a = analysis.custom_blocks.get(id);
 
             // Compiling custom blocks at last moment
             // so that we get the most data for analysis
             let (thread, static_strings) = compile(
                 &scr.blocks,
-                memory,
+                &self.runtime.memory,
                 script.sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
                 &mut |id| {
-                    custom_block_analysis
+                    analysis
+                        .custom_blocks
                         .get(&id)
-                        .map_or(Effects::unknown(), |n| n.0.clone())
+                        .map_or(Effects::unknown(), |n| n.effects.clone())
                 },
                 &|ptr| {
-                    if let Some((_, call_env)) = analysis {
-                        call_env
-                            .call_site
+                    if let Some(a) = a {
+                        a.call_site
+                            .at_site
                             .writes
                             .get(&ptr)
                             .copied()
@@ -337,8 +352,7 @@ impl ProjectBuilder {
                         VariableWrite::default()
                     }
                 },
-                analysis
-                    .map(|n| n.1.argument_types.as_slice())
+                a.map(|n| n.call_site.arguments.as_slice())
                     .unwrap_or_default(),
             );
 
@@ -360,14 +374,15 @@ impl ProjectBuilder {
 
             let (thread, static_strings) = compile(
                 &scr.blocks,
-                memory,
+                &self.runtime.memory,
                 *sprite_id,
                 0,
                 true,
                 &mut |id| {
-                    custom_block_analysis
+                    analysis
+                        .custom_blocks
                         .get(&id)
-                        .map_or(Effects::unknown(), |n| n.0.clone())
+                        .map_or(Effects::unknown(), |n| n.effects.clone())
                 },
                 // You can't safely tell what a variable's type will be
                 // before a green flag is run due to concurrent threads
@@ -395,6 +410,7 @@ pub struct Runtime {
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
     static_strings: Vec<SmolStr>,
+    pub memory: Box<[ScratchObject]>,
 }
 
 impl Runtime {
@@ -452,15 +468,25 @@ impl Runtime {
             costumes: self.costumes.clone(),
             sprite_load_info: self.sprite_load_info.clone(),
             static_strings: self.static_strings.clone(),
+            memory: self.memory.clone(),
         }
     }
 }
 
 #[derive(Default, Clone)]
-pub struct SpawnableScripts {
+pub(crate) struct SpawnableScripts {
     pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
     pub custom_blocks: Vec<CustomBlock>,
     // If you add more here, make sure to update analysis passes too
+}
+
+impl SpawnableScripts {
+    pub fn iter(&self) -> impl Iterator<Item = &MaybeCompiled> {
+        self.green_flags
+            .iter()
+            .map(|n| &n.1)
+            .chain(self.custom_blocks.iter().map(|n| &n.script))
+    }
 }
 
 #[derive(Default, Clone)]
@@ -563,7 +589,7 @@ impl ScratchThread {
     ///   may result in panics or undefined behaviour).
     /// - There hopefully aren't any compiler bugs
     ///   creating broken code
-    pub unsafe fn tick(&mut self, scripts: &SpawnableScripts, state: &mut RunState) -> bool {
+    pub(crate) unsafe fn tick(&mut self, scripts: &SpawnableScripts, state: &mut RunState) -> bool {
         if self.jumped_point.is_done() {
             return true;
         }
