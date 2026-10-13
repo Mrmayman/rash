@@ -16,6 +16,8 @@ use crate::{
 };
 use rash_core::{RunState, SpriteId};
 
+mod args;
+
 const X: Ptr = Ptr(0);
 
 fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks_expected: usize) {
@@ -58,10 +60,11 @@ fn custom_block_screen_refresh() {
                     3.0,
                     vec![
                         change(X, ScratchBlock::FunctionGetArg(0)),
+                        change(X, ScratchBlock::FunctionGetArg(1)),
                         ScratchBlock::ScreenRefresh,
                     ],
                 )],
-                1,
+                2,
                 CustomBlockId(1),
                 true,
             ),
@@ -73,7 +76,7 @@ fn custom_block_screen_refresh() {
                         vec![
                             ScratchBlock::FunctionCallScreenRefresh(
                                 CustomBlockId(1),
-                                vec![1.0.into()],
+                                vec![1.0.into(), 2.0.into()],
                             ),
                             ScratchBlock::ScreenRefresh,
                         ],
@@ -89,7 +92,7 @@ fn custom_block_screen_refresh() {
             ]),
         ],
         |m| {
-            assert_eq!(m[0].convert_to_number(), 15.0);
+            assert_eq!(m[0].convert_to_number(), 45.0);
         },
         21,
     );
