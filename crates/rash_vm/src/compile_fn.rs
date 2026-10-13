@@ -137,29 +137,29 @@ fn fetch_function_arguments(
 ) -> Vec<FunctionArg> {
     let mut args_list = Vec::new();
     for i in 0..num_args {
-        let args_ptr = builder
-            .ins()
-            .iadd_imm(args_ptr, (i * std::mem::size_of::<ScratchObject>()) as i64);
+        let o = (i * std::mem::size_of::<ScratchObject>()) as i32;
         let datatype = arg_types.get(i).copied().unwrap_or_default();
 
         let val = match datatype.ty {
             VarTypeChecked::Number => {
-                ScratchValue::Num(builder.ins().load(F64, MemFlags::new(), args_ptr, 8))
+                ScratchValue::Num(builder.ins().load(F64, MemFlags::new(), args_ptr, o + 8))
             }
             VarTypeChecked::Bool => {
-                ScratchValue::Bool(builder.ins().load(I64, MemFlags::new(), args_ptr, 8))
+                let raw = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
+                let val = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                ScratchValue::Bool(val)
             }
             VarTypeChecked::String => {
-                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
+                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 24);
                 ScratchValue::String([i2, i3, i4])
             }
             VarTypeChecked::Object => {
-                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, 0);
-                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, 24);
+                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 0);
+                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
+                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
+                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 24);
                 ScratchValue::Object([i1, i2, i3, i4])
             }
         };
