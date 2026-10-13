@@ -49,7 +49,6 @@ pub struct JsonStruct {
 
 /// # A Scratch sprite.
 #[derive(Deserialize, Debug, Clone)]
-
 pub struct Target {
     #[serde(rename = "isStage")]
     pub is_stage: bool,
@@ -57,7 +56,6 @@ pub struct Target {
     pub variables: BTreeMap<String, Vec<Value>>,
     pub lists: Value,
     pub broadcasts: Value,
-    #[serde(with = "indexmap::map::serde_seq")]
     pub blocks: IndexMap<String, JsonBlock>,
     pub comments: Value,
     #[serde(rename = "currentCostume")]
