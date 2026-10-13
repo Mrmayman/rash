@@ -40,12 +40,17 @@ pub unsafe extern "C" fn call_no_screen_refresh(
     };
 
     let mut repeat_stack = Vec::new();
-    let mut child_thread = None;
+    let mut child_thread: Option<Box<ScratchThread>> = None;
     let mut result = JumpId::default();
     // TODO: Warp timer
     // Poorly written code could loop infinitely and hang the runtime.
     // If a check is added, ensure it is optional (can be disabled for performance)
     while !result.is_done() {
+        if let Some(child) = &mut child_thread {
+            while !unsafe { child.tick(scripts, &mut *graphics) } {}
+            child_thread = None;
+        }
+
         result = unsafe {
             (s.func)(
                 result,

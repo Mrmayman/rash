@@ -21,28 +21,24 @@ mod tests;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallSiteInfo {
-    pub call_site: Effects,
-    pub argument_types: Vec<VariableWrite>,
+    pub at_site: Effects,
+    pub arguments: Vec<VariableWrite>,
 }
 
 impl CallSiteInfo {
     pub fn merge(&mut self, other: &Self, var_type: &dyn Fn(Ptr) -> VariableWrite) {
-        self.call_site.merge(&other.call_site, var_type);
+        self.at_site.merge(&other.at_site, var_type);
 
         // This assumes both have same no. of arguments.
         // If Scratch ever gets variadic arguments, something to look out for.
-        for (slf, othr) in self
-            .argument_types
-            .iter_mut()
-            .zip(other.argument_types.iter())
-        {
+        for (slf, othr) in self.arguments.iter_mut().zip(other.arguments.iter()) {
             *slf = slf.merge(*othr);
         }
     }
 
     pub fn sequence(&mut self, effects: &Self, var_type: &dyn Fn(Ptr) -> VariableWrite) {
-        self.call_site.sequence(&effects.call_site, var_type);
-        self.argument_types = effects.argument_types.clone();
+        self.at_site.sequence(&effects.at_site, var_type);
+        self.arguments = effects.arguments.clone();
     }
 }
 
@@ -459,8 +455,8 @@ impl CheckEffects for ScratchBlock {
 
             ScratchBlock::FunctionCallNoScreenRefresh(id, args) => {
                 let call_site = CallSiteInfo {
-                    call_site: Effects::new(),
-                    argument_types: args.iter().map(|arg| arg.expected_type(v)).collect(),
+                    at_site: Effects::new(),
+                    arguments: args.iter().map(|arg| arg.expected_type(v)).collect(),
                 };
                 f(*id, call_site);
                 let mut code_eff = c(*id);
@@ -470,8 +466,8 @@ impl CheckEffects for ScratchBlock {
             // Screen refresh blocks could yield
             ScratchBlock::FunctionCallScreenRefresh(id, args) => {
                 let call_site = CallSiteInfo {
-                    call_site: Effects::new(),
-                    argument_types: args.iter().map(|arg| arg.expected_type(v)).collect(),
+                    at_site: Effects::new(),
+                    arguments: args.iter().map(|arg| arg.expected_type(v)).collect(),
                 };
                 f(*id, call_site);
                 Effects::that_yields()
@@ -526,8 +522,8 @@ impl<T: CheckEffects> CheckEffects for &[T] {
                     f(
                         id,
                         CallSiteInfo {
-                            call_site: effects.clone().then(&thrown.call_site, var_ty),
-                            argument_types: thrown.argument_types,
+                            at_site: effects.clone().then(&thrown.at_site, var_ty),
+                            arguments: thrown.arguments,
                         },
                     );
                 },

@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    sync::{LazyLock, Mutex},
 };
 
 use bimap::BiHashMap;
@@ -36,9 +35,6 @@ use crate::{
 use rash_core::SpriteId;
 
 mod display;
-
-pub static MEMORY: LazyLock<Mutex<Box<[ScratchObject]>>> =
-    LazyLock::new(|| Mutex::new(vec![ScratchObject::Number(0.0); 4096].into_boxed_slice()));
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ScratchBlock {

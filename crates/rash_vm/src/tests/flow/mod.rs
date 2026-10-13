@@ -10,7 +10,7 @@
 use crate::{
     ScratchObject,
     builder::{c_repeat, change, set},
-    compiler::{MEMORY, ScratchBlock},
+    compiler::ScratchBlock,
     input_primitives::Ptr,
     runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
 };
@@ -37,8 +37,7 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
     }
     builder.add_sprite(sprite1);
 
-    let memory = MEMORY.lock().unwrap();
-    let mut runtime = builder.build(&memory);
+    let mut runtime = builder.build();
 
     let mut num_ticks = 1;
     let mut graphics = RunState::default();
@@ -47,7 +46,7 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
     }
 
     assert_eq!(by_two(num_ticks), num_ticks_expected);
-    asserts(&memory);
+    asserts(&runtime.memory);
 }
 
 #[test]

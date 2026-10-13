@@ -9,10 +9,11 @@ use json::{Block, JsonBlock, JsonStruct};
 
 use rash_core::{CostumeStore, SpriteId, SpriteLoadData};
 use rash_vm::{
-    Input, MEMORY, Ptr, ScratchBlock,
+    Input, Ptr, ScratchBlock, ScratchObject, data_types,
     error::{ErrorConvert, RashError, Trace},
     runtime::{CustomBlockId, ProjectBuilder, Runtime, SpriteBuilder},
 };
+use serde_json::Value;
 use zip::ZipArchive;
 
 use crate::{
@@ -105,6 +106,8 @@ impl<R: Read + Seek> ProjectLoader<R> {
             builder.add_sprite(sprite);
         }
 
+        self.load_original_var_values(&mut builder, variable_map);
+
         sprite_order.sort_by_key(|(_, order)| *order);
         let sprite_order = sprite_order.into_iter().map(|(id, _)| id).collect();
         builder.set_sprite_order(sprite_order);
@@ -112,8 +115,40 @@ impl<R: Read + Seek> ProjectLoader<R> {
         builder.set_costumes(costumes);
         builder.set_init_state(state_map);
 
-        let memory = MEMORY.lock().unwrap();
-        Ok(builder.build(&memory))
+        Ok(builder.build())
+    }
+
+    fn load_original_var_values(
+        &self,
+        builder: &mut ProjectBuilder,
+        variable_map: HashMap<String, Ptr>,
+    ) {
+        for sprite in &self.json.targets {
+            if sprite.is_stage {
+                builder
+                    .original_values
+                    .extend(sprite.variables.iter().filter_map(|(k, v)| {
+                        let p = variable_map.get(k)?;
+                        let val = v.get(1)?;
+                        let val = match val {
+                            Value::Bool(b) => ScratchObject::Bool(*b),
+                            Value::Number(number) => ScratchObject::Number(number.as_f64()?),
+                            Value::String(s) => {
+                                let num = data_types::string_to_number(s);
+                                if data_types::number_to_string(num) == s {
+                                    ScratchObject::Number(num)
+                                } else {
+                                    ScratchObject::String(s.into())
+                                }
+                            }
+                            _ => return None,
+                        };
+                        Some((*p, val))
+                    }));
+            } else {
+                // TODO: local variables
+            }
+        }
     }
 }
 
