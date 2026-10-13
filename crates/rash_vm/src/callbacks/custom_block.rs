@@ -78,7 +78,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     scripts: *const SpawnableScripts,
     graphics: *mut RunState,
     child_thread: *mut Option<Box<ScratchThread>>,
-    parent_is_screen_refresh: bool,
+    parent_is_screen_refresh: u8,
 ) -> PauseStatus {
     debug_assert!(!arg_buffer.is_null());
     debug_assert!(!scripts.is_null());
@@ -95,7 +95,7 @@ pub unsafe extern "C" fn call_screen_refresh(
         panic!("No custom block found with id {}", id.0)
     };
 
-    let is_screen_refresh = parent_is_screen_refresh && script.is_screen_refresh;
+    let is_screen_refresh = parent_is_screen_refresh == 1 && script.is_screen_refresh;
 
     let args = unsafe { move_into_new_vec(arg_buffer, script.num_args) };
 

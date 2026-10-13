@@ -35,6 +35,10 @@ pub enum ScratchObject {
     Bool(bool),      // 2
 }
 
+const _E: () = {
+    assert!(std::mem::size_of::<ScratchObject>() == 32);
+};
+
 // Debugging code for checking if the objects are being dropped
 // Lets you know when the object is being dropped by the JIT compiled code
 // impl Drop for ScratchObject {

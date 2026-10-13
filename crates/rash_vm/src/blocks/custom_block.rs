@@ -36,12 +36,13 @@ impl Compiler<'_> {
             align_shift: 0,
             key: None,
         });
-        for [i1, i2, i3, i4] in args {
+        for (i, [i1, i2, i3, i4]) in args.into_iter().enumerate() {
+            let o = (i * std::mem::size_of::<ScratchObject>()) as i32;
             // This will later be dropped inside the callback
-            builder.ins().stack_store(i1, stack_slot, 0);
-            builder.ins().stack_store(i2, stack_slot, 8);
-            builder.ins().stack_store(i3, stack_slot, 16);
-            builder.ins().stack_store(i4, stack_slot, 24);
+            builder.ins().stack_store(i1, stack_slot, o + 0);
+            builder.ins().stack_store(i2, stack_slot, o + 8);
+            builder.ins().stack_store(i3, stack_slot, o + 16);
+            builder.ins().stack_store(i4, stack_slot, o + 24);
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
