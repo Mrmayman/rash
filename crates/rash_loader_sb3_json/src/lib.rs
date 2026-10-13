@@ -14,6 +14,7 @@
 
 use std::{collections::BTreeMap, fmt::Debug};
 
+use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -56,7 +57,8 @@ pub struct Target {
     pub variables: BTreeMap<String, Vec<Value>>,
     pub lists: Value,
     pub broadcasts: Value,
-    pub blocks: BTreeMap<String, JsonBlock>,
+    #[serde(with = "indexmap::map::serde_seq")]
+    pub blocks: IndexMap<String, JsonBlock>,
     pub comments: Value,
     #[serde(rename = "currentCostume")]
     pub current_costume: i64,
@@ -132,7 +134,7 @@ pub struct BlockFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<Value>,
     #[serde(flatten)]
-    pub others: BTreeMap<String, serde_json::Value>,
+    pub others: BTreeMap<String, Value>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
