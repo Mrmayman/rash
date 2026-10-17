@@ -549,6 +549,30 @@ impl ScratchValue {
         }
     }
 
+    pub fn drop_in_code(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) {
+        match self {
+            ScratchValue::Num(_) | ScratchValue::Bool(_) => {}
+            ScratchValue::String(s) => {
+                compiler.call_function(
+                    builder,
+                    callbacks::types::DROP_STR,
+                    &[I64, I64, I64],
+                    &[],
+                    s,
+                );
+            }
+            ScratchValue::Object(obj) => {
+                compiler.call_function(
+                    builder,
+                    callbacks::types::DROP_OBJ,
+                    &[I64, I64, I64, I64],
+                    &[],
+                    obj,
+                );
+            }
+        }
+    }
+
     pub fn get_object(
         &self,
         builder: &mut FunctionBuilder<'_>,

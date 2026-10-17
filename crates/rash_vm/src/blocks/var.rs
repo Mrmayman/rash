@@ -18,7 +18,10 @@ impl Compiler<'_> {
     pub fn var_set(&mut self, obj: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
         match obj {
             Input::Obj(obj) => {
-                self.ins_drop_obj(builder, ptr);
+                self.vars
+                    .get(ptr, builder, &mut self.constants)
+                    .val
+                    .drop_in_code(self, builder);
                 match obj {
                     ScratchObject::Number(num) => {
                         self.vars.store_f64(ptr, builder, *num, &mut self.constants);
@@ -46,7 +49,10 @@ impl Compiler<'_> {
                 let val = self.compile_block(block, builder)
                     .expect("blocks inside other blocks (like an add operator in a set var block) should return something!");
 
-                self.ins_drop_obj(builder, ptr);
+                self.vars
+                    .get(ptr, builder, &mut self.constants)
+                    .val
+                    .drop_in_code(self, builder);
                 self.vars.store(
                     ptr,
                     VariableSlot {
