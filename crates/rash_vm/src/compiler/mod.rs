@@ -84,6 +84,18 @@ pub enum ScratchBlock {
     FunctionCallNoScreenRefresh(CustomBlockId, Vec<Input>),
     FunctionCallScreenRefresh(CustomBlockId, Vec<Input>),
     FunctionGetArg(usize),
+    #[doc = include_str!("../../../../docs/LOCALS_WITH.md")]
+    LocalsWith(Vec<Input>, Vec<ScratchBlock>),
+    /// Gets the nth local from the most recently entered [`ScratchBlock::LocalsWith`].
+    ///
+    /// ```txt
+    /// with [a, b, c] {
+    ///     with [d, e] {
+    ///         LocalsGet(1) // returns e, not b
+    ///     }
+    /// }
+    /// ```
+    LocalsGet(usize),
     /// A block to trigger a screen refresh.
     ///
     /// Similar to coroutines in other languages,
@@ -162,9 +174,11 @@ impl ScratchBlock {
     pub fn return_type(
         &self,
         mut vartype: impl FnMut(Ptr) -> VariableWrite,
+        localtype: impl Fn(usize) -> VariableWrite,
     ) -> Option<VariableWrite> {
         match self {
             ScratchBlock::VarRead(ptr) => Some(vartype(*ptr)),
+            ScratchBlock::LocalsGet(n) => Some(localtype(*n)),
             ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpMSqrt(_)
             | ScratchBlock::OpMod(_, _)
@@ -209,6 +223,7 @@ impl ScratchBlock {
             | ScratchBlock::MotionSetY(_)
             | ScratchBlock::ControlRepeatUntil(_, _)
             | ScratchBlock::LooksShown(_)
+            | ScratchBlock::LocalsWith(_, _)
             | ScratchBlock::Log(_) => None,
         }
     }
@@ -244,12 +259,14 @@ impl ScratchBlock {
             | ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
+            | ScratchBlock::LocalsGet(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
             ScratchBlock::ControlIf(_, blocks)
             | ScratchBlock::ControlRepeatUntil(_, blocks)
             | ScratchBlock::ControlForever(blocks)
+            | ScratchBlock::LocalsWith(_, blocks)
             | ScratchBlock::ControlRepeat(_, blocks) => {
                 blocks.iter().any(ScratchBlock::could_trigger_refresh)
             }
@@ -283,6 +300,18 @@ impl ScratchBlock {
                     && walk_inputs
                 {
                     b.walk(on_block, walk_inputs);
+                }
+                for block in blocks {
+                    block.walk(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::LocalsWith(inputs, blocks) => {
+                for i in inputs {
+                    if let Input::Block(b) = i
+                        && walk_inputs
+                    {
+                        b.walk(on_block, walk_inputs);
+                    }
                 }
                 for block in blocks {
                     block.walk(on_block, walk_inputs);
@@ -369,6 +398,7 @@ impl ScratchBlock {
             | ScratchBlock::MotionGetY
             | ScratchBlock::LooksShown(_)
             | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::LocalsGet(_)
             | ScratchBlock::VarRead(_) => {}
         }
     }
@@ -403,6 +433,18 @@ impl ScratchBlock {
                     block.walk_mut(on_block, walk_inputs);
                 }
                 for block in blocks2 {
+                    block.walk_mut(on_block, walk_inputs);
+                }
+            }
+            ScratchBlock::LocalsWith(inputs, blocks) => {
+                for i in inputs {
+                    if let Input::Block(b) = i
+                        && walk_inputs
+                    {
+                        b.walk_mut(on_block, walk_inputs);
+                    }
+                }
+                for block in blocks {
                     block.walk_mut(on_block, walk_inputs);
                 }
             }
@@ -469,6 +511,7 @@ impl ScratchBlock {
             | ScratchBlock::MotionGetY
             | ScratchBlock::LooksShown(_)
             | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::LocalsGet(_)
             | ScratchBlock::VarRead(_) => {}
         }
     }
@@ -489,16 +532,19 @@ pub struct FunctionArg {
 
 pub struct Compiler<'compiler> {
     pub args_list: Vec<FunctionArg>,
-    pub constants: ConstantMap,
     pub break_counter: usize,
     pub break_points: Vec<Block>,
     pub memory: &'compiler [ScratchObject],
     pub effects: Effects,
-    pub func_store: FunctionStore,
     pub call_conv: CallConv,
     pub static_strings: Vec<SmolStr>,
+
     /// See [`Compiler::vars_to_avoid_clobbering`] for more info.
     pub clobber_stack: HashSet<Ptr>,
+    pub locals_stack: Vec<Vec<(ScratchValue, bool)>>,
+
+    pub constants: ConstantMap,
+    pub func_store: FunctionStore,
     pub vars: Box<dyn VarStore>,
     pub jit_args: JitArgs,
 
@@ -506,7 +552,7 @@ pub struct Compiler<'compiler> {
     ///
     /// It returns the effects of that custom block. Useful for
     /// type related optimizations, just put in a `|_| Effects::unknown()` to ignore.
-    pub custom_block_effects: &'compiler mut dyn FnMut(CustomBlockId) -> Effects,
+    pub custom_block_effects: &'compiler dyn Fn(CustomBlockId) -> Effects,
 
     /// Temporary buffer to store some data.
     /// Be careful, don't let multiple things write to this at the same time.
@@ -551,7 +597,7 @@ impl<'a> Compiler<'a> {
         temp_slot4: (Value, StackSlot),
         func_map: FuncMap,
         call_conv: CallConv,
-        mut custom_block_effects: &'a mut dyn FnMut(CustomBlockId) -> Effects,
+        custom_block_effects: &'a dyn Fn(CustomBlockId) -> Effects,
         types_from_callsite: &'a dyn Fn(Ptr) -> VariableWrite,
     ) -> Self {
         let mut constants = ConstantMap::new();
@@ -562,7 +608,12 @@ impl<'a> Compiler<'a> {
         }
         builder.switch_to_block(code_block);
 
-        let effects = analyze(&code, &mut custom_block_effects, &mut |_, _| {});
+        let effects = analyze(
+            &code,
+            &custom_block_effects,
+            types_from_callsite,
+            &mut |_, _| {},
+        );
 
         let vars: Box<dyn VarStore> = if effects.is_unknown {
             Box::new(GenericVarStore::new(memory))
@@ -589,6 +640,7 @@ impl<'a> Compiler<'a> {
             repeat_stack: 0,
             static_strings: Vec::new(),
             clobber_stack: HashSet::new(),
+            locals_stack: Vec::new(),
             memory,
             args_list,
             sprite_id,
@@ -637,14 +689,25 @@ impl<'a> Compiler<'a> {
             ScratchBlock::VarChange(ptr, input) => {
                 self.var_change(input, builder, *ptr);
             }
-            ScratchBlock::ControlIf(input, vec) => {
-                self.control_if(input, builder, vec);
+            ScratchBlock::ControlIf(input, blocks) => {
+                self.control_if(input, builder, blocks);
             }
             ScratchBlock::ControlIfElse(condition, then_block, else_block) => {
                 self.control_if_else(condition, builder, then_block, else_block);
             }
-            ScratchBlock::ControlRepeatUntil(input, vec) => {
-                self.control_repeat_until(builder, input, vec);
+            ScratchBlock::ControlRepeatUntil(input, blocks) => {
+                self.control_repeat_until(builder, input, blocks);
+            }
+            ScratchBlock::LocalsWith(locals, blocks) => {
+                self.control_locals_with(builder, locals, blocks);
+            }
+            ScratchBlock::LocalsGet(n) => {
+                return self
+                    .locals_stack
+                    .last()
+                    .and_then(|locals| locals.get(*n))
+                    .map(|n| n.0)
+                    .map(|n| n.clone_in_code(self, builder));
             }
             ScratchBlock::OpCmp(a, b, ordering) => {
                 return Some(ScratchValue::Bool(self.op_cmp(a, b, builder, *ordering)));
@@ -853,6 +916,76 @@ impl<'a> Compiler<'a> {
     pub fn save_vars(&mut self, builder: &mut FunctionBuilder<'_>) {
         self.vars
             .save(builder, &mut self.constants, self.memory, &self.effects);
+    }
+
+    pub fn clone_str(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        i2: i64,
+        i3: i64,
+        i4: i64,
+    ) -> (Value, Value, Value) {
+        let v2 = self.constants.get_int(i2, builder);
+        let v3 = self.constants.get_int(i3, builder);
+        let v4 = self.constants.get_int(i4, builder);
+
+        self.static_strings
+            .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
+
+        self.call_function(
+            builder,
+            callbacks::types::CLONE_STR,
+            &[I64, I64, I64, I64],
+            &[],
+            &[v2, v3, v4, self.temp_slot4.0],
+        );
+
+        let o2 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
+        let o3 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        let o4 = builder.ins().stack_load(I64, self.temp_slot4.1, 16);
+        (o2, o3, o4)
+    }
+
+    pub fn get_local_type(&self, n: usize) -> VariableWrite {
+        self.locals_stack
+            .last()
+            .and_then(|locals| locals.get(n))
+            .map(|(v, skip_nan)| VariableWrite {
+                ty: (*v).into(),
+                skip_nan: *skip_nan,
+                direct: true,
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn create_string_stack_slot(builder: &mut FunctionBuilder<'_>) -> Value {
+        let stack_slot =
+            builder.create_sized_stack_slot(cranelift::codegen::ir::StackSlotData::new(
+                cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
+                3 * std::mem::size_of::<i64>() as u32,
+                0,
+            ));
+        builder.ins().stack_addr(I64, stack_slot, 0)
+    }
+
+    pub fn call_to_num_with_decimal_check(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        i1: Value,
+        i2: Value,
+        i3: Value,
+        i4: Value,
+    ) -> (Value, Value) {
+        self.call_function(
+            builder,
+            callbacks::types::TO_NUMBER_WITH_DECIMAL_CHECK,
+            &[I64, I64, I64, I64, I64],
+            &[],
+            &[i1, i2, i3, i4, self.temp_slot4.0],
+        );
+        let n = builder.ins().stack_load(F64, self.temp_slot4.1, 0);
+        let b = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        (n, b)
     }
 }
 

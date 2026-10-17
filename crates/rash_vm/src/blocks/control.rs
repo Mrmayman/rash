@@ -154,8 +154,9 @@ impl Compiler<'_> {
 
     fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
         blocks.effects(
-            &mut self.custom_block_effects,
+            &self.custom_block_effects,
             &|v| self.vars.get_type(v),
+            &|n| self.get_local_type(n),
             &mut |_| {}, // We don't care if it returns early
             &mut |_, _| {},
         )
@@ -435,5 +436,42 @@ impl Compiler<'_> {
             .save(builder, &mut self.constants, self.memory, &clobber);
 
         clobber
+    }
+
+    /// See [`ScratchBlock::LocalsWith`] for a brief overview.
+    pub fn control_locals_with(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        locals: &Vec<Input>,
+        blocks: &Vec<ScratchBlock>,
+    ) {
+        let locals = locals
+            .iter()
+            .map(|n| {
+                (
+                    n.get_value(self, builder),
+                    !n.could_be_nan(
+                        |n| self.vars.get_type(n),
+                        |n| self.get_local_type(n),
+                        &self.args_list,
+                    ),
+                )
+            })
+            .collect();
+
+        // TODO: Implement move semantics so we don't clone this stuff
+
+        self.locals_stack.push(locals);
+        for block in blocks {
+            self.compile_block(block, builder);
+        }
+        let stack = self
+            .locals_stack
+            .pop()
+            .expect("stack should have an element, we just pushed earlier");
+
+        for (v, _) in stack {
+            v.drop_in_code(self, builder);
+        }
     }
 }

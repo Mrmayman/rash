@@ -44,7 +44,7 @@ pub fn compile(
     id: SpriteId,
     num_args: usize,
     is_inherently_pausable: bool,
-    custom_block_effects: &mut dyn FnMut(CustomBlockId) -> Effects,
+    custom_block_effects: &dyn Fn(CustomBlockId) -> Effects,
     external_env: &dyn Fn(Ptr) -> VariableWrite,
     arg_types: &[VariableWrite],
 ) -> (ScratchThread, Vec<SmolStr>) {

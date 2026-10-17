@@ -87,85 +87,31 @@ impl Script {
     }
 
     fn insert_refreshes(&mut self) {
-        fn check_block(b: &mut ScratchBlock) {
-            match b {
-                ScratchBlock::ControlRepeat(_, blocks)
-                | ScratchBlock::ControlRepeatUntil(_, blocks)
-                | ScratchBlock::ControlForever(blocks) => {
-                    let mut trigger = false;
-                    for block in blocks.iter_mut() {
-                        if block.could_trigger_refresh() {
-                            trigger = true;
-                        }
-                        check_block(block);
-                    }
-                    if trigger && !matches!(blocks.last(), Some(ScratchBlock::ScreenRefresh)) {
-                        blocks.push(ScratchBlock::ScreenRefresh);
-                    }
-                }
-
-                ScratchBlock::ControlIf(_, b_then) => {
-                    for block in b_then {
-                        check_block(block);
-                    }
-                }
-                ScratchBlock::ControlIfElse(_, b_then, b_else) => {
-                    for block in b_then {
-                        check_block(block);
-                    }
-                    for block in b_else {
-                        check_block(block);
-                    }
-                }
-
-                ScratchBlock::VarSet(_, _)
-                | ScratchBlock::VarChange(_, _)
-                | ScratchBlock::VarRead(_)
-                | ScratchBlock::OpAdd(_, _)
-                | ScratchBlock::OpSub(_, _)
-                | ScratchBlock::OpMul(_, _)
-                | ScratchBlock::OpDiv(_, _)
-                | ScratchBlock::OpRound(_)
-                | ScratchBlock::OpStrJoin(_, _)
-                | ScratchBlock::OpMod(_, _)
-                | ScratchBlock::OpStrLen(_)
-                | ScratchBlock::OpBAnd(_, _)
-                | ScratchBlock::OpBNot(_)
-                | ScratchBlock::OpBOr(_, _)
-                | ScratchBlock::OpMFloor(_)
-                | ScratchBlock::OpMAbs(_)
-                | ScratchBlock::OpMSqrt(_)
-                | ScratchBlock::OpMSin(_)
-                | ScratchBlock::OpMCos(_)
-                | ScratchBlock::OpMTan(_)
-                | ScratchBlock::OpCmp(_, _, _)
-                | ScratchBlock::OpRandom(_, _)
-                | ScratchBlock::OpStrLetterOf(_, _)
-                | ScratchBlock::OpStrContains(_, _)
-                | ScratchBlock::ControlStopThisScript
-                | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
-                | ScratchBlock::FunctionCallScreenRefresh(_, _)
-                | ScratchBlock::FunctionGetArg(_)
-                | ScratchBlock::ScreenRefresh
-                | ScratchBlock::MotionGoToXY(_, _)
-                | ScratchBlock::MotionChangeX(_)
-                | ScratchBlock::MotionChangeY(_)
-                | ScratchBlock::MotionSetX(_)
-                | ScratchBlock::MotionSetY(_)
-                | ScratchBlock::MotionGetX
-                | ScratchBlock::MotionGetY
-                | ScratchBlock::LooksShown(_)
-                | ScratchBlock::SensingDaysSince2000
-                | ScratchBlock::Log(_) => {}
-            }
-        }
-
         if !self.kind.is_screen_refresh() {
             return;
         }
 
         for block in &mut self.blocks {
-            check_block(block);
+            block.walk_mut(
+                &mut |b| match b {
+                    ScratchBlock::ControlRepeat(_, blocks)
+                    | ScratchBlock::ControlRepeatUntil(_, blocks)
+                    | ScratchBlock::ControlForever(blocks) => {
+                        let mut trigger = false;
+                        for block in blocks.iter_mut() {
+                            if block.could_trigger_refresh() {
+                                trigger = true;
+                                break;
+                            }
+                        }
+                        if trigger && !matches!(blocks.last(), Some(ScratchBlock::ScreenRefresh)) {
+                            blocks.push(ScratchBlock::ScreenRefresh);
+                        }
+                    }
+                    _ => {}
+                },
+                false,
+            );
         }
     }
 }
@@ -378,7 +324,7 @@ impl ProjectBuilder {
                 *sprite_id,
                 0,
                 true,
-                &mut |id| {
+                &|id| {
                     analysis
                         .custom_blocks
                         .get(&id)
