@@ -1,18 +1,24 @@
-use std::{cmp::Ordering, collections::HashMap, path::Path};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    io::{Read, Seek},
+    path::Path,
+};
 
 use json::{Block, JsonBlock, JsonStruct};
 
-use rash_core::{SpriteId, SpriteLoadData, costumes::Costumes};
+use rash_core::{CostumeStore, SpriteId, SpriteLoadData};
 use rash_vm::{
-    Input, MEMORY, Ptr, ScratchBlock,
+    Input, Ptr, ScratchBlock, ScratchObject, data_types,
     error::{ErrorConvert, RashError, Trace},
     runtime::{CustomBlockId, ProjectBuilder, Runtime, SpriteBuilder},
 };
+use serde_json::Value;
 use zip::ZipArchive;
 
 use crate::{
     blocks::{control, op},
-    error::{ErrExt, ErrorConvertPath},
+    error::ErrExt,
     sprites::{load_blocks, load_costumes},
 };
 use rash_loader_sb3_json as json;
@@ -23,22 +29,31 @@ mod get;
 mod helpers;
 mod sprites;
 
-pub use error::{FieldType, Sb3ErrorKind};
+pub use error::{FieldType, Sb3Error, Sb3ErrorKind};
 
-pub type Res<T> = Result<T, error::Error>;
-
-pub struct ProjectLoader {
-    json: json::JsonStruct,
-    archive: ZipArchive<std::fs::File>,
+pub fn load_from_path(path: impl AsRef<Path>) -> Result<Runtime, Sb3Error> {
+    let path = path.as_ref();
+    let file = std::fs::File::open(path)
+        .to("std::fs::File::open", "load_from_path")
+        .trace(&format!("(path: {})", path.display()))?;
+    load_from_reader(file)
 }
 
-impl ProjectLoader {
-    pub fn new(file_path: &Path) -> Res<Self> {
-        const FN_N: &str = "ProjectLoader::new";
-        println!("[info] Loading file from {}", file_path.display());
+pub fn load_from_reader<R: Read + Seek>(r: R) -> Result<Runtime, Sb3Error> {
+    let loader = ProjectLoader::new(r)?;
+    loader.build()
+}
 
-        let file = std::fs::File::open(file_path).to_p(file_path, "std::fs::File::open", FN_N)?;
-        let mut archive = zip::ZipArchive::new(file).to("zip::ZipArchive::new", FN_N)?;
+struct ProjectLoader<R: Read + Seek> {
+    json: json::JsonStruct,
+    archive: ZipArchive<R>,
+}
+
+impl<R: Read + Seek> ProjectLoader<R> {
+    pub fn new(r: R) -> Result<Self, Sb3Error> {
+        const FN_N: &str = "ProjectLoader::new";
+
+        let mut archive = zip::ZipArchive::new(r).to("zip::ZipArchive::new", FN_N)?;
 
         let json = archive
             .by_name("project.json")
@@ -46,20 +61,20 @@ impl ProjectLoader {
         let json: JsonStruct =
             serde_json::from_reader(json).to("serde_json::from_reader (project.json)", FN_N)?;
 
-        Ok(Self { archive, json })
+        Ok(Self { json, archive })
     }
 
-    pub fn build(mut self) -> Res<Runtime> {
+    pub fn build(mut self) -> Result<Runtime, Sb3Error> {
         const FN_N: &str = "ProjectLoader::build";
 
-        let memory = MEMORY.lock().unwrap();
-
         let mut builder = ProjectBuilder::new();
-        let mut costumes = Costumes::new();
+        let mut costumes = CostumeStore::new();
         let mut variable_map = HashMap::new();
         let mut state_map = HashMap::new();
 
         let mut custom_block_num = 0;
+
+        let mut sprite_order = Vec::new();
 
         for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
             let id = SpriteId(sprite_i as i64);
@@ -67,9 +82,8 @@ impl ProjectLoader {
 
             load_costumes(&mut self.archive, sprite_json, &mut costumes, id).trace(FN_N)?;
 
-            println!("currentCostume: {}", sprite_json.currentCostume);
             let costume = costumes
-                .get_by_number(id, sprite_json.currentCostume as usize)
+                .index_to_id(id, sprite_json.current_costume as usize)
                 .unwrap();
             let state = SpriteLoadData {
                 x: sprite_json.x.unwrap_or_default(),
@@ -86,28 +100,67 @@ impl ProjectLoader {
                 &mut variable_map,
                 &mut custom_block_num,
                 &mut sprite,
-                &memory,
             )?;
 
+            sprite_order.push((id, sprite_json.layer_order));
             builder.add_sprite(sprite);
         }
+
+        self.load_original_var_values(&mut builder, variable_map);
+
+        sprite_order.sort_by_key(|(_, order)| *order);
+        let sprite_order = sprite_order.into_iter().map(|(id, _)| id).collect();
+        builder.set_sprite_order(sprite_order);
 
         builder.set_costumes(costumes);
         builder.set_init_state(state_map);
 
-        Ok(builder.build(&memory))
+        Ok(builder.build())
+    }
+
+    fn load_original_var_values(
+        &self,
+        builder: &mut ProjectBuilder,
+        variable_map: HashMap<String, Ptr>,
+    ) {
+        for sprite in &self.json.targets {
+            if sprite.is_stage {
+                builder
+                    .original_values
+                    .extend(sprite.variables.iter().filter_map(|(k, v)| {
+                        let p = variable_map.get(k)?;
+                        let val = v.get(1)?;
+                        let val = match val {
+                            Value::Bool(b) => ScratchObject::Bool(*b),
+                            Value::Number(number) => ScratchObject::Number(number.as_f64()?),
+                            Value::String(s) => {
+                                let num = data_types::string_to_number(s);
+                                if data_types::number_to_string(num) == s {
+                                    ScratchObject::Number(num)
+                                } else {
+                                    ScratchObject::String(s.into())
+                                }
+                            }
+                            _ => return None,
+                        };
+                        Some((*p, val))
+                    }));
+            } else {
+                // TODO: local variables
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CustomBlockDef {
+struct CustomBlockDef {
     args: Vec<String>,
     args_name_to_id: Option<HashMap<String, String>>,
     is_screen_refresh: bool,
     id: CustomBlockId,
 }
 
-pub struct CompileContext<'a> {
+struct CompileContext<'a> {
     sprite_json: json::Target,
     variable_map: &'a mut HashMap<String, Ptr>,
 
@@ -132,7 +185,7 @@ impl CompileContext<'_> {
         self.sprite_json.blocks.get(id)
     }
 
-    fn get_custom_block(&mut self, block: &Block) -> Res<CustomBlockDef> {
+    fn get_custom_block(&mut self, block: &Block) -> Result<CustomBlockDef, Sb3Error> {
         const FN_N: &str = "CompileContext::get_custom_block";
 
         let block_mutation = block
@@ -195,7 +248,7 @@ impl CompileContext<'_> {
     }
 }
 
-fn build_argument_names(args: &[String], names: &str) -> Res<HashMap<String, String>> {
+fn build_argument_names(args: &[String], names: &str) -> Result<HashMap<String, String>, Sb3Error> {
     const FN_N: &str = "build_argument_names";
 
     let arg_names: Vec<String> =
@@ -208,7 +261,7 @@ fn build_argument_names(args: &[String], names: &str) -> Res<HashMap<String, Str
     Ok(collect)
 }
 
-fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
+fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Error> {
     match b.opcode.as_str() {
         "data_setvariableto" => {
             // b.fields.VARIABLE[1]
@@ -307,7 +360,7 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Res<ScratchBlock> {
         "procedures_call" => {
             let block = ctx.get_custom_block(b)?;
 
-            let args: Res<Vec<Input>> = block
+            let args: Result<Vec<Input>, Sb3Error> = block
                 .args
                 .iter()
                 .map(|n| get::number(b, ctx, n).trace("Block::compile.procedures_call"))

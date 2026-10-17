@@ -77,9 +77,10 @@ impl Compiler<'_> {
         }
 
         let var_checker = |ptr| self.vars.get_type(ptr);
+        let local_checker = |n| self.get_local_type(n);
 
-        let at = a.expected_type(var_checker).ty;
-        let bt = b.expected_type(var_checker).ty;
+        let at = a.expected_type(var_checker, local_checker).ty;
+        let bt = b.expected_type(var_checker, local_checker).ty;
 
         // Primitive checks involving numbers/bools,
         // based on our smart (conservative) type analysis

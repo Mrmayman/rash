@@ -13,6 +13,7 @@ declare_module!(
     to_string_from_num,
     to_string_from_bool,
     drop_obj,
+    drop_str,
     clone_obj,
     clone_str
 );
@@ -163,6 +164,12 @@ pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut SmolStr) {
 /// dropping the old value.
 pub unsafe extern "C" fn drop_obj(i1: i64, i2: i64, i3: i64, i4: i64) {
     let _: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    // Dropped
+}
+
+/// Drops a `SmolStr` in memory.
+pub unsafe extern "C" fn drop_str(i1: i64, i2: i64, i3: i64) {
+    let _: SmolStr = unsafe { std::mem::transmute([i1, i2, i3]) };
     // Dropped
 }
 

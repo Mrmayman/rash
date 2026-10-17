@@ -1,131 +1,87 @@
-use std::collections::HashMap;
+//! Some core, shared types and utilities used across Rash.
+//!
+//! Split into separate crate to reduce compile times.
 
-pub mod costumes;
+mod costumes;
+pub use costumes::{CostumeStore, RawCostumeData};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct SpriteId(pub i64);
 
+/// The raw VM ID of a costume.
+///
+/// Not necessarily in any meaningful Scratch-related order,
+/// purely used for internal storage and access.
+/// If you want to access by-index or by-name, see [`CostumeStore`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
 pub struct CostumeId(pub i32);
 
 /// The global state of the VM at runtime.
 #[derive(Debug, Clone, Default)]
 pub struct RunState {
-    pub sprites: HashMap<SpriteId, SpriteData>,
+    pub sprites: Vec<(SpriteId, SpriteData)>,
 }
 
 impl RunState {
-    // TODO: Implement Pen trails
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_go_to(this: *mut Self, id: SpriteId, x: f64, y: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).go_to(id, x as f32, y as f32);
+    pub fn new() -> Self {
+        Self::default()
     }
 
+    // TODO: Implement Pen trails
     pub fn go_to(&mut self, id: SpriteId, x: f32, y: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x = x;
         state.graphics.y = y;
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_set_x(this: *mut Self, id: SpriteId, x: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).set_x(id, x as f32);
     }
 
     pub fn set_x(&mut self, id: SpriteId, x: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x = x;
     }
 
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_set_y(this: *mut Self, id: SpriteId, y: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).set_y(id, y as f32);
-    }
-
     pub fn set_y(&mut self, id: SpriteId, y: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y = y;
     }
 
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_get_x(this: *mut Self, id: SpriteId) -> f64 {
-        debug_assert!(!this.is_null());
-        f64::from((unsafe { &mut *this }).get_x(id))
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_get_y(this: *mut Self, id: SpriteId) -> f64 {
-        debug_assert!(!this.is_null());
-        f64::from((unsafe { &mut *this }).get_y(id))
-    }
-
     pub fn get_x(&mut self, id: SpriteId) -> f32 {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x
     }
 
     pub fn get_y(&mut self, id: SpriteId) -> f32 {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y
     }
 
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_change_x(this: *mut Self, id: SpriteId, x: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).change_x(id, x as f32);
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_change_y(this: *mut Self, id: SpriteId, y: f64) {
-        debug_assert!(!this.is_null());
-        (unsafe { &mut *this }).change_y(id, y as f32);
-    }
-
     pub fn change_x(&mut self, id: SpriteId, x: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.x += x;
     }
 
     pub fn change_y(&mut self, id: SpriteId, y: f32) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.y += y;
     }
 
     pub fn shown(&mut self, id: SpriteId, shown: bool) {
-        let state = self.sprites.get_mut(&id).unwrap();
+        let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.shown = i32::from(shown);
-    }
-
-    /// # Safety
-    /// `this` must point to a valid instance of `RunState`
-    pub unsafe extern "C" fn c_shown(this: *mut Self, id: SpriteId, shown: i64) {
-        debug_assert!(!this.is_null());
-        unsafe { &mut *this }.shown(id, shown == 1);
     }
 }
 
 const _E: () = {
-    assert!(std::mem::size_of::<GraphicsState>() == 16 * 4);
+    assert!(std::mem::size_of::<ShaderState>() == 16 * 4);
 };
 
 // WARNING: If you change this,
 // update the shader-side definition too in
 // `crates/rash_render/src/shaders/common.wgsl`
+/// The graphical state of each sprite. Passed to the shader.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct GraphicsState {
+pub struct ShaderState {
     pub x: f32,
     pub y: f32,
     pub texture_width: f32,
@@ -137,10 +93,11 @@ pub struct GraphicsState {
     pub center_y: f32,
 
     pub shown: i32,
+    /// Ignored, just do `[0; _]`
     pub padding: [i32; 7],
 }
 
-impl Default for GraphicsState {
+impl Default for ShaderState {
     fn default() -> Self {
         Self {
             x: 36.0,
@@ -160,19 +117,14 @@ impl Default for GraphicsState {
 /// The global state of each sprite at runtime.
 #[derive(Clone, Debug, Default)]
 pub struct SpriteData {
-    pub graphics: GraphicsState,
+    pub graphics: ShaderState,
 }
 
-#[derive(Clone)]
-pub struct CostumeData {
-    pub bytes: Vec<u8>,
-    pub name: String,
-    pub hash: String,
-    pub rotation_center_x: f64,
-    pub rotation_center_y: f64,
-    pub is_svg: bool,
-}
-
+/// Info of a sprite loaded from disk.
+///
+/// The difference between this and [`ShaderState`]/[`RunState`]
+/// is that some info in that is computed at runtime
+/// while this is loaded straight from disk.
 #[derive(Debug, Clone, Copy)]
 pub struct SpriteLoadData {
     pub x: f64,

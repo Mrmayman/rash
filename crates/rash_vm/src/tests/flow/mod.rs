@@ -10,11 +10,13 @@
 use crate::{
     ScratchObject,
     builder::{c_repeat, change, set},
-    compiler::{MEMORY, ScratchBlock},
+    compiler::ScratchBlock,
     input_primitives::Ptr,
     runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
 };
 use rash_core::{RunState, SpriteId};
+
+mod args;
 
 const X: Ptr = Ptr(0);
 
@@ -29,15 +31,15 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
         }
     }
 
-    let memory = MEMORY.lock().unwrap();
     let mut builder = ProjectBuilder::new();
     let mut sprite1 = SpriteBuilder::new(SpriteId(0));
 
     for script in scripts {
-        sprite1.add_script(script, &memory);
+        sprite1.add_script(script);
     }
     builder.add_sprite(sprite1);
-    let mut runtime = builder.build(&memory);
+
+    let mut runtime = builder.build();
 
     let mut num_ticks = 1;
     let mut graphics = RunState::default();
@@ -46,7 +48,7 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
     }
 
     assert_eq!(by_two(num_ticks), num_ticks_expected);
-    asserts(&memory);
+    asserts(&runtime.memory);
 }
 
 #[test]
@@ -58,10 +60,11 @@ fn custom_block_screen_refresh() {
                     3.0,
                     vec![
                         change(X, ScratchBlock::FunctionGetArg(0)),
+                        change(X, ScratchBlock::FunctionGetArg(1)),
                         ScratchBlock::ScreenRefresh,
                     ],
                 )],
-                1,
+                2,
                 CustomBlockId(1),
                 true,
             ),
@@ -73,7 +76,7 @@ fn custom_block_screen_refresh() {
                         vec![
                             ScratchBlock::FunctionCallScreenRefresh(
                                 CustomBlockId(1),
-                                vec![1.0.into()],
+                                vec![1.0.into(), 2.0.into()],
                             ),
                             ScratchBlock::ScreenRefresh,
                         ],
@@ -89,7 +92,7 @@ fn custom_block_screen_refresh() {
             ]),
         ],
         |m| {
-            assert_eq!(m[0].convert_to_number(), 15.0);
+            assert_eq!(m[0].convert_to_number(), 45.0);
         },
         21,
     );
@@ -124,10 +127,10 @@ fn warp_custom_block_does_not_refresh() {
                 CustomBlockId(0),
                 true, // warp
             ),
-            Script::new_green_flag(vec![ScratchBlock::FunctionCallScreenRefresh(
-                CustomBlockId(0),
-                vec![],
-            )]),
+            Script::new_green_flag(vec![
+                set(X, 0.0),
+                ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), vec![]),
+            ]),
         ],
         |m| assert_eq!(m[0].convert_to_number(), 2.0),
         2,

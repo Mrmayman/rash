@@ -7,22 +7,19 @@ use utils::run_code;
 
 use crate::{
     Input, Ptr, ScratchBlock, ScratchObject,
-    builder::{c_repeat, fadd, fdiv, fmod, fmul, fsub},
+    builder::{c_if, c_repeat, set},
     compiler::VarType,
 };
 
 mod control;
+mod math;
 
 fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
     input
         .into_iter()
         .enumerate()
-        .map(|(i, input)| set_var(Ptr(i), input))
+        .map(|(i, input)| set(Ptr(i), input))
         .collect()
-}
-
-fn set_var(ptr: Ptr, input: impl Into<Input>) -> ScratchBlock {
-    ScratchBlock::VarSet(ptr, input.into())
 }
 
 #[test]
@@ -80,13 +77,13 @@ pub fn pi() {
 #[test]
 pub fn random() {
     let memory = run_code(vec![
-        set_var(Ptr(0), ScratchBlock::OpRandom(0.0.into(), 100.0.into())),
-        set_var(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
-        set_var(Ptr(2), ScratchBlock::OpRandom("1".into(), "2".into())),
-        set_var(Ptr(3), ScratchBlock::OpRandom("1.0".into(), "2".into())),
+        set(Ptr(0), ScratchBlock::OpRandom(0.0.into(), 100.0.into())),
+        set(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
+        set(Ptr(2), ScratchBlock::OpRandom("1".into(), "2".into())),
+        set(Ptr(3), ScratchBlock::OpRandom("1.0".into(), "2".into())),
         c_repeat(
             100_000.0,
-            vec![set_var(
+            vec![set(
                 Ptr(4),
                 ScratchBlock::OpRandom(0.0.into(), 100.0.into()),
             )],
@@ -115,217 +112,32 @@ pub fn random() {
 }
 
 #[test]
-pub fn math_add() {
-    let memory = run_code(set_vars(vec![
-        fadd(50.0, 25.0).into(),
-        fadd(-500.0, 25.0).into(),
-        fadd(-500.0, -25.0).into(),
-        fadd(2.54, 6.25).into(),
-        fadd(2.54, -6.25).into(),
-        fadd(true, true).into(),
-        fadd(1.0 / 0.0, 1.0 / 0.0).into(),
-        fadd(1.0 / 0.0, -1.0 / 0.0).into(),
-        fadd(-1.0 / 0.0, 1.0 / 0.0).into(),
-        fadd(-1.0 / 0.0, -1.0 / 0.0).into(),
-        fadd(1.0, f64::NAN).into(),
-        fadd(f64::NAN, 1.0).into(),
-        // FMA
-        fadd(1.0, fmul(2.0, 3.0)).into(),
-        fadd(fmul(2.0, 3.0), 1.0).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 75.0);
-    assert_eq!(memory[1].convert_to_number(), -475.0);
-    assert_eq!(memory[2].convert_to_number(), -525.0);
-    assert_eq!(memory[3].convert_to_number(), 8.79);
-    assert_eq!(memory[4].convert_to_number(), -3.71);
-    assert_eq!(memory[5].convert_to_number(), 2.0);
-
-    assert!(memory[6].convert_to_number().is_infinite());
-    assert!(memory[7].convert_to_number().is_nan());
-    assert!(memory[8].convert_to_number().is_nan());
-    assert!(memory[9].convert_to_number().is_infinite());
-    assert!(memory[9].convert_to_number().is_sign_negative());
-
-    assert_eq!(memory[10].convert_to_number(), 1.0);
-    assert_eq!(memory[11].convert_to_number(), 1.0);
-
-    assert_eq!(memory[12].convert_to_number(), 7.0);
-    assert_eq!(memory[13].convert_to_number(), 7.0);
-}
-
-#[test]
-pub fn math_sub() {
-    let memory = run_code(set_vars(vec![
-        fsub(50.0, 25.0).into(),
-        fsub(-500.0, 25.0).into(),
-        fsub(-500.0, -25.0).into(),
-        fsub(2.54, 6.25).into(),
-        fsub(2.54, -6.25).into(),
-        fsub(true, true).into(),
-        fsub(1.0 / 0.0, 1.0 / 0.0).into(),
-        fsub(1.0 / 0.0, -1.0 / 0.0).into(),
-        fsub(-1.0 / 0.0, 1.0 / 0.0).into(),
-        fsub(-1.0 / 0.0, -1.0 / 0.0).into(),
-        fsub(1.0, f64::NAN).into(),
-        fsub(f64::NAN, 1.0).into(),
-        // FMA
-        fsub(fmul(2.0, 3.0), 1.0).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 25.0);
-    assert_eq!(memory[1].convert_to_number(), -525.0);
-    assert_eq!(memory[2].convert_to_number(), -475.0);
-    assert_eq!(memory[3].convert_to_number(), -3.71);
-    assert_eq!(memory[4].convert_to_number(), 8.79);
-    assert_eq!(memory[5].convert_to_number(), 0.0);
-
-    assert!(memory[6].convert_to_number().is_nan());
-    assert!(memory[7].convert_to_number().is_infinite());
-    assert!(memory[7].convert_to_number().is_sign_positive());
-    assert!(memory[8].convert_to_number().is_infinite());
-    assert!(memory[8].convert_to_number().is_sign_negative());
-    assert!(memory[9].convert_to_number().is_nan());
-
-    assert_eq!(memory[10].convert_to_number(), 1.0);
-    assert_eq!(memory[11].convert_to_number(), -1.0);
-
-    assert_eq!(memory[12].convert_to_number(), 5.0);
-}
-
-#[test]
-pub fn math_mul() {
-    let memory = run_code(set_vars(vec![
-        fmul(50.0, 2.0).into(),
-        fmul(-50.0, 2.0).into(),
-        fmul(-50.0, -2.0).into(),
-        fmul(2.54, 6.25).into(),
-        fmul(2.54, -6.25).into(),
-        fmul(true, true).into(),
-        fmul(1.0 / 0.0, 1.0 / 0.0).into(),
-        fmul(1.0 / 0.0, 0.0).into(),
-        fmul(1.0 / 0.0, 2.0).into(),
-        fmul(1.0 / 0.0, -2.0).into(),
-        fmul(1.0 / 0.0, -1.0 / 0.0).into(),
-        fmul(-1.0 / 0.0, 1.0 / 0.0).into(),
-        fmul(-1.0 / 0.0, 0.0).into(),
-        fmul(-1.0 / 0.0, 2.0).into(),
-        fmul(-1.0 / 0.0, -2.0).into(),
-        fmul(-1.0 / 0.0, -1.0 / 0.0).into(),
-        fmul(1.0, f64::NAN).into(),
-        fmul(f64::NAN, 1.0).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 100.0);
-    assert_eq!(memory[1].convert_to_number(), -100.0);
-    assert_eq!(memory[2].convert_to_number(), 100.0);
-    assert_eq!(memory[3].convert_to_number(), 15.875);
-    assert_eq!(memory[4].convert_to_number(), -15.875);
-    assert_eq!(memory[5].convert_to_number(), 1.0);
-
-    assert!(memory[6].convert_to_number().is_infinite());
-    assert!(memory[6].convert_to_number().is_sign_positive());
-
-    assert!(memory[7].convert_to_number().is_nan());
-
-    assert!(memory[8].convert_to_number().is_infinite());
-    assert!(memory[8].convert_to_number().is_sign_positive());
-
-    assert!(memory[9].convert_to_number().is_infinite());
-    assert!(memory[9].convert_to_number().is_sign_negative());
-
-    assert!(memory[10].convert_to_number().is_infinite());
-    assert!(memory[10].convert_to_number().is_sign_negative());
-
-    assert!(memory[11].convert_to_number().is_infinite());
-    assert!(memory[11].convert_to_number().is_sign_negative());
-
-    assert!(memory[12].convert_to_number().is_nan());
-
-    assert!(memory[13].convert_to_number().is_infinite());
-    assert!(memory[13].convert_to_number().is_sign_negative());
-
-    assert!(memory[14].convert_to_number().is_infinite());
-    assert!(memory[14].convert_to_number().is_sign_positive());
-
-    assert!(memory[15].convert_to_number().is_infinite());
-    assert!(memory[15].convert_to_number().is_sign_positive());
-
-    assert_eq!(memory[16].convert_to_number(), 0.0);
-    assert_eq!(memory[17].convert_to_number(), 0.0);
-}
-
-#[test]
-pub fn math_div() {
-    let memory = run_code(set_vars(vec![
-        fdiv(50.0, 2.0).into(),
-        fdiv(-50.0, 2.0).into(),
-        fdiv(-50.0, -2.0).into(),
-        fdiv(3.5, 2.5).into(),
-        fdiv(3.5, -2.5).into(),
-        fdiv(true, true).into(),
-        fdiv(1.0 / 0.0, 1.0 / 0.0).into(),
-        fdiv(1.0 / 0.0, 0.0).into(),
-        fdiv(1.0 / 0.0, 2.0).into(),
-        fdiv(1.0 / 0.0, -2.0).into(),
-        fdiv(1.0 / 0.0, -1.0 / 0.0).into(),
-        fdiv(-1.0 / 0.0, 1.0 / 0.0).into(),
-        fdiv(-1.0 / 0.0, 0.0).into(),
-        fdiv(-1.0 / 0.0, 2.0).into(),
-        fdiv(-1.0 / 0.0, -2.0).into(),
-        fdiv(-1.0 / 0.0, -1.0 / 0.0).into(),
-        fdiv(1.0, f64::NAN).into(),
-        fdiv(f64::NAN, 1.0).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 25.0);
-    assert_eq!(memory[1].convert_to_number(), -25.0);
-    assert_eq!(memory[2].convert_to_number(), 25.0);
-    assert_eq!(memory[3].convert_to_number(), 1.4);
-    assert_eq!(memory[4].convert_to_number(), -1.4);
-    assert_eq!(memory[5].convert_to_number(), 1.0);
-
-    assert!(memory[6].convert_to_number().is_nan());
-
-    assert!(memory[7].convert_to_number().is_infinite());
-    assert!(memory[7].convert_to_number().is_sign_positive());
-
-    assert!(memory[8].convert_to_number().is_infinite());
-    assert!(memory[8].convert_to_number().is_sign_positive());
-
-    assert!(memory[9].convert_to_number().is_infinite());
-    assert!(memory[9].convert_to_number().is_sign_negative());
-
-    assert!(memory[10].convert_to_number().is_nan());
-    assert!(memory[11].convert_to_number().is_nan());
-
-    assert!(memory[12].convert_to_number().is_infinite());
-    assert!(memory[12].convert_to_number().is_sign_negative());
-
-    assert!(memory[13].convert_to_number().is_infinite());
-    assert!(memory[13].convert_to_number().is_sign_negative());
-
-    assert!(memory[14].convert_to_number().is_infinite());
-    assert!(memory[14].convert_to_number().is_sign_positive());
-
-    assert!(memory[15].convert_to_number().is_nan());
-
-    assert!(memory[16].convert_to_number().is_infinite());
-    assert!(memory[16].convert_to_number().is_sign_positive());
-
-    assert_eq!(memory[17].convert_to_number(), 0.0);
+pub fn negative_zero_is_truthy() {
+    // Real bug btw
+    let memory = run_code(vec![
+        set(Ptr(0), -0.0),
+        c_if(Ptr(0), vec![set(Ptr(1), 1.0)]),
+        // Also verify the literal path
+        c_if(-0.0, vec![set(Ptr(2), 1.0)]),
+    ]);
+    assert_eq!(memory[1].convert_to_number(), 1.0);
+    assert_eq!(memory[2].convert_to_number(), 1.0);
 }
 
 #[test]
 pub fn bool_ops() {
     fn check_and(memory: &[ScratchObject], offset: usize) {
-        assert_eq!(memory[offset + 0].convert_to_number(), 1.0);
-        assert_eq!(memory[offset + 1].convert_to_number(), 0.0);
-        assert_eq!(memory[offset + 2].convert_to_number(), 0.0);
-        assert_eq!(memory[offset + 3].convert_to_number(), 0.0);
+        assert!(memory[offset + 0].convert_to_bool());
+        assert!(!memory[offset + 1].convert_to_bool());
+        assert!(!memory[offset + 2].convert_to_bool());
+        assert!(!memory[offset + 3].convert_to_bool());
     }
 
     fn check_or(memory: &[ScratchObject], offset: usize) {
-        assert_eq!(memory[offset + 0].convert_to_number(), 1.0);
-        assert_eq!(memory[offset + 1].convert_to_number(), 1.0);
-        assert_eq!(memory[offset + 2].convert_to_number(), 1.0);
-        assert_eq!(memory[offset + 3].convert_to_number(), 0.0);
+        assert!(memory[offset + 0].convert_to_bool());
+        assert!(memory[offset + 1].convert_to_bool());
+        assert!(memory[offset + 2].convert_to_bool());
+        assert!(!memory[offset + 3].convert_to_bool());
     }
 
     // Testing multiple data types as this caused a real bug earlier
@@ -368,251 +180,23 @@ pub fn bool_ops() {
     check_and(&memory, 0);
     check_or(&memory, 4);
 
-    assert_eq!(memory[8].convert_to_number(), 0.0);
-    assert_eq!(memory[9].convert_to_number(), 1.0);
-    assert_eq!(memory[10].convert_to_number(), 0.0);
-    assert_eq!(memory[11].convert_to_number(), 1.0);
+    assert!(!memory[8].convert_to_bool());
+    assert!(memory[9].convert_to_bool());
+    assert!(!memory[10].convert_to_bool());
+    assert!(memory[11].convert_to_bool());
 
     check_and(&memory, 12);
     check_or(&memory, 16);
     check_and(&memory, 20);
     check_or(&memory, 24);
 
-    assert_eq!(memory[28].convert_to_number(), 0.0);
-    assert_eq!(memory[29].convert_to_number(), 1.0);
-}
-
-#[test]
-pub fn math_modulo() {
-    let memory = run_code(set_vars(vec![
-        fmod(5.5, 3.0).into(),    // 5.5 % 3.0
-        fmod(-5.5, 3.0).into(),   // -5.5 % 3.0
-        fmod(5.5, -3.0).into(),   // 5.5 % -3.0
-        fmod(-5.5, -3.0).into(),  // -5.5 % -3.0
-        fmod(10.0, 3.0).into(),   // 10.0 % 3.0
-        fmod(-10.0, 3.0).into(),  // -10.0 % 3.0
-        fmod(10.0, -3.0).into(),  // 10.0 % -3.0
-        fmod(-10.0, -3.0).into(), // -10.0 % -3.0
-        fmod(0.0, 1.0).into(),    // 0.0 % 1.0
-        fmod(-1.0, 1.0).into(),   // -1.0 % 1.0
-        fmod(1.0, -1.0).into(),   // 1.0 % -1.0
-        fmod(1.0, 2.5).into(),    // 1.0 % 2.5
-        fmod(-1.0, 2.5).into(),   // -1.0 % 2.5
-        fmod(1e10, 3.0).into(),   // Large numbers
-        fmod(-1e10, 3.0).into(),
-        fmod(0.0001, 0.003).into(), // Small remainders
-        fmod(-0.0001, 0.003).into(),
-    ]));
-
-    assert_eq!(memory[0].convert_to_number(), 2.5);
-    assert!((memory[1].convert_to_number() - 0.5) <= f64::EPSILON);
-    assert!((memory[2].convert_to_number() + 0.5).abs() <= f64::EPSILON);
-    assert_eq!(memory[3].convert_to_number(), -2.5);
-
-    assert!((memory[4].convert_to_number() - 1.0) <= 2.0 * f64::EPSILON);
-    assert!((memory[5].convert_to_number() - 2.0).abs() <= 2.0 * f64::EPSILON);
-    assert!((memory[6].convert_to_number() + 2.0).abs() <= 2.0 * f64::EPSILON);
-    assert!((memory[7].convert_to_number() + 1.0).abs() <= 2.0 * f64::EPSILON);
-
-    assert_eq!(memory[8].convert_to_number(), 0.0);
-    assert_eq!(memory[9].convert_to_number(), 0.0);
-    assert_eq!(memory[10].convert_to_number(), 0.0);
-
-    assert_eq!(memory[11].convert_to_number(), 1.0);
-    assert_eq!(memory[12].convert_to_number(), 1.5);
-
-    assert!((memory[13].convert_to_number() - 1.0).abs() <= (i32::MAX as f64 + 1.0) * f64::EPSILON);
-    assert!((memory[14].convert_to_number() - 2.0).abs() <= (i32::MAX as f64 + 1.0) * f64::EPSILON);
-
-    assert_eq!(memory[15].convert_to_number(), 0.0001);
-    assert!(memory[16].convert_to_number() - 0.0029 <= f64::EPSILON);
-}
-
-#[test]
-pub fn math_floor() {
-    let memory = run_code(set_vars(vec![
-        ScratchBlock::OpMFloor(5.5.into()).into(),
-        ScratchBlock::OpMFloor((-3.2).into()).into(),
-        ScratchBlock::OpMFloor(0.0.into()).into(),
-        ScratchBlock::OpMFloor((-0.8).into()).into(),
-        ScratchBlock::OpMFloor(2.999.into()).into(),
-        ScratchBlock::OpMFloor((-1.1).into()).into(),
-        ScratchBlock::OpMFloor(10.0.into()).into(),
-        ScratchBlock::OpMFloor((-10.999).into()).into(),
-        ScratchBlock::OpMFloor(123_456.789.into()).into(),
-        ScratchBlock::OpMFloor((-123_456.789).into()).into(),
-        ScratchBlock::OpMFloor(1e-9.into()).into(),
-        ScratchBlock::OpMFloor((-1e-9).into()).into(),
-        ScratchBlock::OpMFloor(1e10.into()).into(),
-        ScratchBlock::OpMFloor((-1e10).into()).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 5.0);
-    assert_eq!(memory[1].convert_to_number(), -4.0);
-    assert_eq!(memory[2].convert_to_number(), 0.0);
-    assert_eq!(memory[3].convert_to_number(), -1.0);
-    assert_eq!(memory[4].convert_to_number(), 2.0);
-    assert_eq!(memory[5].convert_to_number(), -2.0);
-    assert_eq!(memory[6].convert_to_number(), 10.0);
-    assert_eq!(memory[7].convert_to_number(), -11.0);
-    assert_eq!(memory[8].convert_to_number(), 123456.0);
-    assert_eq!(memory[9].convert_to_number(), -123457.0);
-    assert_eq!(memory[10].convert_to_number(), 0.0);
-    assert_eq!(memory[11].convert_to_number(), -1.0);
-    assert_eq!(memory[12].convert_to_number(), 1e10);
-    assert_eq!(memory[13].convert_to_number(), -1e10);
-}
-
-#[test]
-pub fn math_round() {
-    let memory = run_code(set_vars(vec![
-        ScratchBlock::OpRound(2.3.into()).into(),
-        ScratchBlock::OpRound(2.5.into()).into(),
-        ScratchBlock::OpRound(2.7.into()).into(),
-        ScratchBlock::OpRound(3.0.into()).into(),
-        ScratchBlock::OpRound((-2.3).into()).into(),
-        ScratchBlock::OpRound((-2.5).into()).into(),
-        ScratchBlock::OpRound((-2.7).into()).into(),
-        ScratchBlock::OpRound((-3.0).into()).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 2.0);
-    assert_eq!(memory[1].convert_to_number(), 3.0);
-    assert_eq!(memory[2].convert_to_number(), 3.0);
-    assert_eq!(memory[3].convert_to_number(), 3.0);
-    assert_eq!(memory[4].convert_to_number(), -2.0);
-    assert_eq!(memory[5].convert_to_number(), -2.0);
-    assert_eq!(memory[6].convert_to_number(), -3.0);
-    assert_eq!(memory[7].convert_to_number(), -3.0);
-}
-
-#[test]
-pub fn math_abs() {
-    let memory = run_code(set_vars(vec![
-        ScratchBlock::OpMAbs(2.3.into()).into(),
-        ScratchBlock::OpMAbs((-2.3).into()).into(),
-        ScratchBlock::OpMAbs(0.0.into()).into(),
-        ScratchBlock::OpMAbs((-0.0).into()).into(),
-        ScratchBlock::OpMAbs(f64::INFINITY.into()).into(),
-        ScratchBlock::OpMAbs(f64::NEG_INFINITY.into()).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 2.3);
-    assert_eq!(memory[1].convert_to_number(), 2.3);
-    assert_eq!(memory[2].convert_to_number(), 0.0);
-    assert_eq!(memory[3].convert_to_number(), 0.0);
-    assert_eq!(memory[4].convert_to_number(), f64::INFINITY);
-    assert_eq!(memory[5].convert_to_number(), f64::INFINITY);
-}
-
-#[test]
-pub fn math_sqrt() {
-    let memory = run_code(set_vars(vec![
-        ScratchBlock::OpMSqrt(1.0.into()).into(),
-        ScratchBlock::OpMSqrt(2.0.into()).into(),
-        ScratchBlock::OpMSqrt(0.0.into()).into(),
-        ScratchBlock::OpMSqrt((-0.0).into()).into(),
-        ScratchBlock::OpMSqrt((-1.0).into()).into(),
-        ScratchBlock::OpMSqrt(f64::INFINITY.into()).into(),
-        ScratchBlock::OpMSqrt(f64::NEG_INFINITY.into()).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 1.0);
-    assert_eq!(memory[1].convert_to_number(), 1.4142135623730951);
-    assert_eq!(memory[2].convert_to_number(), 0.0);
-    assert_eq!(memory[3].convert_to_number(), 0.0);
-    assert!(memory[4].convert_to_number().is_nan());
-    assert!(memory[5].convert_to_number().is_infinite());
-    assert!(memory[5].convert_to_number().is_sign_positive());
-    assert!(memory[6].convert_to_number().is_nan());
-}
-
-#[test]
-pub fn math_trig() {
-    let memory = run_code(set_vars(vec![
-        ScratchBlock::OpMSin(0.0.into()).into(),
-        ScratchBlock::OpMSin(30.0.into()).into(),
-        ScratchBlock::OpMSin(60.0.into()).into(),
-        ScratchBlock::OpMSin(90.0.into()).into(),
-        ScratchBlock::OpMSin(100.0.into()).into(),
-        ScratchBlock::OpMSin((-30.0).into()).into(),
-        ScratchBlock::OpMSin((-60.0).into()).into(),
-        ScratchBlock::OpMSin((-90.0).into()).into(),
-        ScratchBlock::OpMSin((-100.0).into()).into(),
-        ScratchBlock::OpMCos(0.0.into()).into(),
-        ScratchBlock::OpMCos(30.0.into()).into(),
-        ScratchBlock::OpMCos(60.0.into()).into(),
-        ScratchBlock::OpMCos(90.0.into()).into(),
-        ScratchBlock::OpMCos(100.0.into()).into(),
-        ScratchBlock::OpMCos((-30.0).into()).into(),
-        ScratchBlock::OpMCos((-60.0).into()).into(),
-        ScratchBlock::OpMCos((-90.0).into()).into(),
-        ScratchBlock::OpMCos((-100.0).into()).into(),
-        ScratchBlock::OpMTan(0.0.into()).into(),
-        ScratchBlock::OpMTan(30.0.into()).into(),
-        ScratchBlock::OpMTan(60.0.into()).into(),
-        ScratchBlock::OpMTan(90.0.into()).into(),
-        ScratchBlock::OpMTan(100.0.into()).into(),
-        ScratchBlock::OpMTan(180.0.into()).into(),
-        ScratchBlock::OpMTan(270.0.into()).into(),
-        ScratchBlock::OpMTan((-30.0).into()).into(),
-        ScratchBlock::OpMTan((-60.0).into()).into(),
-        ScratchBlock::OpMTan((-90.0).into()).into(),
-        ScratchBlock::OpMTan((-100.0).into()).into(),
-        ScratchBlock::OpMTan((-180.0).into()).into(),
-        ScratchBlock::OpMTan((-270.0).into()).into(),
-    ]));
-
-    // SIN
-
-    assert_eq!(memory[0].convert_to_number(), 0.0);
-
-    assert!(0.5 - memory[1].convert_to_number() < f64::EPSILON);
-    assert!(0.8660254038 - memory[2].convert_to_number() <= 80000.0 * f64::EPSILON);
-    assert_eq!(memory[3].convert_to_number(), 1.0);
-    assert!(memory[4].convert_to_number() - 0.984807753 <= 60000.0 * f64::EPSILON);
-
-    assert!(memory[5].convert_to_number() - 0.5 < f64::EPSILON);
-    assert!(memory[6].convert_to_number() - 0.8660254038 <= 80000.0 * f64::EPSILON);
-    assert_eq!(memory[7].convert_to_number(), -1.0);
-    assert!(memory[8].convert_to_number() + 0.984807753 <= 60000.0 * f64::EPSILON);
-
-    // COS
-
-    assert_eq!(memory[9].convert_to_number(), 1.0);
-
-    assert!(0.8660254038 - memory[10].convert_to_number() <= 80000.0 * f64::EPSILON);
-    assert!(0.5 - memory[11].convert_to_number() < f64::EPSILON);
-    assert!(memory[12].convert_to_number() < f64::EPSILON);
-    assert!(memory[13].convert_to_number() + 0.1736481777 < 150000.0 * f64::EPSILON);
-
-    assert!(memory[14].convert_to_number() - 0.8660254038 <= 80000.0 * f64::EPSILON);
-    assert!(memory[15].convert_to_number() - 0.5 < f64::EPSILON);
-    assert!(memory[16].convert_to_number() < f64::EPSILON);
-    assert!(memory[17].convert_to_number() + 0.1736481777 < 150000.0 * f64::EPSILON);
-
-    // TAN
-
-    assert_eq!(memory[18].convert_to_number(), 0.0);
-
-    assert!((memory[19].convert_to_number() - 0.5773502692).abs() < 46722.0 * f64::EPSILON);
-    assert!((memory[20].convert_to_number() - 1.7320508076).abs() < 140168.0 * f64::EPSILON);
-    assert!(memory[21].convert_to_number().is_infinite());
-    assert!(memory[21].convert_to_number().is_sign_positive());
-    assert!(memory[22].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
-    assert!(memory[23].convert_to_number().abs() < f64::EPSILON);
-    assert!(memory[24].convert_to_number().is_infinite());
-    assert!(memory[24].convert_to_number().is_sign_negative());
-
-    assert!((memory[25].convert_to_number() + 0.5773502692).abs() < 46722.0 * f64::EPSILON);
-    assert!((memory[26].convert_to_number() + 1.7320508076).abs() < 140168.0 * f64::EPSILON);
-    assert!(memory[27].convert_to_number().is_infinite());
-    assert!(memory[27].convert_to_number().is_sign_negative());
-    assert!(memory[28].convert_to_number() - 5.6712818196 < 79765.0 * f64::EPSILON);
-    assert!(memory[29].convert_to_number() < f64::EPSILON);
-    assert!(memory[30].convert_to_number().is_infinite());
-    assert!(memory[30].convert_to_number().is_sign_positive());
+    assert!(!memory[28].convert_to_bool());
+    assert!(memory[29].convert_to_bool());
 }
 
 #[test]
 fn bool_return() {
-    let memory = run_code(vec![set_var(
+    let memory = run_code(vec![set(
         Ptr(0),
         ScratchBlock::OpBAnd(
             ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
@@ -638,4 +222,34 @@ fn comparison() {
     assert_eq!(memory[3].convert_to_number(), 0.0);
     assert_eq!(memory[4].convert_to_number(), 1.0);
     assert_eq!(memory[5].convert_to_number(), 0.0);
+}
+
+#[test]
+fn locals() {
+    let memory = run_code(vec![ScratchBlock::LocalsWith(
+        vec![4.0.into()],
+        vec![
+            set(Ptr(0), ScratchBlock::LocalsGet(0)),
+            ScratchBlock::LocalsWith(
+                vec![3.0.into(), "2".into(), true.into()],
+                vec![
+                    set(Ptr(1), ScratchBlock::LocalsGet(0)),
+                    set(Ptr(2), ScratchBlock::LocalsGet(1)),
+                    set(Ptr(3), ScratchBlock::LocalsGet(2)),
+                    set(Ptr(4), ScratchBlock::LocalsGet(1)),
+                    ScratchBlock::LocalsWith(
+                        vec![5.0.into()],
+                        vec![set(Ptr(5), ScratchBlock::LocalsGet(0))],
+                    ),
+                ],
+            ),
+        ],
+    )]);
+
+    assert_eq!(memory[0], ScratchObject::Number(4.0));
+    assert_eq!(memory[1], ScratchObject::Number(3.0));
+    assert_eq!(memory[2], ScratchObject::String("2".into()));
+    assert_eq!(memory[3], ScratchObject::Bool(true));
+    assert_eq!(memory[4], ScratchObject::String("2".into()));
+    assert_eq!(memory[5], ScratchObject::Number(5.0));
 }

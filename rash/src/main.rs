@@ -1,9 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
-use rash_core::{RunState, SpriteData, SpriteId};
-use rash_loader_sb3::ProjectLoader;
+use rash_core::{RunState, SpriteId};
 use rash_render::{Renderer, WindowSize};
-use rash_vm::{MEMORY, ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
+use rash_vm::{ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -23,7 +22,6 @@ fn main() {
             return;
         } else if arg == "--demo" {
             run_demo();
-            rash_vm::print_memory();
             return;
         }
         PathBuf::from(arg)
@@ -50,7 +48,8 @@ fn main() {
             .unwrap(),
     );
 
-    let vm = match ProjectLoader::new(&path).unwrap().build() {
+    println!("Loading project from {path:?}");
+    let vm = match rash_loader_sb3::load_from_path(&path) {
         Ok(n) => n,
         Err(err) => {
             eprintln!("{err}");
@@ -64,19 +63,20 @@ fn main() {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => control_flow.exit(),
+            } => {
+                if std::env::var("RASH_PRINT_MEMORY").is_ok() {
+                    rash_vm::print_memory(&app.vm.memory);
+                }
+                control_flow.exit()
+            }
             _ => app.tick(event),
         })
         .unwrap();
-
-    if std::env::var("RASH_PRINT_MEMORY").is_ok() {
-        rash_vm::print_memory();
-    }
 }
 
 pub struct App {
     renderer: Renderer,
-    vm: Runtime,
+    pub vm: Runtime,
     window: Arc<Window>,
 
     surface: wgpu::Surface<'static>,
@@ -85,7 +85,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn new(mut vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -125,7 +125,7 @@ impl App {
             &device,
             &queue,
             &vm.sprite_load_info,
-            &vm.costumes,
+            &mut vm.costumes,
         )
         .await;
 
@@ -180,10 +180,6 @@ impl App {
 }
 
 fn run_demo() {
-    // TODO: All memory is a global variable
-    // I *will* refactor this in the future
-    let memory = MEMORY.lock().unwrap();
-
     let mut sprite = SpriteBuilder::new(SpriteId(0));
     sprite.add_script(
         // Script::new_green_flag(vec![
@@ -191,15 +187,14 @@ fn run_demo() {
         //     ScratchBlock::Log(ScratchBlock::OpBNot(true.into()).into()),
         // ]),
         Script::new_green_flag(rash_vm::builder::program_pi()),
-        &memory,
     );
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
-    let mut vm = builder.build(&memory);
-    let mut state = RunState {
-        // We won't do any graphics operations here
-        sprites: HashMap::from([(SpriteId(0), SpriteData::default())]),
-    };
 
+    let mut vm = builder.build();
+
+    let mut state = RunState::new(); // No graphics operations here
     while !vm.update(&mut state) {}
+
+    rash_vm::print_memory(&vm.memory);
 }

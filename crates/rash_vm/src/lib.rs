@@ -1,3 +1,29 @@
+//! The JIT compiler for Scratch projects. You can manually hook this up
+//! to a renderer, or run it headlessly.
+//!
+//! ```
+//! # use rash_vm::{ProjectBuilder, ScratchBlock, Script, SpriteBuilder, SpriteId, RunState};
+//! # use std::collections::HashMap;
+//!
+//! let mut sprite = SpriteBuilder::new(SpriteId(0));
+//! sprite.add_script(
+//!     Script::new_green_flag(vec![
+//!         ScratchBlock::Log("Hello World".into()),
+//!     ]),
+//! );
+//! // You can also add custom blocks...
+//!
+//! let mut builder = ProjectBuilder::new();
+//! builder.add_sprite(sprite);
+//!
+//! let mut vm = builder.build();
+//! // Make sure `memory` lives as long as `vm`
+//!
+//! let mut state = RunState::new(); // No graphics operations
+//! while !vm.update(&mut state) {}
+//! ```
+
+mod analysis_passes;
 mod blocks;
 mod callbacks;
 mod compile_fn;
@@ -6,8 +32,9 @@ mod constant_set;
 pub mod data_types;
 mod effects;
 pub mod error;
+mod gapvec;
 mod input_primitives;
-mod ins_shortcuts;
+mod jit_func;
 pub mod runtime;
 mod variable_storage;
 
@@ -15,27 +42,26 @@ mod variable_storage;
 mod tests;
 
 pub use callbacks::print_function_addresses;
-pub use compiler::{MEMORY, ScratchBlock};
+pub use compiler::ScratchBlock;
 pub use data_types::ScratchObject;
 pub use input_primitives::{Input, Ptr};
-pub use runtime::{ProjectBuilder, Runtime, SpriteBuilder};
+pub use rash_core::*;
+pub use runtime::{ProjectBuilder, Runtime, Script, SpriteBuilder};
 
 use smol_str::SmolStr;
 
-pub fn print_memory() {
-    let lock = MEMORY.lock().unwrap();
-
-    println!("MEMORY: {:X}", lock.as_ptr() as usize);
+pub fn print_memory(memory: &[ScratchObject]) {
+    println!("memory: {:X}", memory.as_ptr() as usize);
 
     // Only print the changed values that aren't zero.
-    let print_until_idx = lock
+    let print_until_idx = memory
         .iter()
         .enumerate()
         .rev()
         .find(|(_, n)| !matches!(**n, ScratchObject::Number(0.0)))
         .map(|(i, _)| i);
     if let Some(print_until_idx) = print_until_idx {
-        for (i, obj) in lock.iter().enumerate().take(print_until_idx + 1) {
+        for (i, obj) in memory.iter().enumerate().take(print_until_idx + 1) {
             println!("{i}: {obj:?}");
         }
     }

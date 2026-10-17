@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use rash_core::{GraphicsState, SpriteId};
+use rash_core::{ShaderState, SpriteId};
 
 use super::to_bytes;
 use crate::WindowSize;
@@ -33,7 +33,7 @@ impl Renderer {
     fn render_inner(
         &mut self,
         sprite_order: &[SpriteId],
-        graphics: &[GraphicsState],
+        graphics: &[ShaderState],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
@@ -74,7 +74,7 @@ impl Renderer {
                 }
 
                 let costume_id = state.current_costume;
-                let costume = self.costumes.get(costume_id.0 as usize).unwrap();
+                let costume = self.textures.get(costume_id.0 as usize).unwrap();
                 render_pass.set_bind_group(1, &costume.bind_group, &[]);
 
                 let i = i.0 as u32 * 6;
@@ -96,24 +96,20 @@ impl Renderer {
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
     ) {
-        let mut graphics: Vec<(_, _)> = self.state.sprites.iter().collect();
-        graphics.sort_by_key(|n| n.0);
-        let graphics: Vec<GraphicsState> = graphics.into_iter().map(|n| n.1.graphics).collect();
+        let graphics: Vec<ShaderState> = self.state.sprites.iter().map(|n| n.1.graphics).collect();
 
         queue.write_buffer(&self.sprites_buffer, 0, to_bytes(&graphics));
 
         match self.render_inner(sprite_order, &graphics, device, queue, surface) {
             Ok(()) => {}
-            // Reconfigure the surface if it's lost or outdated
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                self.resize(self.window_size, device, queue, surface);
+                self.resize(self.window_size, device, queue, surface); // Reconfigure
             }
-            // The system is out of memory, we should probably quit
             Err(wgpu::SurfaceError::OutOfMemory) => {
                 eprintln!("[error] Graphics: Out Of Memory");
                 return;
             }
-            // This happens when the a frame takes too long to present
+            // Frame took too long to present
             Err(err) => {
                 eprintln!("[error] {err}");
             }
