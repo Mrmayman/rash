@@ -57,12 +57,13 @@ impl ProjectBuilder {
 
                 analyze(
                     &script.blocks,
-                    &mut |child| {
+                    &|child| {
                         effects_by_block
                             .get(&child)
                             .cloned()
                             .unwrap_or(Effects::unknown())
                     },
+                    &|_| VariableWrite::default(),
                     &mut |child, local_effects| {
                         // Fresh entry this pass ⇒ this is a genuine replace, not accumulate.
                         call_sites
@@ -94,11 +95,18 @@ impl ProjectBuilder {
 
                 let effects = analyze(
                     &script.blocks,
-                    &mut |child| {
+                    &|child| {
                         effects_by_block
                             .get(&child)
                             .cloned()
                             .unwrap_or(Effects::unknown())
+                    },
+                    &|v| {
+                        previous_call_sites
+                            .get(&block_id)
+                            .filter(|n| !n.at_site.is_unknown)
+                            .and_then(|n| n.at_site.writes.get(&v).copied())
+                            .unwrap_or_default()
                     },
                     &mut |child, local_effects| {
                         let contribution = match parent_call_site.clone() {
@@ -186,7 +194,12 @@ impl ProjectBuilder {
                 continue;
             };
 
-            let eff = analyze(&script.blocks, &mut |_| Effects::unknown(), &mut |_, _| {});
+            let eff = analyze(
+                &script.blocks,
+                &mut |_| Effects::unknown(),
+                &|_| VariableWrite::default(),
+                &mut |_, _| {},
+            );
             accessed_vars.extend(eff.reads);
             accessed_vars.extend(eff.writes.into_keys());
         }

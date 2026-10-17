@@ -22,6 +22,7 @@ impl ScratchBlock {
             ScratchBlock::VarSet(ptr, input) => format!("{ptr:?} = {}", input.format(0)),
             ScratchBlock::VarChange(ptr, input) => format!("{ptr:?} += {}", input.format(0)),
             ScratchBlock::VarRead(ptr) => format!("{ptr:?}"),
+            ScratchBlock::LocalsGet(n) => format!("l{n}"),
             ScratchBlock::OpAdd(input, input1) => op_inner("+", input, input1),
             ScratchBlock::OpSub(input, input1) => op_inner("-", input, input1),
             ScratchBlock::OpMul(input, input1) => op_inner("*", input, input1),
@@ -65,6 +66,19 @@ impl ScratchBlock {
                 body(else_, indent),
                 pad(indent),
             ),
+            ScratchBlock::LocalsWith(locals, blocks) => {
+                let declare = locals
+                    .iter()
+                    .enumerate()
+                    .map(|(i, n)| format!("l{i} = {}", n.format(0)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "with {declare} {{\n{}{}}}",
+                    body(blocks, indent),
+                    pad(indent)
+                )
+            }
             ScratchBlock::ControlRepeat(times, blocks) => format!(
                 "repeat {} {{\n{}{}}}",
                 times.format(0),
@@ -109,19 +123,14 @@ impl ScratchBlock {
 }
 
 fn format_call(id: usize, args: &[Input], await_: bool) -> String {
-    let mut out = format!("call ({id})(");
-    let len = args.len();
-    for (i, arg) in args.iter().enumerate() {
-        out.push_str(&arg.format(0));
-        if i < len - 1 {
-            out.push_str(", ");
-        }
-    }
-    out.push(')');
-    if await_ {
-        out.push_str(".await");
-    }
-    out
+    let args_list = args
+        .iter()
+        .map(|n| n.format(0))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let await_str = if await_ { ".await" } else { "" };
+
+    format!("call ({id})({args_list}){await_str}")
 }
 
 fn func_call_inner(name: &str, inputs: &[&Input]) -> String {

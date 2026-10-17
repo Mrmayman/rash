@@ -223,3 +223,33 @@ fn comparison() {
     assert_eq!(memory[4].convert_to_number(), 1.0);
     assert_eq!(memory[5].convert_to_number(), 0.0);
 }
+
+#[test]
+fn locals() {
+    let memory = run_code(vec![ScratchBlock::LocalsWith(
+        vec![4.0.into()],
+        vec![
+            set(Ptr(0), ScratchBlock::LocalsGet(0)),
+            ScratchBlock::LocalsWith(
+                vec![3.0.into(), "2".into(), true.into()],
+                vec![
+                    set(Ptr(1), ScratchBlock::LocalsGet(0)),
+                    set(Ptr(2), ScratchBlock::LocalsGet(1)),
+                    set(Ptr(3), ScratchBlock::LocalsGet(2)),
+                    set(Ptr(4), ScratchBlock::LocalsGet(1)),
+                    ScratchBlock::LocalsWith(
+                        vec![5.0.into()],
+                        vec![set(Ptr(5), ScratchBlock::LocalsGet(0))],
+                    ),
+                ],
+            ),
+        ],
+    )]);
+
+    assert_eq!(memory[0], ScratchObject::Number(4.0));
+    assert_eq!(memory[1], ScratchObject::Number(3.0));
+    assert_eq!(memory[2], ScratchObject::String("2".into()));
+    assert_eq!(memory[3], ScratchObject::Bool(true));
+    assert_eq!(memory[4], ScratchObject::String("2".into()));
+    assert_eq!(memory[5], ScratchObject::Number(5.0));
+}

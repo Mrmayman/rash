@@ -10,7 +10,12 @@ use crate::{
 
 #[must_use]
 fn eff<T: CheckEffects>(input: &T) -> Effects {
-    analyze(input, &mut |_| Effects::unknown(), &mut |_, _| {})
+    analyze(
+        input,
+        &|_| Effects::unknown(),
+        &|_| VariableWrite::default(),
+        &mut |_, _| {},
+    )
 }
 
 const X: Ptr = Ptr(0);
@@ -176,6 +181,7 @@ fn repeat_loop_nested() {
         &mut |_| Effects::unknown(),
         // Let's say X was previously a number
         &|_| VariableWrite::normal(VarTypeChecked::Number),
+        &|_| VariableWrite::default(),
         &mut |_| {},
         &mut |_, _| {},
     );

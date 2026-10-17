@@ -371,8 +371,9 @@ impl Effects {
 pub trait CheckEffects {
     fn effects(
         &self,
-        block_eff: &mut impl FnMut(CustomBlockId) -> Effects,
+        block_eff: &impl Fn(CustomBlockId) -> Effects,
         var_ty: &dyn Fn(Ptr) -> VariableWrite,
+        local_ty: &dyn Fn(usize) -> VariableWrite,
         throw_early_ret: &mut dyn FnMut(Effects),
         throw_call_func: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
     ) -> Effects;
@@ -381,13 +382,16 @@ pub trait CheckEffects {
 impl CheckEffects for ScratchBlock {
     fn effects(
         &self,
-        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        c: &impl Fn(CustomBlockId) -> Effects,
         v: &dyn Fn(Ptr) -> VariableWrite,
+        l: &dyn Fn(usize) -> VariableWrite,
         e: &mut dyn FnMut(Effects),
         f: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
     ) -> Effects {
         match self {
-            ScratchBlock::VarSet(ptr, input) => Effects::with_write(*ptr, input.expected_type(v)),
+            ScratchBlock::VarSet(ptr, input) => {
+                Effects::with_write(*ptr, input.expected_type(v, l))
+            }
             ScratchBlock::VarChange(ptr, _) => Effects::with_write(
                 *ptr,
                 VariableWrite {
@@ -409,7 +413,9 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::OpStrContains(a, b)
             | ScratchBlock::OpBAnd(a, b)
             | ScratchBlock::OpCmp(a, b, _)
-            | ScratchBlock::OpBOr(a, b) => a.effects(c, v, e, f).then(&b.effects(c, v, e, f), v),
+            | ScratchBlock::OpBOr(a, b) => {
+                a.effects(c, v, l, e, f).then(&b.effects(c, v, l, e, f), v)
+            }
 
             ScratchBlock::MotionChangeX(input)
             | ScratchBlock::MotionChangeY(input)
@@ -424,27 +430,54 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::OpMSqrt(input)
             | ScratchBlock::OpMSin(input)
             | ScratchBlock::OpMCos(input)
-            | ScratchBlock::OpMTan(input) => input.effects(c, v, e, f),
+            | ScratchBlock::OpMTan(input) => input.effects(c, v, l, e, f),
 
             ScratchBlock::ControlRepeatUntil(input, blocks)
             | ScratchBlock::ControlRepeat(input, blocks)
             | ScratchBlock::ControlIf(input, blocks) => {
                 let mut final_effects = input
-                    .effects(c, v, e, f)
-                    .then(&blocks.effects(c, v, e, f), v);
+                    .effects(c, v, l, e, f)
+                    .then(&blocks.effects(c, v, l, e, f), v);
                 // Setting input.effects to may_not_happen is fine,
                 // since input would be read-only and this only affects writes
                 final_effects.may_not_happen = true;
                 final_effects
             }
+            ScratchBlock::LocalsWith(inputs, blocks) => {
+                let mut input_effects: Option<Effects> = None;
+                for i in inputs {
+                    let e = i.effects(c, v, l, e, f);
+                    if let Some(eff) = &mut input_effects {
+                        eff.sequence(&e, v);
+                    } else {
+                        input_effects = Some(e);
+                    }
+                }
+
+                input_effects.unwrap_or(Effects::new()).then(
+                    &blocks.effects(
+                        c,
+                        v,
+                        &|loc| {
+                            inputs
+                                .get(loc)
+                                .map(|n| n.expected_type(v, l))
+                                .unwrap_or_default()
+                        },
+                        e,
+                        f,
+                    ),
+                    v,
+                )
+            }
             ScratchBlock::ControlForever(blocks) => {
                 // It's guaranteed to run at least once
-                blocks.effects(c, v, e, f)
+                blocks.effects(c, v, l, e, f)
             }
             ScratchBlock::ControlIfElse(input, b1, b2) => {
-                let b1 = b1.effects(c, v, e, f);
-                let b2 = b2.effects(c, v, e, f);
-                input.effects(c, v, e, f).then(&b1.or(&b2, v), v)
+                let b1 = b1.effects(c, v, l, e, f);
+                let b2 = b2.effects(c, v, l, e, f);
+                input.effects(c, v, l, e, f).then(&b1.or(&b2, v), v)
             }
 
             ScratchBlock::ControlStopThisScript => {
@@ -456,18 +489,18 @@ impl CheckEffects for ScratchBlock {
             ScratchBlock::FunctionCallNoScreenRefresh(id, args) => {
                 let call_site = CallSiteInfo {
                     at_site: Effects::new(),
-                    arguments: args.iter().map(|arg| arg.expected_type(v)).collect(),
+                    arguments: args.iter().map(|arg| arg.expected_type(v, l)).collect(),
                 };
                 f(*id, call_site);
                 let mut code_eff = c(*id);
                 code_eff.set_direct(false);
-                args.effects(c, v, e, f).then(&code_eff, v)
+                args.effects(c, v, l, e, f).then(&code_eff, v)
             }
             // Screen refresh blocks could yield
             ScratchBlock::FunctionCallScreenRefresh(id, args) => {
                 let call_site = CallSiteInfo {
                     at_site: Effects::new(),
-                    arguments: args.iter().map(|arg| arg.expected_type(v)).collect(),
+                    arguments: args.iter().map(|arg| arg.expected_type(v, l)).collect(),
                 };
                 f(*id, call_site);
                 Effects::that_yields()
@@ -478,6 +511,7 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::LooksShown(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
+            | ScratchBlock::LocalsGet(_)
             | ScratchBlock::SensingDaysSince2000 => Effects::new(),
         }
     }
@@ -486,20 +520,22 @@ impl CheckEffects for ScratchBlock {
 impl<T: CheckEffects> CheckEffects for Vec<T> {
     fn effects(
         &self,
-        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        c: &impl Fn(CustomBlockId) -> Effects,
         v: &dyn Fn(Ptr) -> VariableWrite,
+        l: &dyn Fn(usize) -> VariableWrite,
         e: &mut dyn FnMut(Effects),
         f: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
     ) -> Effects {
-        self.as_slice().effects(c, v, e, f)
+        self.as_slice().effects(c, v, l, e, f)
     }
 }
 
 impl<T: CheckEffects> CheckEffects for &[T] {
     fn effects(
         &self,
-        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        c: &impl Fn(CustomBlockId) -> Effects,
         v: &dyn Fn(Ptr) -> VariableWrite,
+        l: &dyn Fn(usize) -> VariableWrite,
         e: &mut dyn FnMut(Effects),
         f: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
     ) -> Effects {
@@ -514,6 +550,7 @@ impl<T: CheckEffects> CheckEffects for &[T] {
             let other = item.effects(
                 c,
                 var_ty,
+                l,
                 &mut |thrown_effect| {
                     // If a function returns early, the thrown effect is propagated.
                     e(effects.clone().then(&thrown_effect, var_ty));
@@ -541,13 +578,14 @@ impl<T: CheckEffects> CheckEffects for &[T] {
 impl CheckEffects for Input {
     fn effects(
         &self,
-        c: &mut impl FnMut(CustomBlockId) -> Effects,
+        c: &impl Fn(CustomBlockId) -> Effects,
         v: &dyn Fn(Ptr) -> VariableWrite,
+        l: &dyn Fn(usize) -> VariableWrite,
         e: &mut dyn FnMut(Effects),
         f: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
     ) -> Effects {
         match self {
-            Input::Block(block) => block.effects(c, v, e, f),
+            Input::Block(block) => block.effects(c, v, l, e, f),
             Input::Obj(_) => Effects::new(),
         }
     }
@@ -555,14 +593,15 @@ impl CheckEffects for Input {
 
 pub fn analyze(
     code: &impl CheckEffects,
-    block_eff: &mut impl FnMut(CustomBlockId) -> Effects,
+    block_eff: &impl Fn(CustomBlockId) -> Effects,
+    var_ty: &dyn Fn(Ptr) -> VariableWrite,
     throw_call_func: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
 ) -> Effects {
     let mut other_eff: Option<Effects> = None;
-    let var_ty = &|_| VariableWrite::default();
     let mut effects = code.effects(
         block_eff,
         var_ty,
+        &|_| VariableWrite::default(),
         &mut |e| {
             if let Some(other) = &mut other_eff {
                 other.merge(&e, var_ty);

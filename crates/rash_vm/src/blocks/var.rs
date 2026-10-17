@@ -58,7 +58,7 @@ impl Compiler<'_> {
                     VariableSlot {
                         val,
                         skip_nan: block
-                            .return_type(|n| self.vars.get_type(n))
+                            .return_type(|n| self.vars.get_type(n), |n| self.get_local_type(n))
                             .is_some_and(|n| n.skip_nan),
                     },
                     builder,
