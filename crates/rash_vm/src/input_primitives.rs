@@ -359,7 +359,7 @@ impl Input {
                     }
                     ScratchValue::Bool(value) => (
                         builder.ins().fcvt_from_sint(F64, value),
-                        compiler.constants.get_int(1, builder),
+                        compiler.constants.get_int(0, builder),
                     ),
                 }
             }
