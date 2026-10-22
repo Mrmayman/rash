@@ -280,7 +280,7 @@ impl ProjectBuilder {
                 script.sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
-                &mut |id| {
+                &|id| {
                     analysis
                         .custom_blocks
                         .get(&id)
@@ -424,15 +424,6 @@ pub(crate) struct SpawnableScripts {
     pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
     pub custom_blocks: Vec<CustomBlock>,
     // If you add more here, make sure to update analysis passes too
-}
-
-impl SpawnableScripts {
-    pub fn iter(&self) -> impl Iterator<Item = &MaybeCompiled> {
-        self.green_flags
-            .iter()
-            .map(|n| &n.1)
-            .chain(self.custom_blocks.iter().map(|n| &n.script))
-    }
 }
 
 #[derive(Default, Clone)]

@@ -399,7 +399,8 @@ impl Input {
                     ScratchValue::Bool(b)
                 }
                 ScratchObject::String(smol_str) => {
-                    let [i2, i3, i4] = unsafe { std::mem::transmute(smol_str.clone()) };
+                    let [i2, i3, i4] =
+                        unsafe { std::mem::transmute::<SmolStr, [i64; 3]>(smol_str.clone()) };
 
                     compiler
                         .static_strings
