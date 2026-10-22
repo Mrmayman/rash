@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ProjectBuilder, ScratchBlock,
+    ProjectBuilder, Ptr, ScratchBlock,
     effects::{CallSiteInfo, Effects, VariableWrite, analyze},
     runtime::{CustomBlockId, MaybeCompiled},
 };
@@ -36,13 +36,69 @@ impl std::ops::Index<&CustomBlockId> for AnalysisOutput {
 
 impl ProjectBuilder {
     pub(crate) fn analyze_custom_blocks(&mut self) -> AnalysisOutput {
+        let mut accessed_vars = HashSet::new();
+        let (child_to_parent, parent_to_child) = self.collect_custom_block_calls();
+
+        let (mut effects_by_block, mut call_sites) =
+            self.analyze_pass(&parent_to_child, &mut accessed_vars);
+
+        let has_changed = self.inline_functions(child_to_parent);
+
+        if has_changed {
+            (effects_by_block, call_sites) =
+                self.analyze_pass(&parent_to_child, &mut accessed_vars);
+        }
+
+        // Recursive/cyclic blocks remain intentionally unresolved
+        // and resort to runtime checks rather than compile time.
+
+        let mut combined = HashMap::new();
+
+        for (id, effects) in effects_by_block {
+            combined.insert(
+                id,
+                CustomBlockAnalysis {
+                    effects,
+                    call_site: CallSiteInfo {
+                        at_site: Effects::unknown(),
+                        arguments: Vec::new(),
+                    },
+                },
+            );
+        }
+        for (id, call_site) in call_sites {
+            combined
+                .entry(id)
+                .and_modify(|c| c.call_site = call_site.clone())
+                .or_insert_with(|| CustomBlockAnalysis {
+                    effects: Effects::unknown(),
+                    call_site,
+                });
+        }
+
+        AnalysisOutput {
+            custom_blocks: combined,
+            var_buf_len: if let Some(max) = accessed_vars.iter().max_by_key(|a| a.0) {
+                max.0 + 1
+            } else {
+                accessed_vars.len()
+            },
+        }
+    }
+
+    fn analyze_pass(
+        &mut self,
+        parent_to_child: &HashMap<CustomBlockId, HashSet<CustomBlockId>>,
+        accessed_vars: &mut HashSet<Ptr>,
+    ) -> (
+        HashMap<CustomBlockId, Effects>,
+        HashMap<CustomBlockId, CallSiteInfo>,
+    ) {
         let mut effects_by_block: HashMap<CustomBlockId, Effects> = HashMap::new();
         let mut call_sites: HashMap<CustomBlockId, CallSiteInfo> = HashMap::new();
 
-        #[allow(unused)]
-        let (child_to_parent, parent_to_child) = self.collect_custom_block_calls();
-
         let fallback_write = &|_| VariableWrite::default();
+        let mut first_iteration = true;
 
         loop {
             let mut changed = false;
@@ -55,7 +111,7 @@ impl ProjectBuilder {
                     continue;
                 };
 
-                analyze(
+                let eff = analyze(
                     &script.blocks,
                     &|child| {
                         effects_by_block
@@ -72,6 +128,10 @@ impl ProjectBuilder {
                             .or_insert(local_effects);
                     },
                 );
+                if first_iteration {
+                    accessed_vars.extend(eff.reads);
+                    accessed_vars.extend(eff.writes.into_keys());
+                }
             }
 
             for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
@@ -87,6 +147,16 @@ impl ProjectBuilder {
                     });
 
                 if has_unresolved_children {
+                    if first_iteration {
+                        let eff = analyze(
+                            &script.blocks,
+                            &|_| Effects::unknown(),
+                            &|_| VariableWrite::default(),
+                            &mut |_, _| {},
+                        );
+                        accessed_vars.extend(eff.reads);
+                        accessed_vars.extend(eff.writes.into_keys());
+                    }
                     continue;
                 }
 
@@ -130,6 +200,10 @@ impl ProjectBuilder {
                 {
                     continue;
                 }
+                if first_iteration {
+                    accessed_vars.extend(effects.reads.iter().copied());
+                    accessed_vars.extend(effects.writes.keys().copied());
+                }
                 effects_by_block.insert(block_id, effects);
                 changed = true;
             }
@@ -138,77 +212,80 @@ impl ProjectBuilder {
                 changed = true;
             }
 
+            first_iteration = false;
+
             if !changed {
                 break;
             }
         }
-
-        // let mut to_inline: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
-        // for (child, parents) in child_to_parent {
-        // if parents.len() == 1 {
-        // TODO: add PushArgSlot and PopArgSlot
-        // to_inline.insert(child, parents);
-        // continue;
-        // }
-        // TODO: more heuristics
-        // TODO: implement inlining
-        // }
-
-        // Recursive/cyclic blocks remain intentionally unresolved
-        // and resort to runtime checks rather than compile time.
-
-        let mut combined = HashMap::new();
-
-        for (id, effects) in effects_by_block {
-            combined.insert(
-                id,
-                CustomBlockAnalysis {
-                    effects,
-                    call_site: CallSiteInfo {
-                        at_site: Effects::unknown(),
-                        arguments: Vec::new(),
-                    },
-                },
-            );
-        }
-        for (id, call_site) in call_sites {
-            combined
-                .entry(id)
-                .and_modify(|c| c.call_site = call_site.clone())
-                .or_insert_with(|| CustomBlockAnalysis {
-                    effects: Effects::unknown(),
-                    call_site,
-                });
-        }
-
-        AnalysisOutput {
-            custom_blocks: combined,
-            var_buf_len: self.get_var_buf_len(),
-        }
+        (effects_by_block, call_sites)
     }
 
-    fn get_var_buf_len(&mut self) -> usize {
-        let mut accessed_vars = HashSet::new();
-        for s in self.runtime.scripts.iter() {
-            let MaybeCompiled::ToCompile(script) = &s else {
+    fn inline_functions(
+        &mut self,
+        child_to_parent: HashMap<CustomBlockId, HashSet<CustomBlockId>>,
+    ) -> bool {
+        let skip_inline = std::env::var("RASH_SKIP_INLINE").ok();
+        if skip_inline.as_deref() == Some("1")
+            || skip_inline
+                .as_deref()
+                .is_some_and(|n| n.to_lowercase() == "true")
+        {
+            return false;
+        }
+
+        let mut to_inline: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
+        let mut inlined_something = false;
+
+        for (child, parents) in child_to_parent {
+            let info = &self.runtime.scripts.custom_blocks[child.0];
+
+            // ========================================================
+            // 1. Can we inline?
+            // ========================================================
+
+            if info.is_screen_refresh && info.num_args > 0 {
+                // The compiler doesn't support persistent storage
+                // of inlined arguments for screen refresh blocks, so if any, just bail.
+                // I don't plan on adding that either (too much complexity).
+                continue;
+            }
+
+            let MaybeCompiled::ToCompile(s) = &info.script else {
                 continue;
             };
 
-            let eff = analyze(
-                &script.blocks,
-                &mut |_| Effects::unknown(),
-                &|_| VariableWrite::default(),
-                &mut |_, _| {},
-            );
-            accessed_vars.extend(eff.reads);
-            accessed_vars.extend(eff.writes.into_keys());
+            // Case where child is non-refresh, parent is refresh,
+            // but when child inlined into parent,
+            // child could become refresh like parent (incorrect behaviour)
+            let can_turn_into_refresh =
+                !info.is_screen_refresh && s.blocks.iter().any(|n| n.could_trigger_refresh());
+            let parents_are_refresh = parents
+                .iter()
+                .filter_map(|n| self.runtime.scripts.custom_blocks.get(n.0))
+                .any(|n| n.is_screen_refresh);
+
+            if can_turn_into_refresh && parents_are_refresh {
+                continue;
+            }
+
+            // ========================================================
+            // 2. Should we inline?
+            // ========================================================
+
+            // TODO: more heuristics
+            let should_inline = parents.len() == 1;
+
+            if should_inline {
+                to_inline.insert(child, parents);
+                continue;
+            }
+
+            inlined_something = true;
+
+            // TODO: do inlining
         }
-        let var_buf_len = if let Some(max) = accessed_vars.iter().max_by_key(|a| a.0) {
-            max.0 + 1
-        } else {
-            accessed_vars.len()
-        };
-        var_buf_len
+        inlined_something
     }
 
     fn collect_custom_block_calls(
