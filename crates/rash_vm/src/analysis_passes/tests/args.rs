@@ -1,11 +1,9 @@
 use crate::{
-    Input, ScratchBlock,
-    analysis_passes::tests::{A, B, C, X, assert_writes, call, custom_block, project},
-    builder::set,
-    compiler::VarTypeChecked,
-    effects::CallSiteInfo,
+    Input, ScratchBlock, builder::set, compiler::VarTypeChecked, effects::CallSiteInfo,
     runtime::CustomBlockId,
 };
+
+use super::{A, B, C, X, assert_writes, call, custom_block, project};
 
 fn call_with_args(id: CustomBlockId, args: Vec<Input>) -> ScratchBlock {
     ScratchBlock::FunctionCallNoScreenRefresh(id, args)

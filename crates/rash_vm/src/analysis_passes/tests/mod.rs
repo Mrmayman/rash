@@ -22,6 +22,7 @@ const C: CustomBlockId = CustomBlockId(2);
 // straight from A to C (in definitions) with gap in the ID (B). Else it will panic.
 
 mod args;
+mod flag;
 
 /// Adjust this helper to the actual custom-block-call variant in
 /// ScratchBlock. Keeping it here means the tests below don't depend
