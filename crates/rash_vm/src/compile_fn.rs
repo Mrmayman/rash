@@ -156,7 +156,7 @@ fn fetch_function_arguments(
                 ScratchValue::String([i2, i3, i4])
             }
             VarTypeChecked::Object => {
-                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 0);
+                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, o);
                 let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
                 let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
                 let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 24);

@@ -442,7 +442,7 @@ impl Compiler<'_> {
     pub fn control_locals_with(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        locals: &Vec<Input>,
+        locals: &[Input],
         blocks: &Vec<ScratchBlock>,
     ) {
         let locals = locals
