@@ -45,6 +45,8 @@ Env vars:
 - `RASH_PRINT_IR` to print the cranelift IR of the compiled code.
 - `RASH_PRINT_FUNCTIONS` to print IR IDs of the callback functions.
 - `RASH_PRINT_MEMORY` to print memory values after running.
+- `RASH_SKIP_INLINE` to skip inlining functions
+  (useful for debugging/blackbox benchmarking)
 
 # Technical details
 
