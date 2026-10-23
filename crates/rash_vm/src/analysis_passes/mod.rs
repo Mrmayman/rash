@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     ProjectBuilder, Ptr, ScratchBlock,
     effects::{CallSiteInfo, Effects, VariableWrite, analyze},
-    runtime::{CustomBlockId, MaybeCompiled},
+    runtime::{CustomBlock, CustomBlockId, MaybeCompiled},
 };
 
 #[cfg(test)]
@@ -37,16 +37,16 @@ impl std::ops::Index<&CustomBlockId> for AnalysisOutput {
 impl ProjectBuilder {
     pub(crate) fn analyze_custom_blocks(&mut self) -> AnalysisOutput {
         let mut accessed_vars = HashSet::new();
-        let (child_to_parent, parent_to_child) = self.collect_custom_block_calls();
+        let calls = self.collect_custom_block_calls();
 
         let (mut effects_by_block, mut call_sites) =
-            self.analyze_pass(&parent_to_child, &mut accessed_vars);
+            self.analyze_pass(&calls.parent_to_child, &mut accessed_vars);
 
-        let has_changed = self.inline_functions(child_to_parent);
+        let has_changed = self.inline_functions(&calls);
 
         if has_changed {
             (effects_by_block, call_sites) =
-                self.analyze_pass(&parent_to_child, &mut accessed_vars);
+                self.analyze_pass(&calls.parent_to_child, &mut accessed_vars);
         }
 
         // Recursive/cyclic blocks remain intentionally unresolved
@@ -221,10 +221,7 @@ impl ProjectBuilder {
         (effects_by_block, call_sites)
     }
 
-    fn inline_functions(
-        &mut self,
-        child_to_parent: HashMap<CustomBlockId, HashSet<CustomBlockId>>,
-    ) -> bool {
+    fn inline_functions(&mut self, calls: &CallsAnalyzed) -> bool {
         let skip_inline = std::env::var("RASH_SKIP_INLINE").ok();
         if skip_inline.as_deref() == Some("1")
             || skip_inline
@@ -234,69 +231,43 @@ impl ProjectBuilder {
             return false;
         }
 
-        let mut to_inline: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
         let mut inlined_something = false;
 
-        for (child, parents) in child_to_parent {
-            let info = &self.runtime.scripts.custom_blocks[child.0];
-
-            // ========================================================
-            // 1. Can we inline?
-            // ========================================================
-
-            if info.is_screen_refresh && info.num_args > 0 {
-                // The compiler doesn't support persistent storage
-                // of inlined arguments for screen refresh blocks, so if any, just bail.
-                // I don't plan on adding that either (too much complexity).
-                continue;
-            }
-
-            let MaybeCompiled::ToCompile(s) = &info.script else {
-                continue;
-            };
-
-            // Case where child is non-refresh, parent is refresh,
-            // but when child inlined into parent,
-            // child could become refresh like parent (incorrect behaviour)
-            let can_turn_into_refresh =
-                !info.is_screen_refresh && s.blocks.iter().any(|n| n.could_trigger_refresh());
-            let parents_are_refresh = parents
+        let custom_blocks = self.runtime.scripts.custom_blocks.clone();
+        inline_inner(
+            &calls
+                .child_to_parent
                 .iter()
-                .filter_map(|n| self.runtime.scripts.custom_blocks.get(n.0))
-                .any(|n| n.is_screen_refresh);
+                .filter_map(|(id, p)| custom_blocks.get(id.0).map(|n| (n, *id, p)))
+                .collect::<Vec<_>>(),
+            |id| custom_blocks[id.0].is_screen_refresh,
+            &mut self.runtime.scripts.custom_blocks,
+            |blocks, id| &mut blocks[id.0].script,
+            &mut inlined_something,
+        );
 
-            if can_turn_into_refresh && parents_are_refresh {
-                continue;
-            }
+        inline_inner(
+            &calls
+                .child_to_flags
+                .iter()
+                .filter_map(|(id, p)| custom_blocks.get(id.0).map(|n| (n, *id, p)))
+                .collect::<Vec<_>>(),
+            |_| true,
+            &mut self.runtime.scripts.green_flags,
+            |blocks, id| &mut blocks[*id].1,
+            &mut inlined_something,
+        );
 
-            // ========================================================
-            // 2. Should we inline?
-            // ========================================================
-
-            // TODO: more heuristics
-            let should_inline = parents.len() == 1;
-
-            if should_inline {
-                to_inline.insert(child, parents);
-                continue;
-            }
-
-            inlined_something = true;
-
-            // TODO: do inlining
-        }
         inlined_something
     }
 
-    fn collect_custom_block_calls(
-        &mut self,
-    ) -> (
-        HashMap<CustomBlockId, HashSet<CustomBlockId>>,
-        HashMap<CustomBlockId, HashSet<CustomBlockId>>,
-    ) {
-        // In this terminology we call callers as parent and callees as child.
-        let mut callers_by_callee: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
-        let mut callees_by_caller: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
+    fn collect_custom_block_calls(&mut self) -> CallsAnalyzed {
+        // Callers by callee
+        let mut child_to_parent: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
+        let mut child_to_flags: HashMap<CustomBlockId, HashSet<usize>> = HashMap::new();
+
+        // Callees by caller
+        let mut parent_to_child: HashMap<CustomBlockId, HashSet<CustomBlockId>> = HashMap::new();
 
         for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
             let MaybeCompiled::ToCompile(script) = &script.script else {
@@ -311,7 +282,7 @@ impl ProjectBuilder {
                         | ScratchBlock::FunctionCallScreenRefresh(child_id, _) = b
                         {
                             calls.insert(*child_id);
-                            callers_by_callee
+                            child_to_parent
                                 .entry(*child_id)
                                 .or_default()
                                 .insert(CustomBlockId(id));
@@ -320,8 +291,113 @@ impl ProjectBuilder {
                     false,
                 );
             }
-            callees_by_caller.insert(CustomBlockId(id), calls);
+            parent_to_child.insert(CustomBlockId(id), calls);
         }
-        (callers_by_callee, callees_by_caller)
+
+        for (id, (_, script)) in self.runtime.scripts.green_flags.iter().enumerate() {
+            let MaybeCompiled::ToCompile(script) = &script else {
+                continue;
+            };
+
+            let mut calls = HashSet::new();
+            for block in &script.blocks {
+                block.walk(
+                    &mut |b| {
+                        if let ScratchBlock::FunctionCallNoScreenRefresh(child_id, _)
+                        | ScratchBlock::FunctionCallScreenRefresh(child_id, _) = b
+                        {
+                            calls.insert(*child_id);
+                            child_to_flags.entry(*child_id).or_default().insert(id);
+                        }
+                    },
+                    false,
+                );
+            }
+        }
+
+        CallsAnalyzed {
+            child_to_parent,
+            parent_to_child,
+            child_to_flags,
+        }
+    }
+}
+
+type CallCheck<T> = HashMap<CustomBlockId, HashSet<T>>;
+
+struct CallsAnalyzed {
+    child_to_parent: CallCheck<CustomBlockId>,
+    parent_to_child: CallCheck<CustomBlockId>,
+    child_to_flags: CallCheck<usize>,
+}
+
+fn inline_inner<T, S>(
+    calls: &[(&CustomBlock, CustomBlockId, &HashSet<T>)],
+    is_refresh: impl Fn(&T) -> bool + Copy,
+    scripts: &mut S,
+    get_script: impl for<'a, 'b> Fn(&'a mut S, &'b T) -> &'a mut MaybeCompiled,
+    inlined_something: &mut bool,
+) {
+    for (info, child, parents) in calls {
+        let MaybeCompiled::ToCompile(s) = &info.script else {
+            continue;
+        };
+
+        // 1. Can we inline?
+        let performs_refresh = s.blocks.iter().any(|n| n.could_trigger_refresh());
+
+        if info.is_screen_refresh && performs_refresh && info.num_args > 0 {
+            continue;
+        }
+
+        let can_turn_into_refresh = !info.is_screen_refresh && performs_refresh;
+        let parents_are_refresh = parents.iter().any(is_refresh);
+
+        if can_turn_into_refresh && parents_are_refresh {
+            continue;
+        }
+
+        // 2. Should we inline?
+        let should_inline = parents.len() == 1;
+        if !should_inline {
+            continue;
+        }
+
+        // 3. Perform inlining
+        *inlined_something = true;
+
+        let mut blocks_to_inline = s.blocks.clone();
+        for b in &mut blocks_to_inline {
+            b.walk_mut(
+                &mut |b| {
+                    if let ScratchBlock::FunctionGetArg(n) = b {
+                        *b = ScratchBlock::LocalsGet(*n);
+                    }
+                },
+                true,
+            );
+        }
+
+        for par in *parents {
+            let MaybeCompiled::ToCompile(scr) = get_script(&mut *scripts, par) else {
+                continue;
+            };
+            for b in &mut scr.blocks {
+                b.walk_mut(
+                    &mut |b| {
+                        if let ScratchBlock::FunctionCallNoScreenRefresh(id, args)
+                        | ScratchBlock::FunctionCallScreenRefresh(id, args) = b
+                            && id == child
+                        {
+                            *b = ScratchBlock::LocalsWith(
+                                std::mem::take(args),
+                                blocks_to_inline.clone(),
+                            )
+                        }
+                    },
+                    true,
+                );
+            }
+        }
     }
 }
