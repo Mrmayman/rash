@@ -6,13 +6,11 @@ A Scratch JIT compiler written in rust using [cranelift](https://cranelift.dev/)
 
 # What is this?
 
-Scratch is a visual programming language aimed at children,
-and people push it to its limits (with projects like path tracers,
-3d minecraft clones, neural networks and more),
-running into performance bottlenecks.
+Scratch is a visual programming language that people push far beyond simple games,
+building projects like 3D Minecraft clones, path tracers, and neural networks.
 
-Rash aims to run scratch code with a JIT compiler, where the code is
-compiled to machine code and executed directly, much like Java, C#, JavaScript, etc.
+Rash aims to make these projects run faster by compiling Scratch code to
+native machine code using a JIT compiler, powered by Rust and [Cranelift](https://cranelift.dev/).
 
 # Benchmarks
 
@@ -61,60 +59,16 @@ This includes:
 - Extensible architecture for VM
 - A `wgpu` based renderer (basic, can be extended in future)
 
-## Todo list:
-
-(WIP means Work-In-Progress)
-
-- [ ] Implement loading from SB3 files (WIP)
-- [ ] Implement Control operations
-  - [x] If, If-Else
-  - [x] Repeat, Repeat Until, Forever
-  - [ ] Wait
-  - [ ] Wait Until
-  - [x] Stop this script
-  - [ ] Stop all
-  - [ ] Stop other scripts in sprite
-- [ ] Math Operations
-  - [x] Add, subtract, multiply, divide
-  - [x] && || !
-  - [x] < >
-  - [ ] ==
-  - [x] String: Join, Contains, Length
-  - [x] Mod, Round, Abs
-  - [x] Floor
-  - [ ] Ceiling
-  - [x] Sqrt
-  - [x] Sin, Cos, Tan
-  - [ ] ASin, ACos, ATan
-  - [ ] Ln, Log
-  - [ ] E^, 10^
-- [ ] Other blocks
-  - [x] Days since 2000
-  - [ ] Timer, reset timer
-  - [ ] Keyboard/mouse input
-- [ ] Core features
-  - [x] Custom Blocks
-  - [x] Variables
-  - [ ] Lists
-  - [ ] Broadcasts
-  - [ ] Clones
-- [x] Add Graphics
-  - [ ] Hide, Show blocks
-  - [x] Position blocks
-  - [ ] Rotation blocks
-  - [ ] Size block
-  - [x] Render sprites & stage
-  - [ ] Render text
-  - [ ] Render speech and thought bubbles
-  - [ ] Sprite costumes and backdrops
-  - [ ] Sprite graphical effects (Ghost, Fisheye, etc)
-  - [ ] Pen canvas and clear operation
-  - [ ] Pen stamps
-  - [ ] Pen lines
-  - [ ] Variable monitors
-  - [ ] UI library
-- [ ] Add sound
+Rash currently doesn't support many Scratch features (pen, clones, broadcasts, lists, etc).
+A roadmap can be found [here](./ROADMAP.md)
 
 # Contributing
 
 Feel free to submit any changes you make as a pull request, I'll be happy to review it.
+
+# Note on AI coding
+
+AI assistance was used in parts of this project only as a tool.
+Most of the compiler itself, as well as the core architecture, remains strictly human.
+Main use of AI here was for generating lots of test cases.
+This project is NOT and will NEVER be "vibe-coded".
