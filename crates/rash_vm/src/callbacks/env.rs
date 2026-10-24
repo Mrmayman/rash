@@ -18,7 +18,7 @@ pub extern "C" fn days_since_2000() -> f64 {
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .expect("Time went backwards");
+        .unwrap_or_default();
 
     let seconds = now.as_secs() as f64;
     let millis = f64::from(now.subsec_nanos()) / 1_000_000_000.0;

@@ -487,8 +487,18 @@ impl ScratchValue {
                 stack_ptr
             }
             ScratchValue::String([i2, i3, i4]) => {
-                let i1 = compiler.constants.get_int(ID_STRING, builder);
-                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
+                // We don't clone it since it's already owned by self
+                let slot =
+                    builder.create_sized_stack_slot(cranelift::codegen::ir::StackSlotData::new(
+                        cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
+                        3 * std::mem::size_of::<i64>() as u32,
+                        0,
+                    ));
+
+                builder.ins().stack_store(i2, slot, 0);
+                builder.ins().stack_store(i3, slot, 8);
+                builder.ins().stack_store(i4, slot, 16);
+                builder.ins().stack_addr(I64, slot, 0)
             }
             ScratchValue::Object([i1, i2, i3, i4]) => {
                 get_string_from_obj(builder, compiler, i1, i2, i3, i4)

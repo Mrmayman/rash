@@ -354,7 +354,7 @@ pub fn has_hardware_fma() -> bool {
 
         // FMA is built into the baseline ARMv8 Neon vector system.
         #[cfg(target_arch = "aarch64")]
-        return std::is_aarch64_feature_detected!("neon");
+        return true;
 
         // RISC-V mandates hardware FMA operations inside its floating point units.
         // We check for "d" (Double-precision FP)

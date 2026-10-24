@@ -70,13 +70,17 @@ impl Compiler<'_> {
 
     pub fn var_change(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
         let input = input.get_number(self, builder);
-        let old_value = self.var_read(builder, ptr).get_number(self, builder);
-        let new_value = builder.ins().fadd(old_value, input);
+        let old_value = self.var_read(builder, ptr);
+
+        let old_num = old_value.get_number(self, builder);
+        let new_num = builder.ins().fadd(old_num, input);
+
+        old_value.drop_in_code(self, builder);
 
         self.vars.store(
             ptr,
             VariableSlot {
-                val: ScratchValue::Num(new_value),
+                val: ScratchValue::Num(new_num),
                 skip_nan: true,
             },
             builder,
