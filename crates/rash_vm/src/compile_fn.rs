@@ -48,12 +48,6 @@ pub fn compile(
     external_env: &dyn Fn(Ptr) -> VariableWrite,
     arg_types: &[VariableWrite],
 ) -> (ScratchThread, Vec<SmolStr>) {
-    println!();
-    for block in script {
-        println!("{}", block.format(0));
-    }
-    println!();
-
     let isa = get_isa();
 
     let (mut func, call_conv) = create_function(&*isa);

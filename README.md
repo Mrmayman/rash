@@ -39,12 +39,17 @@ You can see the progress in implementing blocks in this [Google Docs spreadsheet
 - Compile and run Rash: `cargo run --release -- path/to/file.sb3`
 - To run the test suite, do: `cargo test`
 
-Env vars:
-- `RASH_PRINT_IR` to print the cranelift IR of the compiled code.
-- `RASH_PRINT_FUNCTIONS` to print IR IDs of the callback functions.
-- `RASH_PRINT_MEMORY` to print memory values after running.
+# Environment variables
+
 - `RASH_SKIP_INLINE` to skip inlining functions
   (useful for debugging/blackbox benchmarking)
+
+Debug printing:
+
+- `RASH_PRINT_BLOCKS`: prints Scratch Blocks
+- `RASH_PRINT_IR`: prints cranelift IR of the compiled code
+- `RASH_PRINT_FUNCTIONS`: prints IR IDs of the callback functions
+- `RASH_PRINT_MEMORY`: prints memory values after the project terminates
 
 # Technical details
 
