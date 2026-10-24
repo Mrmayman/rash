@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use rash_core::SpriteId;
-
 use crate::{
     ProjectBuilder, Ptr, ScratchBlock, SpriteBuilder,
     builder::set,
@@ -67,7 +65,7 @@ fn custom_block(id: CustomBlockId, blocks: Vec<ScratchBlock>) -> Script {
 /// particular sprite/runtime structure, this is the only helper that
 /// should need adapting.
 fn project(custom_blocks: Vec<Script>) -> ProjectBuilder {
-    let mut sprite = SpriteBuilder::new(SpriteId(0));
+    let mut sprite = SpriteBuilder::new();
     for script in custom_blocks {
         sprite.add_script(script);
     }

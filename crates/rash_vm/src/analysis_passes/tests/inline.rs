@@ -50,7 +50,6 @@ impl Fixture {
             )),
             is_screen_refresh,
             num_args,
-            sprite_id: SpriteId(0),
         });
         id
     }
@@ -81,7 +80,7 @@ fn inline(fx: &mut Fixture, child_to_parents: &[(CustomBlockId, Vec<CustomBlockI
     inline_inner(
         &calls,
         &mut fx.blocks,
-        |w, id| w.get(id.0),
+        |w, id| &w[id.0],
         |w, id| w[id.0].is_screen_refresh,
         |w: &mut Vec<CustomBlock>, id: &CustomBlockId| &mut w[id.0].script,
         &mut inlined,
@@ -329,7 +328,7 @@ fn leaf_called_from_recursive_block_is_inlined_into_it() {
     builder.analyze_custom_blocks();
 
     assert!(flag_has_call(&builder)); // A is still called
-    let MaybeCompiled::ToCompile(a) = &builder.runtime.scripts.custom_blocks[A.0].script else {
+    let MaybeCompiled::ToCompile(a) = &builder.runtime.scripts.custom_blocks[A.0].1.script else {
         panic!("expected ToCompile");
     };
     assert!(

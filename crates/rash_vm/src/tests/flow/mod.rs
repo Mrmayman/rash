@@ -14,7 +14,7 @@ use crate::{
     input_primitives::Ptr,
     runtime::{CustomBlockId, ProjectBuilder, Script, SpriteBuilder},
 };
-use rash_core::{RunState, SpriteId};
+use rash_core::RunState;
 
 mod args;
 
@@ -32,7 +32,7 @@ fn suite(scripts: Vec<Script>, num_ticks_expected: usize) -> Box<[ScratchObject]
     }
 
     let mut builder = ProjectBuilder::new();
-    let mut sprite1 = SpriteBuilder::new(SpriteId(0));
+    let mut sprite1 = SpriteBuilder::new();
 
     for script in scripts {
         sprite1.add_script(script);

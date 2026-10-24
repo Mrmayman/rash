@@ -2,10 +2,10 @@ use crate::{
     ProjectBuilder, SpriteBuilder, compiler::ScratchBlock, data_types::ScratchObject,
     print_function_addresses, print_memory, runtime::Script,
 };
-use rash_core::{RunState, SpriteId};
+use rash_core::RunState;
 
 fn run(program: Vec<ScratchBlock>) -> Box<[ScratchObject]> {
-    let mut sprite = SpriteBuilder::new(SpriteId(0));
+    let mut sprite = SpriteBuilder::new();
     sprite.add_script(Script::new_green_flag(program));
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);

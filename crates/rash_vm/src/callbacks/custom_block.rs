@@ -31,7 +31,7 @@ pub unsafe extern "C" fn call_no_screen_refresh(
     // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
-    let Some(script) = scripts.custom_blocks.get(id.0) else {
+    let Some((_, script)) = scripts.custom_blocks.get(id.0) else {
         panic!("No custom block found with id {}", id.0)
     };
 
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn call_screen_refresh(
     // println!("calling custom block: {id}");
     let id = CustomBlockId(id as usize);
 
-    let Some(script) = scripts.custom_blocks.get(id.0) else {
+    let Some((_, script)) = scripts.custom_blocks.get(id.0) else {
         panic!("No custom block found with id {}", id.0)
     };
 
