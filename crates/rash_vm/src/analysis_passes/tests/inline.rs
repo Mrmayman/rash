@@ -113,16 +113,16 @@ fn inlines_single_caller_and_rewrites_args() {
 }
 
 #[test]
-fn does_not_inline_multiple_callers() {
+fn inline_multiple_callers() {
     let mut fx = Fixture::new();
     let b = fx.add(vec![arg(0)], false, 1);
     let a1 = fx.add(vec![call_nr(b, vec![arg(0)])], false, 0);
     let a2 = fx.add(vec![call_nr(b, vec![arg(0)])], false, 0);
 
-    assert!(!inline(&mut fx, &[(b, vec![a1, a2])]));
+    assert!(inline(&mut fx, &[(b, vec![a1, a2])]));
 
-    assert_blocks(fx.body(a1), &[call_nr(b, vec![arg(0)])]);
-    assert_blocks(fx.body(a2), &[call_nr(b, vec![arg(0)])]);
+    assert_blocks(fx.body(a1), &[lw(vec![arg(0)], vec![local(0)])]);
+    assert_blocks(fx.body(a2), &[lw(vec![arg(0)], vec![local(0)])]);
 }
 
 // TODO: I am kinda iffy about this one
