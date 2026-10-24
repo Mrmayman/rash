@@ -24,6 +24,7 @@ pub struct RunState {
 }
 
 impl RunState {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

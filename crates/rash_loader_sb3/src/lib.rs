@@ -76,7 +76,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
 
         let mut sprite_order = Vec::new();
 
-        for sprite_json in self.json.targets.iter() {
+        for sprite_json in &self.json.targets {
             let id = builder.next_sprite_id();
             let mut sprite = SpriteBuilder::new();
 
@@ -106,7 +106,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
             builder.add_sprite(sprite);
         }
 
-        self.load_original_var_values(&mut builder, variable_map);
+        self.load_original_var_values(&mut builder, &variable_map);
 
         sprite_order.sort_by_key(|(_, order)| *order);
         let sprite_order = sprite_order.into_iter().map(|(id, _)| id).collect();
@@ -121,7 +121,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
     fn load_original_var_values(
         &self,
         builder: &mut ProjectBuilder,
-        variable_map: HashMap<String, Ptr>,
+        variable_map: &HashMap<String, Ptr>,
     ) {
         for sprite in &self.json.targets {
             if sprite.is_stage {

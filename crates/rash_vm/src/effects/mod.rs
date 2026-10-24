@@ -38,7 +38,7 @@ impl CallSiteInfo {
 
     pub fn sequence(&mut self, effects: &Self, var_type: &dyn Fn(Ptr) -> VariableWrite) {
         self.at_site.sequence(&effects.at_site, var_type);
-        self.arguments = effects.arguments.clone();
+        self.arguments.clone_from(&effects.arguments);
     }
 }
 
@@ -328,7 +328,7 @@ impl Effects {
                     ));
                 }
                 VarTypeChecked::String => {
-                    let vals = [
+                    let string = [
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
@@ -336,13 +336,13 @@ impl Effects {
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ScratchValue::String(vals),
+                            val: ScratchValue::String(string),
                             skip_nan,
                         },
                     ));
                 }
                 VarTypeChecked::Object => {
-                    let vals = [
+                    let obj = [
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
@@ -351,7 +351,7 @@ impl Effects {
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ScratchValue::Object(vals),
+                            val: ScratchValue::Object(obj),
                             skip_nan,
                         },
                     ));
@@ -393,14 +393,17 @@ impl CheckEffects for ScratchBlock {
             ScratchBlock::VarSet(ptr, input) => {
                 Effects::with_write(*ptr, input.expected_type(v, l))
             }
-            ScratchBlock::VarChange(ptr, _) => Effects::with_write(
-                *ptr,
-                VariableWrite {
-                    ty: VarTypeChecked::Number,
-                    skip_nan: true,
-                    direct: true,
-                },
-            ),
+            ScratchBlock::VarChange(ptr, input) => {
+                let increment = Effects::with_write(
+                    *ptr,
+                    VariableWrite {
+                        ty: VarTypeChecked::Number,
+                        skip_nan: true,
+                        direct: true,
+                    },
+                );
+                input.effects(c, v, l, e, f).then(&increment, v)
+            }
             ScratchBlock::VarRead(ptr) => Effects::with_read(*ptr),
             ScratchBlock::MotionGoToXY(a, b)
             | ScratchBlock::OpAdd(a, b)

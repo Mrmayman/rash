@@ -23,7 +23,7 @@ pub extern "C" fn tan(value: f64) -> f64 {
 }
 
 pub extern "C" fn round(value: f64) -> f64 {
-    if (value - value.trunc()).abs() == 0.5 {
+    if value.fract().abs() == 0.5 {
         // If number ends with .5 round up (Scratch behaviour).
         // Override of Rust behaviour
         value.ceil()
