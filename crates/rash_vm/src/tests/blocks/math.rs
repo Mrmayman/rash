@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[test]
-pub fn math_add() {
+fn math_add() {
     let memory = run_code(set_vars(vec![
         fadd(50.0, 25.0).into(),
         fadd(-500.0, 25.0).into(),
@@ -44,7 +44,7 @@ pub fn math_add() {
 }
 
 #[test]
-pub fn math_sub() {
+fn math_sub() {
     let memory = run_code(set_vars(vec![
         fsub(50.0, 25.0).into(),
         fsub(-500.0, 25.0).into(),
@@ -82,7 +82,7 @@ pub fn math_sub() {
 }
 
 #[test]
-pub fn math_mul() {
+fn math_mul() {
     let memory = run_code(set_vars(vec![
         fmul(50.0, 2.0).into(),
         fmul(-50.0, 2.0).into(),
@@ -143,7 +143,7 @@ pub fn math_mul() {
 }
 
 #[test]
-pub fn math_div() {
+fn math_div() {
     let memory = run_code(set_vars(vec![
         fdiv(50.0, 2.0).into(),
         fdiv(-50.0, 2.0).into(),
@@ -203,7 +203,7 @@ pub fn math_div() {
 }
 
 #[test]
-pub fn math_modulo() {
+fn math_modulo() {
     let memory = run_code(set_vars(vec![
         fmod(5.5, 3.0).into(),    // 5.5 % 3.0
         fmod(-5.5, 3.0).into(),   // -5.5 % 3.0
@@ -249,7 +249,7 @@ pub fn math_modulo() {
 }
 
 #[test]
-pub fn math_floor() {
+fn math_floor() {
     let memory = run_code(set_vars(vec![
         ScratchBlock::OpMFloor(5.5.into()).into(),
         ScratchBlock::OpMFloor((-3.2).into()).into(),
@@ -283,7 +283,7 @@ pub fn math_floor() {
 }
 
 #[test]
-pub fn math_round() {
+fn math_round() {
     let memory = run_code(set_vars(vec![
         ScratchBlock::OpRound(2.3.into()).into(),
         ScratchBlock::OpRound(2.5.into()).into(),
@@ -305,7 +305,7 @@ pub fn math_round() {
 }
 
 #[test]
-pub fn math_abs() {
+fn math_abs() {
     let memory = run_code(set_vars(vec![
         ScratchBlock::OpMAbs(2.3.into()).into(),
         ScratchBlock::OpMAbs((-2.3).into()).into(),
@@ -323,7 +323,7 @@ pub fn math_abs() {
 }
 
 #[test]
-pub fn math_sqrt() {
+fn math_sqrt() {
     let memory = run_code(set_vars(vec![
         ScratchBlock::OpMSqrt(1.0.into()).into(),
         ScratchBlock::OpMSqrt(2.0.into()).into(),
@@ -344,7 +344,7 @@ pub fn math_sqrt() {
 }
 
 #[test]
-pub fn math_trig() {
+fn math_trig() {
     let memory = run_code(set_vars(vec![
         ScratchBlock::OpMSin(0.0.into()).into(),
         ScratchBlock::OpMSin(30.0.into()).into(),

@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[test]
-pub fn nested_repeat() {
+fn nested_repeat() {
     let memory = run_code(vec![
         set(Ptr(0), 0.0),
         c_repeat(
@@ -28,7 +28,7 @@ pub fn nested_repeat() {
 }
 
 #[test]
-pub fn repeat_until() {
+fn repeat_until() {
     let memory = run_code(vec![
         set(Ptr(0), 0.0),
         ScratchBlock::ControlRepeatUntil(
@@ -48,7 +48,7 @@ pub fn repeat_until() {
 }
 
 #[test]
-pub fn stop_this_script() {
+fn stop_this_script() {
     let memory = run_code(vec![
         set(Ptr(0), 1.0),
         set(Ptr(1), 2.0),
@@ -65,7 +65,7 @@ pub fn stop_this_script() {
 }
 
 #[test]
-pub fn stop_this_script_inside_if_prevents_following_code() {
+fn stop_this_script_inside_if_prevents_following_code() {
     let memory = run_code(vec![
         c_if(
             true,
@@ -82,7 +82,7 @@ pub fn stop_this_script_inside_if_prevents_following_code() {
 }
 
 #[test]
-pub fn stop_this_script_inside_nested_control_flow() {
+fn stop_this_script_inside_nested_control_flow() {
     let memory = run_code(vec![
         c_if(
             true,
@@ -105,7 +105,7 @@ pub fn stop_this_script_inside_nested_control_flow() {
 }
 
 #[test]
-pub fn stop_this_script_only_skips_remaining_execution_path() {
+fn stop_this_script_only_skips_remaining_execution_path() {
     let memory = run_code(vec![
         set(Ptr(1), ""),
         c_if(
@@ -120,7 +120,7 @@ pub fn stop_this_script_only_skips_remaining_execution_path() {
 }
 
 #[test]
-pub fn stop_this_script_multiple_possible_stops() {
+fn stop_this_script_multiple_possible_stops() {
     let memory = run_code(vec![
         set(Ptr(0), "start"),
         c_if(
@@ -139,7 +139,7 @@ pub fn stop_this_script_multiple_possible_stops() {
 }
 
 #[test]
-pub fn stop_this_script_does_not_rollback_state() {
+fn stop_this_script_does_not_rollback_state() {
     let memory = run_code(vec![
         set(Ptr(0), 100.0),
         set(Ptr(0), 200.0),
@@ -152,7 +152,7 @@ pub fn stop_this_script_does_not_rollback_state() {
 }
 
 #[test]
-pub fn branch_if_else() {
+fn branch_if_else() {
     let memory = run_code(vec![
         c_if_else(true, vec![set(Ptr(2), 1.0)], vec![set(Ptr(2), 0.0)]),
         c_if_else(false, vec![set(Ptr(3), 0.0)], vec![set(Ptr(3), 1.0)]),
@@ -182,7 +182,7 @@ pub fn branch_if_else() {
 }
 
 #[test]
-pub fn branch_if() {
+fn branch_if() {
     let memory = run_code(vec![
         set(Ptr(0), 0.0),
         set(Ptr(1), 0.0),
@@ -233,7 +233,7 @@ pub fn branch_if() {
 }
 
 #[test]
-pub fn repeated_sum() {
+fn repeated_sum() {
     let memory = run_code(vec![
         set(Ptr(7), 0.0),
         set(Ptr(7), fadd(Ptr(7), false)),
@@ -249,7 +249,7 @@ pub fn repeated_sum() {
 }
 
 #[test]
-pub fn repeated_join_string() {
+fn repeated_join_string() {
     let memory = run_code(vec![
         set(Ptr(7), "hello "),
         c_repeat(
@@ -270,7 +270,7 @@ pub fn repeated_join_string() {
 }
 
 #[test]
-pub fn repeat_invalid_inputs() {
+fn repeat_invalid_inputs() {
     let memory = run_code(vec![
         set(Ptr(0), 0.0),
         c_repeat(-1.0, vec![change(Ptr(0), 1.0)]),
