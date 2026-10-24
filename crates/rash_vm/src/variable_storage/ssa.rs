@@ -60,8 +60,9 @@ impl SsaVarStore {
                     ScratchValue::Num(i2)
                 }
                 VarTypeChecked::Bool => {
-                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                    ScratchValue::Bool(i2)
+                    let raw = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    let val = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                    ScratchValue::Bool(val)
                 }
                 VarTypeChecked::String => {
                     let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
@@ -212,7 +213,8 @@ impl super::VarStore for SsaVarStore {
                     *val = VariableSlot::normal(ScratchValue::Num(i2));
                 }
                 VarTypeChecked::Bool => {
-                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    let raw = builder.ins().load(I64, MemFlags::new(), ptr, 8);
+                    let i2 = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
                     *val = VariableSlot::normal(ScratchValue::Bool(i2));
                 }
                 VarTypeChecked::String => {
