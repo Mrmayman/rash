@@ -13,6 +13,9 @@ use crate::{
     runtime::{CustomBlock, CustomBlockId, MaybeCompiled},
 };
 
+const INLINE_ALWAYS: usize = 32;
+const INLINE_NEVER: usize = 256;
+
 #[cfg(test)]
 mod tests;
 
@@ -430,8 +433,17 @@ fn inline_inner<W, T>(
         }
 
         // --- Should we inline? ---
-        // TODO: more heuristics
-        let should_inline = parents.len() == 1;
+        let code_size = s.blocks.iter().fold(0, |mut s, n| {
+            n.walk(&mut |_| s += 1, true);
+            s
+        });
+
+        // Maybe could expand with better heuristics? A `hotness` value for loops?
+
+        let inline_site_cost = parents.len().checked_sub(1).unwrap_or_default();
+        let should_inline = inline_site_cost == 0
+            || code_size <= INLINE_ALWAYS
+            || (code_size * inline_site_cost) <= INLINE_NEVER;
         if !should_inline {
             continue;
         }
