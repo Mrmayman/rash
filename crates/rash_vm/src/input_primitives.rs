@@ -508,10 +508,6 @@ impl ScratchValue {
         }
     }
 
-    pub fn is_bool(&self) -> bool {
-        matches!(self, ScratchValue::Bool(_))
-    }
-
     fn get_bool(&self, compiler: &mut Compiler, builder: &mut FunctionBuilder<'_>) -> Value {
         match self {
             ScratchValue::Num(value) => {

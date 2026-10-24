@@ -55,7 +55,11 @@ impl VarStore for GenericVarStore {
 
         let val = match variable.ty {
             VarTypeChecked::Number => ScratchValue::Num(load_val(F64, 8)),
-            VarTypeChecked::Bool => ScratchValue::Bool(load_val(I64, 8)),
+            VarTypeChecked::Bool => {
+                let raw = load_val(I64, 8);
+                let val = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                ScratchValue::Bool(val)
+            }
             VarTypeChecked::String => {
                 ScratchValue::String([load_val(I64, 8), load_val(I64, 16), load_val(I64, 24)])
             }
