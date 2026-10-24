@@ -20,7 +20,7 @@ mod args;
 
 const X: Ptr = Ptr(0);
 
-fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks_expected: usize) {
+fn suite(scripts: Vec<Script>, num_ticks_expected: usize) -> Box<[ScratchObject]> {
     fn by_two(n: usize) -> usize {
         if n % 2 == 0 {
             // If n is even, standard division works
@@ -48,12 +48,12 @@ fn suite(scripts: Vec<Script>, asserts: impl FnOnce(&[ScratchObject]), num_ticks
     }
 
     assert_eq!(by_two(num_ticks), num_ticks_expected);
-    asserts(&runtime.memory);
+    runtime.memory
 }
 
 #[test]
 fn custom_block_screen_refresh() {
-    suite(
+    let m = suite(
         vec![
             Script::new_custom_block(
                 vec![c_repeat(
@@ -91,16 +91,14 @@ fn custom_block_screen_refresh() {
                 ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), Vec::new()),
             ]),
         ],
-        |m| {
-            assert_eq!(m[0].convert_to_number(), 45.0);
-        },
         21,
     );
+    assert_eq!(m[0].convert_to_number(), 45.0);
 }
 
 #[test]
 fn nested_loop_screen_refresh() {
-    suite(
+    let m = suite(
         vec![Script::new_green_flag(vec![
             set(X, 0.5),
             c_repeat(
@@ -111,15 +109,15 @@ fn nested_loop_screen_refresh() {
                 ],
             ),
         ])],
-        |m| assert_eq!(m[0].convert_to_number(), 24.5),
         16,
     );
+    assert_eq!(m[0].convert_to_number(), 24.5);
 }
 
 #[test]
 fn warp_custom_block_does_not_refresh() {
     // ScreenRefresh inside warp block should still force yielding
-    suite(
+    let m = suite(
         vec![
             Script::new_custom_block(
                 vec![change(X, 1.0), ScratchBlock::ScreenRefresh, change(X, 1.0)],
@@ -132,9 +130,9 @@ fn warp_custom_block_does_not_refresh() {
                 ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), vec![]),
             ]),
         ],
-        |m| assert_eq!(m[0].convert_to_number(), 2.0),
         2,
     );
+    assert_eq!(m[0].convert_to_number(), 2.0)
 }
 
 #[test]
@@ -142,16 +140,13 @@ fn no_refresh_blocks_complete_same_tick() {
     // Everything should happen before the next frame
     let mut blocks = vec![set(X, 0.0)];
     blocks.extend((0..100).map(|_| change(X, 1.0)));
-    suite(
-        vec![Script::new_green_flag(blocks)],
-        |m| assert_eq!(m[0].convert_to_number(), 100.0),
-        1,
-    );
+    let m = suite(vec![Script::new_green_flag(blocks)], 1);
+    assert_eq!(m[0].convert_to_number(), 100.0);
 }
 
 #[test]
 fn nested_custom_blocks_preserve_refresh_order() {
-    suite(
+    let m = suite(
         vec![
             // Inner block
             Script::new_custom_block(
@@ -176,14 +171,14 @@ fn nested_custom_blocks_preserve_refresh_order() {
                 ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), vec![]),
             ]),
         ],
-        |m| assert_eq!(m[0].convert_to_number(), 11.0),
         3,
     );
+    assert_eq!(m[0].convert_to_number(), 11.0);
 }
 
 #[test]
 fn multiple_scripts_refresh_independently() {
-    suite(
+    let m = suite(
         vec![
             Script::new_green_flag(vec![
                 set(X, 0.0),
@@ -194,39 +189,37 @@ fn multiple_scripts_refresh_independently() {
                 c_repeat(3.0, vec![change(Ptr(1), 1.0), ScratchBlock::ScreenRefresh]),
             ]),
         ],
-        |m| {
-            assert_eq!(m[0].convert_to_number(), 3.0);
-            assert_eq!(m[1].convert_to_number(), 3.0);
-        },
         4,
     );
+    assert_eq!(m[0].convert_to_number(), 3.0);
+    assert_eq!(m[1].convert_to_number(), 3.0);
 }
 
 #[test]
 fn repeat_zero_and_negative_do_not_execute() {
-    suite(
+    let m = suite(
         vec![Script::new_green_flag(vec![
             set(X, 0.0),
             c_repeat(0.0, vec![change(X, 1.0)]),
             c_repeat(-5.0, vec![change(X, 1.0)]),
         ])],
-        |m| assert_eq!(m[0].convert_to_number(), 0.0),
         1,
     );
+    assert_eq!(m[0].convert_to_number(), 0.0);
 }
 
 #[test]
 fn refresh_after_loop_happens_after_last_iteration() {
-    suite(
+    let m = suite(
         vec![Script::new_green_flag(vec![
             set(X, 0.0),
             c_repeat(2.0, vec![change(X, 1.0), ScratchBlock::ScreenRefresh]),
             change(X, 10.0),
             ScratchBlock::ScreenRefresh,
         ])],
-        |m| assert_eq!(m[0].convert_to_number(), 12.0),
         4,
     );
+    assert_eq!(m[0].convert_to_number(), 12.0);
 }
 
 #[test]
@@ -250,7 +243,7 @@ fn custom_blocks_inherit_warp_from_non_refresh_caller() {
         true, // warp
     );
 
-    suite(
+    let m = suite(
         vec![
             inner,
             outer,
@@ -259,9 +252,7 @@ fn custom_blocks_inherit_warp_from_non_refresh_caller() {
                 ScratchBlock::FunctionCallScreenRefresh(CustomBlockId(0), vec![]),
             ]),
         ],
-        |m| {
-            assert_eq!(m[0].convert_to_number(), 12.0);
-        },
         1,
     );
+    assert_eq!(m[0].convert_to_number(), 12.0);
 }
