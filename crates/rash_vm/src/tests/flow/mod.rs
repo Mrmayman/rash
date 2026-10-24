@@ -223,13 +223,13 @@ fn refresh_after_loop_happens_after_last_iteration() {
 }
 
 #[test]
-fn custom_blocks_inherit_warp_from_non_refresh_caller() {
+fn custom_blocks_inherit_non_refresh_from_non_refresh_caller() {
     // A normal custom block containing a ScreenRefresh
     let inner = Script::new_custom_block(
         vec![change(X, 1.0), ScratchBlock::ScreenRefresh, change(X, 1.0)],
         0,
         CustomBlockId(1),
-        false, // not warp
+        true, // screen refresh
     );
 
     // A warp custom block calling the normal block
@@ -240,7 +240,7 @@ fn custom_blocks_inherit_warp_from_non_refresh_caller() {
         ],
         0,
         CustomBlockId(0),
-        true, // warp
+        false, // not screen refresh
     );
 
     let m = suite(

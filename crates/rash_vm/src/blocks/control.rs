@@ -52,9 +52,9 @@ impl Compiler<'_> {
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let final_params_loop = effects.generate_params(builder, loop_block, &*self.vars);
+        let final_params_loop = effects.create_params(builder, loop_block, &*self.vars);
         let mut loop_value_param = builder.append_block_param(loop_block, I64); // loop counter
-        let final_params_end = effects.generate_params(builder, end_block, &*self.vars);
+        let final_params_end = effects.create_params(builder, end_block, &*self.vars);
 
         let entry_params = self.generate_params(builder, &final_params_loop);
         let mut entry_params2 = entry_params.clone();
@@ -132,7 +132,9 @@ impl Compiler<'_> {
         let end_block = builder.create_block();
 
         let effects = self.effects(blocks);
-        let final_params = effects.generate_params(builder, loop_block, &*self.vars);
+        let clobber = self.vars_to_avoid_clobbering(builder, &effects);
+
+        let final_params = effects.create_params(builder, loop_block, &*self.vars);
         let entry_params = self.generate_params(builder, &final_params);
 
         builder.ins().jump(loop_block, &entry_params);
@@ -150,6 +152,10 @@ impl Compiler<'_> {
         builder.ins().jump(loop_block, &loop_params);
 
         builder.switch_to_block(end_block);
+        // Unreachable so no point reloading variables here,
+        // just undo the bookkeeping.
+        self.clobber_stack
+            .retain(|n| !clobber.writes.contains_key(n));
     }
 
     fn effects(&mut self, blocks: &[ScratchBlock]) -> Effects {
@@ -193,7 +199,7 @@ impl Compiler<'_> {
 
         let inside_block = builder.create_block();
         let end_block = builder.create_block();
-        let final_params = effects.generate_params(builder, end_block, &*self.vars);
+        let final_params = effects.create_params(builder, end_block, &*self.vars);
 
         // Before the code runs...
         let direct_params = self.generate_params(builder, &final_params);
@@ -280,7 +286,7 @@ impl Compiler<'_> {
         let else_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let final_params = effects.generate_params(builder, end_block, &*self.vars);
+        let final_params = effects.create_params(builder, end_block, &*self.vars);
 
         let condition = condition.get_bool(self, builder);
         builder
@@ -324,9 +330,13 @@ impl Compiler<'_> {
         let loop_block = builder.create_block();
         let end_block = builder.create_block();
 
-        let effects = self.effects(body);
+        let mut effects = self.effects(body);
+        // Also consider condition (evaluated every iteration)
+        effects.sequence(&self.input_effects(input), &|v| self.vars.get_type(v));
 
-        let final_params = effects.generate_params(builder, condition_block, &*self.vars);
+        let clobber = self.vars_to_avoid_clobbering(builder, &effects);
+
+        let final_params = effects.create_params(builder, condition_block, &*self.vars);
 
         let entry_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &entry_params);
@@ -348,10 +358,27 @@ impl Compiler<'_> {
         }
         let loop_params = self.generate_params(builder, &final_params);
         builder.ins().jump(condition_block, &loop_params);
+
         builder.switch_to_block(end_block);
         self.vars = old_vars;
         self.vars.extend(final_params);
         self.constants = old_constants;
+
+        // Reload everything that was only written indirectly inside the loop.
+        self.clobber_stack
+            .retain(|n| !clobber.writes.contains_key(n));
+        self.vars
+            .reinit(builder, &mut self.constants, self.memory, &clobber);
+    }
+
+    fn input_effects(&mut self, input: &Input) -> Effects {
+        input.effects(
+            &self.custom_block_effects,
+            &|v| self.vars.get_type(v),
+            &|n| self.get_local_type(n),
+            &mut |_| {},
+            &mut |_, _| {},
+        )
     }
 
     /// An example is worth a thousand words:

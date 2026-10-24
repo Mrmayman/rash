@@ -276,7 +276,7 @@ impl Effects {
         !self.writes.values().any(|ty| !ty.direct)
     }
 
-    pub fn generate_params(
+    pub fn create_params(
         &self,
         builder: &mut FunctionBuilder,
         block: Block,
