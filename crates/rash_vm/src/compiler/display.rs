@@ -67,17 +67,21 @@ impl ScratchBlock {
                 pad(indent),
             ),
             ScratchBlock::LocalsWith(locals, blocks) => {
-                let declare = locals
-                    .iter()
-                    .enumerate()
-                    .map(|(i, n)| format!("l{i} = {}", n.format(0)))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "with {declare} {{\n{}{}}}",
-                    body(blocks, indent),
-                    pad(indent)
-                )
+                if locals.is_empty() {
+                    format!("do {{\n{}{}}}", body(blocks, indent), pad(indent))
+                } else {
+                    let declare = locals
+                        .iter()
+                        .enumerate()
+                        .map(|(i, n)| format!("l{i} = {}", n.format(0)))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(
+                        "with {declare} do {{\n{}{}}}",
+                        body(blocks, indent),
+                        pad(indent)
+                    )
+                }
             }
             ScratchBlock::ControlRepeat(times, blocks) => format!(
                 "repeat {} {{\n{}{}}}",
