@@ -1,5 +1,4 @@
 mod utils;
-// pub use utils::run_code;
 
 use std::cmp::Ordering;
 
@@ -23,7 +22,7 @@ fn set_vars(input: Vec<Input>) -> Vec<ScratchBlock> {
 }
 
 #[test]
-pub fn str_ops() {
+fn str_ops() {
     let memory = run_code(set_vars(vec![
         ScratchBlock::OpStrJoin("hello".into(), "world".into()).into(),
         ScratchBlock::OpStrJoin("hello".into(), 1.0.into()).into(),
@@ -66,7 +65,7 @@ pub fn str_ops() {
 }
 
 #[test]
-pub fn pi() {
+fn pi() {
     let memory = run_code(crate::builder::program_pi());
 
     assert_eq!(memory[0].convert_to_number(), -3.1415916535897743);
@@ -75,7 +74,7 @@ pub fn pi() {
 }
 
 #[test]
-pub fn random() {
+fn random() {
     let memory = run_code(vec![
         set(Ptr(0), ScratchBlock::OpRandom(0.0.into(), 100.0.into())),
         set(Ptr(1), ScratchBlock::OpRandom(1.0.into(), 2.5.into())),
@@ -112,7 +111,7 @@ pub fn random() {
 }
 
 #[test]
-pub fn negative_zero_is_truthy() {
+fn negative_zero_is_truthy() {
     // Real bug btw
     let memory = run_code(vec![
         set(Ptr(0), -0.0),
@@ -125,7 +124,7 @@ pub fn negative_zero_is_truthy() {
 }
 
 #[test]
-pub fn bool_ops() {
+fn bool_ops() {
     fn check_and(memory: &[ScratchObject], offset: usize) {
         assert!(memory[offset + 0].convert_to_bool());
         assert!(!memory[offset + 1].convert_to_bool());
