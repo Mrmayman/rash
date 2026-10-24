@@ -25,6 +25,7 @@ pub struct CostumeStore {
 }
 
 impl CostumeStore {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -75,6 +76,7 @@ impl CostumeStore {
         self.sprites.get_mut(sprite.0 as usize).unwrap()
     }
 
+    #[must_use]
     pub fn index_to_id(&self, sprite: SpriteId, index: usize) -> Option<CostumeId> {
         self.sprites
             .get(sprite.0 as usize)
@@ -82,6 +84,7 @@ impl CostumeStore {
             .copied()
     }
 
+    #[must_use]
     pub fn name_to_id(&self, sprite: SpriteId, name: &str) -> Option<CostumeId> {
         self.sprites
             .get(sprite.0 as usize)
@@ -89,6 +92,7 @@ impl CostumeStore {
             .copied()
     }
 
+    #[must_use]
     pub fn id_to_costume(&self, id: CostumeId) -> Option<&RawCostumeData> {
         self.costumes.get(id.0 as usize)
     }

@@ -48,7 +48,7 @@ fn main() {
             .unwrap(),
     );
 
-    println!("Loading project from {path:?}");
+    println!("Loading project from {}", path.display());
     let vm = match rash_loader_sb3::load_from_path(&path) {
         Ok(n) => n,
         Err(err) => {
@@ -67,7 +67,7 @@ fn main() {
                 if std::env::var("RASH_PRINT_MEMORY").is_ok() {
                     rash_vm::print_memory(&app.vm.memory);
                 }
-                control_flow.exit()
+                control_flow.exit();
             }
             _ => app.tick(event),
         })
@@ -126,8 +126,7 @@ impl App {
             &queue,
             &vm.sprite_load_info,
             &mut vm.costumes,
-        )
-        .await;
+        );
 
         Ok(Self {
             renderer,

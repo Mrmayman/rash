@@ -137,7 +137,7 @@ impl ScriptKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SpriteBuilder {
     scripts: Scripts,
     static_strings: Vec<SmolStr>,
@@ -146,10 +146,7 @@ pub struct SpriteBuilder {
 impl SpriteBuilder {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            scripts: Scripts::default(),
-            static_strings: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn add_script(&mut self, mut script: Script) {
@@ -207,6 +204,7 @@ impl ProjectBuilder {
         Self::default()
     }
 
+    #[must_use]
     pub fn next_sprite_id(&self) -> SpriteId {
         SpriteId(self.runtime.sprite_order.len() as i64)
     }
@@ -552,7 +550,7 @@ impl ScratchThread {
                 self.arguments.as_ptr(),
                 scripts,
                 state,
-                self.is_screen_refresh as u8,
+                u8::from(self.is_screen_refresh),
                 &raw mut self.child_thread,
             )
         };

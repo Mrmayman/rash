@@ -8,6 +8,10 @@ use crate::{
     runtime::{JumpId, ScratchThread, SpawnableScripts},
 };
 
+// NOTE: if you ever add local variables
+// (and subsequently add a pointer to the buffer here),
+// remember to update `rash_loader_sb3::ProjectLoader::load_original_var_values`
+
 pub type JitFunction = unsafe extern "C" fn(
     JumpId,
     *mut Vec<i64>, // Stack repeat

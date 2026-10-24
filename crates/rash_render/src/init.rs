@@ -13,7 +13,7 @@ use super::to_bytes;
 use super::{Renderer, buffers::GlobalBuffer};
 
 impl Renderer {
-    pub async fn new(
+    pub fn new(
         window_size: WindowSize,
         surface: &wgpu::Surface<'_>,
         adapter: &wgpu::Adapter,

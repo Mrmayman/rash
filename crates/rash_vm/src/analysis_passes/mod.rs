@@ -212,8 +212,7 @@ impl ProjectBuilder {
     fn inline_functions(&mut self, calls: &CallsAnalyzed) -> bool {
         // Escape hatch for debugging.
         if std::env::var("RASH_SKIP_INLINE")
-            .map(|value| value == "1" || value.to_lowercase() == "true")
-            .unwrap_or(false)
+            .is_ok_and(|value| value == "1" || value.to_lowercase() == "true")
         {
             return false;
         }
@@ -419,7 +418,7 @@ fn inline_inner<W, T>(
         // --- Can we inline? ---
         // Inlining a refreshing block into a refreshing context would change
         // refresh semantics, so those stay as calls.
-        let performs_refresh = s.blocks.iter().any(|n| n.could_trigger_refresh());
+        let performs_refresh = s.blocks.iter().any(ScratchBlock::could_trigger_refresh);
 
         if info.is_screen_refresh && performs_refresh && info.num_args > 0 {
             continue;
@@ -438,7 +437,7 @@ fn inline_inner<W, T>(
 
         // Maybe could expand with better heuristics? A `hotness` value for loops?
 
-        let inline_site_cost = parents.len().checked_sub(1).unwrap_or_default();
+        let inline_site_cost = parents.len().saturating_sub(1);
         let should_inline = inline_site_cost == 0
             || code_size <= INLINE_ALWAYS
             || (code_size * inline_site_cost) <= INLINE_NEVER;
@@ -476,7 +475,7 @@ fn inline_inner<W, T>(
                             *b = ScratchBlock::LocalsWith(
                                 std::mem::take(args),
                                 blocks_to_inline.clone(),
-                            )
+                            );
                         }
                     },
                     true,

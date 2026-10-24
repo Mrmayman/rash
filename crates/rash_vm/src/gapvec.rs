@@ -48,7 +48,7 @@ impl<T> GapVec<T> {
 
     pub fn inline_map<O>(self, mut f: impl FnMut(T) -> O) -> GapVec<O> {
         GapVec::<O> {
-            inner: self.inner.into_iter().map(|n| n.map(|n| f(n))).collect(),
+            inner: self.inner.into_iter().map(|n| n.map(&mut f)).collect(),
         }
     }
 }
