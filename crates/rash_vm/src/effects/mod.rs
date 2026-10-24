@@ -129,6 +129,7 @@ impl PartialEq for Effects {
             return true;
         }
         self.yields == other.yields
+            && self.is_unknown == other.is_unknown
             && self.may_not_happen == other.may_not_happen
             && self.reads == other.reads
             && self.writes == other.writes
@@ -503,7 +504,7 @@ impl CheckEffects for ScratchBlock {
                     arguments: args.iter().map(|arg| arg.expected_type(v, l)).collect(),
                 };
                 f(*id, call_site);
-                Effects::that_yields()
+                args.effects(c, v, l, e, f).then(&Effects::that_yields(), v)
             }
             ScratchBlock::ScreenRefresh => Effects::that_yields(),
 
