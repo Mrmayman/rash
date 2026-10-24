@@ -308,8 +308,8 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
                 let what = (target_addr as isize).wrapping_add(reloc.addend as isize);
                 let pc = at as isize;
                 // AArch64 PC-relative branches are relative to
-                // the branch instruction's own address — no
-                // +8 pipeline quirk like legacy A32/T32 has.
+                // the branch instruction's own address.
+                // No +8 pipeline quirk like legacy A32/T32 has.
                 let byte_offset = what.wrapping_sub(pc);
                 assert_eq!(byte_offset & 0b11, 0, "misaligned arm64 call target");
 
@@ -379,14 +379,14 @@ fn resolve_libcall(libcall: cranelift::codegen::ir::LibCall) -> usize {
 
         // ── things we should never emit ─────────────────────────
         LibCall::Probestack => panic!(
-            "Probestack libcall emitted — enable_probestack should be disabled \
+            "Probestack libcall emitted: enable_probestack should be disabled \
              or the stack size limit raised"
         ),
         LibCall::ElfTlsGetAddr | LibCall::ElfTlsGetOffset => {
-            panic!("TLS libcall emitted — we don't support thread-local storage")
+            panic!("TLS libcall emitted: we don't support thread-local storage")
         }
         LibCall::X86Pshufb => panic!(
-            "X86Pshufb libcall emitted — enable SSSE3 in the target ISA flags \
+            "X86Pshufb libcall emitted: enable SSSE3 in the target ISA flags \
              or avoid byte-shuffle SIMD ops"
         ),
     }

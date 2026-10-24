@@ -404,7 +404,6 @@ impl ScratchBlock {
     }
 
     pub fn walk_mut(&mut self, on_block: &mut impl FnMut(&mut ScratchBlock), walk_inputs: bool) {
-        on_block(self);
         match self {
             ScratchBlock::ControlIf(i, blocks)
             | ScratchBlock::ControlRepeat(i, blocks)
@@ -514,6 +513,7 @@ impl ScratchBlock {
             | ScratchBlock::LocalsGet(_)
             | ScratchBlock::VarRead(_) => {}
         }
+        on_block(self);
     }
 }
 

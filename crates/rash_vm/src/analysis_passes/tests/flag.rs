@@ -2,6 +2,9 @@ use crate::{ScratchBlock, Script, builder::set, compiler::VarTypeChecked};
 
 use super::{A, B, X, Y, assert_writes, call, custom_block, project};
 
+// These tests inspect call-site state, so they analyze without inlining
+// (a callee with a single caller would otherwise be inlined, removing the call).
+
 fn green_flag(blocks: Vec<ScratchBlock>) -> Script {
     Script::new_green_flag(blocks)
 }
@@ -13,7 +16,7 @@ fn green_flag_contributes_call_site_to_callee() {
         custom_block(A, vec![]),
     ]);
 
-    let analysis = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks_with(false);
 
     // A has no blocks of its own, but the green flag's pre-call state
     // should still be visible as A's call-site environment.
@@ -31,7 +34,7 @@ fn green_flag_call_site_propagates_transitively() {
         custom_block(B, vec![]),
     ]);
 
-    let analysis = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks_with(false);
 
     // B sees the green flag's X *plus* A's local Y write. Verifies the
     // fixed-point pass threads green-flag state through multiple hops.
@@ -48,7 +51,7 @@ fn green_flag_writes_after_call_are_excluded() {
         custom_block(A, vec![]),
     ]);
 
-    let analysis = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks_with(false);
 
     assert!(
         analysis.custom_blocks[&A]
@@ -68,7 +71,7 @@ fn multiple_green_flags_merge_call_sites() {
         custom_block(A, vec![]),
     ]);
 
-    let analysis = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks_with(false);
 
     // Two independent entry points with conflicting types must both be
     // represented; the variable downgrades to Object.
@@ -85,7 +88,7 @@ fn single_green_flag_multiple_calls_merge_states() {
         custom_block(A, vec![]),
     ]);
 
-    let analysis = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks_with(false);
 
     // X is written before both calls (Number); Y only before the second,
     // so it becomes optional → Object.
@@ -102,7 +105,7 @@ fn green_flag_contributes_call_site_to_recursive_block() {
         custom_block(A, vec![call(A)]),
     ]);
 
-    let analysis = builder.analyze_custom_blocks();
+    let analysis = builder.analyze_custom_blocks_with(false);
 
     // A is self-recursive, so it never enters `effects_by_block`…
     assert!(analysis.custom_blocks[&A].effects.is_unknown);
