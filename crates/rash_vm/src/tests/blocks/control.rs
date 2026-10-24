@@ -296,30 +296,84 @@ fn repeat_invalid_inputs() {
     assert_eq!(memory[6].convert_to_number(), 0.0);
 }
 
-// #[test]
-// pub fn repeat_invalid_inputs_runtime() {
-//     let f = |n| fadd(n, 0.0);
-//     let memory = run_code(vec![
-//         set(Ptr(0), 0.0),
-//         c_repeat(f(-1.0), vec![change(Ptr(0), 1.0)]),
-//         set(Ptr(1), 0.0),
-//         c_repeat(f(0.0), vec![change(Ptr(1), 1.0)]),
-//         set(Ptr(2), 0.0),
-//         c_repeat(f(f64::NEG_INFINITY), vec![change(Ptr(2), 1.0)]),
-//         set(Ptr(3), 0.0),
-//         c_repeat(f(f64::NAN), vec![change(Ptr(3), 1.0)]),
-//         set(Ptr(4), 0.0),
-//         c_repeat(f(0.1), vec![change(Ptr(4), 1.0)]),
-//         set(Ptr(5), 0.0),
-//         c_repeat(f(0.5), vec![change(Ptr(5), 1.0)]),
-//         set(Ptr(6), 0.0),
-//         c_repeat(f(0.9), vec![change(Ptr(6), 1.0)]),
-//     ]);
-//     assert_eq!(memory[0].convert_to_number(), 0.0);
-//     assert_eq!(memory[1].convert_to_number(), 0.0);
-//     assert_eq!(memory[2].convert_to_number(), 0.0);
-//     assert_eq!(memory[3].convert_to_number(), 0.0);
-//     assert_eq!(memory[4].convert_to_number(), 0.0);
-//     assert_eq!(memory[5].convert_to_number(), 0.0);
-//     assert_eq!(memory[6].convert_to_number(), 0.0);
-// }
+#[test]
+fn repeat_invalid_inputs_runtime() {
+    let f = |n| fadd(n, 0.0);
+    let memory = run_code(vec![
+        set(Ptr(0), 0.0),
+        c_repeat(f(-1.0), vec![change(Ptr(0), 1.0)]),
+        set(Ptr(1), 0.0),
+        c_repeat(f(0.0), vec![change(Ptr(1), 1.0)]),
+        set(Ptr(2), 0.0),
+        c_repeat(f(f64::NEG_INFINITY), vec![change(Ptr(2), 1.0)]),
+        set(Ptr(3), 0.0),
+        c_repeat(f(f64::NAN), vec![change(Ptr(3), 1.0)]),
+        set(Ptr(4), 0.0),
+        c_repeat(f(0.1), vec![change(Ptr(4), 1.0)]),
+        set(Ptr(5), 0.0),
+        c_repeat(f(0.5), vec![change(Ptr(5), 1.0)]),
+        set(Ptr(6), 0.0),
+        c_repeat(f(0.9), vec![change(Ptr(6), 1.0)]),
+    ]);
+    assert_eq!(memory[0].convert_to_number(), 0.0);
+    assert_eq!(memory[1].convert_to_number(), 0.0);
+    assert_eq!(memory[2].convert_to_number(), 0.0);
+    assert_eq!(memory[3].convert_to_number(), 0.0);
+    assert_eq!(memory[4].convert_to_number(), 0.0);
+    assert_eq!(memory[5].convert_to_number(), 0.0);
+    assert_eq!(memory[6].convert_to_number(), 0.0);
+}
+
+#[test]
+fn forever_loop_stop_this_script() {
+    let memory = run_code(vec![
+        set(Ptr(0), 0.0),
+        ScratchBlock::ControlForever(vec![
+            change(Ptr(0), 1.0),
+            c_if(
+                ScratchBlock::OpCmp(Ptr(0).into(), 10.0.into(), Ordering::Greater),
+                vec![ScratchBlock::ControlStopThisScript],
+            ),
+        ]),
+    ]);
+
+    assert_eq!(memory[0].convert_to_number(), 11.0);
+}
+
+#[test]
+fn repeat_infinity_loop_stop_this_script() {
+    let memory = run_code(vec![
+        set(Ptr(0), 0.0),
+        ScratchBlock::ControlRepeat(
+            f64::INFINITY.into(),
+            vec![
+                change(Ptr(0), 1.0),
+                c_if(
+                    ScratchBlock::OpCmp(Ptr(0).into(), 1000.0.into(), Ordering::Greater),
+                    vec![ScratchBlock::ControlStopThisScript],
+                ),
+            ],
+        ),
+    ]);
+
+    assert_eq!(memory[0].convert_to_number(), 1001.0);
+}
+
+#[test]
+fn repeat_infinity_loop_stop_this_script_runtime() {
+    let memory = run_code(vec![
+        set(Ptr(0), 0.0),
+        ScratchBlock::ControlRepeat(
+            fadd(f64::INFINITY, 0.0).into(),
+            vec![
+                change(Ptr(0), 1.0),
+                c_if(
+                    ScratchBlock::OpCmp(Ptr(0).into(), 1000.0.into(), Ordering::Greater),
+                    vec![ScratchBlock::ControlStopThisScript],
+                ),
+            ],
+        ),
+    ]);
+
+    assert_eq!(memory[0].convert_to_number(), 1001.0);
+}
