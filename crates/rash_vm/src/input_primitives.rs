@@ -192,12 +192,12 @@ impl Input {
                     .get_int(if num.is_nan() { 0 } else { num as i64 }, builder)
             }
             Input::Block(scratch_block) => {
-                let mut num = compiler
+                let num = compiler
                     .compile_block(scratch_block, builder)
                     .unwrap()
                     .get_number(compiler, builder);
-                self.nan_check(compiler, builder, &mut num);
-                builder.ins().fcvt_to_sint(I64, num)
+                // NaN automatically becomes zero
+                builder.ins().fcvt_to_sint_sat(I64, num)
             }
         }
     }

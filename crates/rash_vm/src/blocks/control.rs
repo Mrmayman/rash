@@ -32,10 +32,17 @@ impl Compiler<'_> {
         input: &Input,
         blocks: &[ScratchBlock],
     ) {
-        if let Input::Obj(obj) = input
-            && obj.convert_to_number() < 1.0
-        {
-            return;
+        if let Input::Obj(obj) = input {
+            let n = obj.convert_to_number();
+            if (n as i64) < 1 {
+                return;
+            }
+            // repeat Infinity becomes forever
+            // repeat -Infinity is skipped (above)
+            if n.is_infinite() {
+                self.control_forever(builder, blocks);
+                return;
+            }
         }
 
         let effects = self.effects(blocks);
@@ -47,6 +54,9 @@ impl Compiler<'_> {
         let old_constants = self.constants.clone();
         let old_vars = self.vars.clone_box();
 
+        // Note: f64::INFINITY gets converted to i64::MAX
+        // which is basically infinite (matching Scratch)
+        // since it'd take decades to finish looping that much.
         let loop_value = input.get_number_int(self, builder);
 
         let loop_block = builder.create_block();
@@ -60,9 +70,8 @@ impl Compiler<'_> {
         let mut entry_params2 = entry_params.clone();
         entry_params2.push(loop_value.into());
 
-        if let Input::Obj(obj) = input
-            && obj.convert_to_number() >= 1.0
-        {
+        // Already const-evaluated earlier
+        if let Input::Obj(_) = input {
             builder.ins().jump(loop_block, &entry_params2);
         } else {
             let condition = builder
