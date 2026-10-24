@@ -113,7 +113,7 @@ pub enum ScratchBlock {
     MotionSetY(Input),
     MotionGetX,
     MotionGetY,
-    LooksShown(bool),
+    LooksSetShown(bool),
     SensingDaysSince2000,
 
     Log(Input),
@@ -222,7 +222,7 @@ impl ScratchBlock {
             | ScratchBlock::MotionSetX(_)
             | ScratchBlock::MotionSetY(_)
             | ScratchBlock::ControlRepeatUntil(_, _)
-            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::LocalsWith(_, _)
             | ScratchBlock::Log(_) => None,
         }
@@ -274,7 +274,7 @@ impl ScratchBlock {
                 blocks_then.iter().any(ScratchBlock::could_trigger_refresh)
                     || blocks_else.iter().any(ScratchBlock::could_trigger_refresh)
             }
-            ScratchBlock::LooksShown(b) => *b, // Triggers refresh on show, not hide
+            ScratchBlock::LooksSetShown(b) => *b, // Triggers refresh on show, not hide
 
             // TODO: This actually depends on the function itself
             // Remove from here eventually
@@ -396,7 +396,7 @@ impl ScratchBlock {
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
-            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::LocalsGet(_)
             | ScratchBlock::VarRead(_) => {}
@@ -508,7 +508,7 @@ impl ScratchBlock {
             | ScratchBlock::ScreenRefresh
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
-            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::LocalsGet(_)
             | ScratchBlock::VarRead(_) => {}
@@ -864,7 +864,7 @@ impl<'a> Compiler<'a> {
                 let val = builder.inst_results(inst)[0];
                 return Some(ScratchValue::Num(val));
             }
-            ScratchBlock::LooksShown(shown) => {
+            ScratchBlock::LooksSetShown(shown) => {
                 let id = self.constants.get_int(self.sprite_id.0, builder);
                 let shown = self.constants.get_int(i64::from(*shown), builder);
 

@@ -114,7 +114,7 @@ impl ScratchBlock {
             ScratchBlock::MotionSetY(input) => format!("motion.y = {}", input.format(0)),
             ScratchBlock::MotionGetX => "motion.x".to_owned(),
             ScratchBlock::MotionGetY => "motion.y".to_owned(),
-            ScratchBlock::LooksShown(show) => if *show {
+            ScratchBlock::LooksSetShown(show) => if *show {
                 "looks.show()"
             } else {
                 "looks.hide()"

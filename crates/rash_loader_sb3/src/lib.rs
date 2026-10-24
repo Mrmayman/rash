@@ -320,8 +320,8 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
         }
         "motion_xposition" => Ok(ScratchBlock::MotionGetX),
         "motion_yposition" => Ok(ScratchBlock::MotionGetY),
-        "looks_show" => Ok(ScratchBlock::LooksShown(true)),
-        "looks_hide" => Ok(ScratchBlock::LooksShown(false)),
+        "looks_show" => Ok(ScratchBlock::LooksSetShown(true)),
+        "looks_hide" => Ok(ScratchBlock::LooksSetShown(false)),
         "control_if" => control::c_if(b, ctx),
         "control_if_else" => control::c_if_else(b, ctx),
         "control_repeat" => control::repeat(b, ctx),

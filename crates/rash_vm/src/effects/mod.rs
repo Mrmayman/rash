@@ -512,7 +512,7 @@ impl CheckEffects for ScratchBlock {
             ScratchBlock::ScreenRefresh => Effects::that_yields(),
 
             ScratchBlock::FunctionGetArg(_)
-            | ScratchBlock::LooksShown(_)
+            | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::LocalsGet(_)
