@@ -19,8 +19,7 @@ Math Operations:
 
 - [x] Add, subtract, multiply, divide
 - [x] && || !
-- [x] < >
-- [ ] ==
+- [x] < > ==
 - [x] String: Join, Contains, Length
 - [x] Mod, Round, Abs
 - [x] Floor

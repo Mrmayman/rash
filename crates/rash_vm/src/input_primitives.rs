@@ -143,17 +143,8 @@ impl Input {
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
     ) -> Value {
-        let mut num = match self {
-            Input::Obj(scratch_object) => compiler
-                .constants
-                .get_float(scratch_object.convert_to_number(), builder),
-            Input::Block(scratch_block) => compiler
-                .compile_block(scratch_block, builder)
-                .unwrap()
-                .get_number(compiler, builder),
-        };
+        let mut num = self.get_number_without_nan_check(compiler, builder);
         self.nan_check(compiler, builder, &mut num);
-
         num
     }
 
@@ -177,6 +168,22 @@ impl Input {
         self.nan_check(compiler, builder, &mut num);
 
         num
+    }
+
+    pub(crate) fn get_number_without_nan_check(
+        &self,
+        compiler: &mut Compiler,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> Value {
+        match self {
+            Input::Obj(scratch_object) => compiler
+                .constants
+                .get_float(scratch_object.convert_to_number(), builder),
+            Input::Block(scratch_block) => compiler
+                .compile_block(scratch_block, builder)
+                .unwrap()
+                .get_number(compiler, builder),
+        }
     }
 
     pub(crate) fn get_number_int(

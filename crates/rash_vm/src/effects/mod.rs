@@ -390,9 +390,9 @@ impl CheckEffects for ScratchBlock {
         f: &mut dyn FnMut(CustomBlockId, CallSiteInfo),
     ) -> Effects {
         match self {
-            ScratchBlock::VarSet(ptr, input) => {
-                Effects::with_write(*ptr, input.expected_type(v, l))
-            }
+            ScratchBlock::VarSet(ptr, input) => input
+                .effects(c, v, l, e, f)
+                .then(&Effects::with_write(*ptr, input.expected_type(v, l)), v),
             ScratchBlock::VarChange(ptr, input) => {
                 let increment = Effects::with_write(
                     *ptr,

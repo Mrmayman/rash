@@ -1,15 +1,14 @@
 mod utils;
 
-use std::cmp::Ordering;
-
 use utils::run_code;
 
 use crate::{
     Input, Ptr, ScratchBlock, ScratchObject,
-    builder::{c_if, c_repeat, set},
+    builder::{c_if, c_repeat, gt, set},
     compiler::VarType,
 };
 
+mod cmp;
 mod control;
 mod math;
 
@@ -197,30 +196,9 @@ fn bool_ops() {
 fn bool_return() {
     let memory = run_code(vec![set(
         Ptr(0),
-        ScratchBlock::OpBAnd(
-            ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
-            false.into(),
-        ),
+        ScratchBlock::OpBAnd(gt(3.0, 2.0).into(), false.into()),
     )]);
     assert_eq!(memory[0].convert_to_number(), 0.0);
-}
-
-#[test]
-fn comparison() {
-    let memory = run_code(set_vars(vec![
-        ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Greater).into(),
-        ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Greater).into(),
-        ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Greater).into(),
-        ScratchBlock::OpCmp(3.0.into(), 2.0.into(), Ordering::Less).into(),
-        ScratchBlock::OpCmp(2.0.into(), 3.0.into(), Ordering::Less).into(),
-        ScratchBlock::OpCmp(3.0.into(), 3.0.into(), Ordering::Less).into(),
-    ]));
-    assert_eq!(memory[0].convert_to_number(), 1.0);
-    assert_eq!(memory[1].convert_to_number(), 0.0);
-    assert_eq!(memory[2].convert_to_number(), 0.0);
-    assert_eq!(memory[3].convert_to_number(), 0.0);
-    assert_eq!(memory[4].convert_to_number(), 1.0);
-    assert_eq!(memory[5].convert_to_number(), 0.0);
 }
 
 #[test]

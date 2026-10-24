@@ -87,17 +87,78 @@ impl Compiler<'_> {
         match (at, bt) {
             (VarTypeChecked::Number | VarTypeChecked::Bool, VarTypeChecked::Number)
             | (VarTypeChecked::Number, VarTypeChecked::Bool) => {
-                let na = a.get_number(self, builder);
-                let nb = b.get_number(self, builder);
-                let res = builder.ins().fcmp(
-                    match comp {
-                        Ordering::Less => FloatCC::LessThan,
-                        Ordering::Equal => FloatCC::Equal,
-                        Ordering::Greater => FloatCC::GreaterThan,
-                    },
-                    na,
-                    nb,
+                let na = a.get_number_without_nan_check(self, builder);
+                let nb = b.get_number_without_nan_check(self, builder);
+
+                let ieee_cc = match comp {
+                    Ordering::Less => FloatCC::LessThan,
+                    Ordering::Equal => FloatCC::Equal,
+                    Ordering::Greater => FloatCC::GreaterThan,
+                };
+                let ieee = builder.ins().fcmp(ieee_cc, na, nb);
+
+                // If neither operand can be NaN, the IEEE result is already correct.
+                let can_a_nan = a.could_be_nan(
+                    |ptr| self.vars.get_type(ptr),
+                    |n| self.get_local_type(n),
+                    &self.args_list,
                 );
+                let can_b_nan = b.could_be_nan(
+                    |ptr| self.vars.get_type(ptr),
+                    |n| self.get_local_type(n),
+                    &self.args_list,
+                );
+
+                let res = match (can_a_nan, can_b_nan) {
+                    // Either can be NaN
+                    (true, true) => {
+                        let a_is_nan = builder.ins().fcmp(FloatCC::Unordered, na, na);
+                        let b_is_nan = builder.ins().fcmp(FloatCC::Unordered, nb, nb);
+
+                        match comp {
+                            Ordering::Equal => {
+                                // a and b NaN -> a == b
+                                let both_nan = builder.ins().band(a_is_nan, b_is_nan);
+                                builder.ins().bor(ieee, both_nan)
+                            }
+                            Ordering::Less => {
+                                // a not NaN and b Nan -> a < b
+                                let a_not_nan = builder.ins().fcmp(FloatCC::Ordered, na, na);
+                                let patch = builder.ins().band(b_is_nan, a_not_nan);
+                                builder.ins().bor(ieee, patch)
+                            }
+                            Ordering::Greater => {
+                                // a NaN and b not Nan -> a > b
+                                let b_not_nan = builder.ins().fcmp(FloatCC::Ordered, nb, nb);
+                                let patch = builder.ins().band(a_is_nan, b_not_nan);
+                                builder.ins().bor(ieee, patch)
+                            }
+                        }
+                    }
+                    // B isn't NaN
+                    (true, false) => {
+                        let a_is_nan = builder.ins().fcmp(FloatCC::Unordered, na, na);
+
+                        match comp {
+                            Ordering::Equal => ieee,
+                            Ordering::Less => ieee,
+                            Ordering::Greater => builder.ins().bor(ieee, a_is_nan),
+                        }
+                    }
+                    // A isn't NaN
+                    (false, true) => {
+                        let b_is_nan = builder.ins().fcmp(FloatCC::Unordered, nb, nb);
+
+                        match comp {
+                            Ordering::Equal => ieee,
+                            Ordering::Less => builder.ins().bor(ieee, b_is_nan),
+                            Ordering::Greater => ieee,
+                        }
+                    }
+                    // Neither are NaN, just use regular comparison
+                    (false, false) => ieee,
+                };
+
                 return builder.ins().uextend(I64, res);
             }
             (VarTypeChecked::Bool, VarTypeChecked::Bool) => {

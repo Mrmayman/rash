@@ -169,6 +169,21 @@ pub mod builder {
     pub fn fmod(a: impl Into<Input>, b: impl Into<Input>) -> ScratchBlock {
         ScratchBlock::OpMod(a.into(), b.into())
     }
+
+    #[must_use]
+    pub fn equal(a: impl Into<Input>, b: impl Into<Input>) -> ScratchBlock {
+        ScratchBlock::OpCmp(a.into(), b.into(), std::cmp::Ordering::Equal)
+    }
+
+    #[must_use]
+    pub fn gt(a: impl Into<Input>, b: impl Into<Input>) -> ScratchBlock {
+        ScratchBlock::OpCmp(a.into(), b.into(), std::cmp::Ordering::Greater)
+    }
+
+    #[must_use]
+    pub fn lt(a: impl Into<Input>, b: impl Into<Input>) -> ScratchBlock {
+        ScratchBlock::OpCmp(a.into(), b.into(), std::cmp::Ordering::Less)
+    }
 }
 
 fn stat(s: &'static str) -> SmolStr {

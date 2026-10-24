@@ -232,16 +232,17 @@ impl ScratchObject {
         let b = other;
 
         match (a, b) {
-            // fast cases
-            (ScratchObject::Number(a), ScratchObject::Number(b)) => return a.total_cmp(b),
+            (ScratchObject::Number(a), ScratchObject::Number(b)) => {
+                return scratch_num_cmp(*a, *b);
+            }
             (ScratchObject::Number(a), ScratchObject::Bool(b)) => {
-                return a.total_cmp(&makebool(*b));
+                return scratch_num_cmp(*a, makebool(*b));
             }
             (ScratchObject::Bool(b), ScratchObject::Number(a)) => {
-                return makebool(*b).total_cmp(a);
+                return scratch_num_cmp(makebool(*b), *a);
             }
             (ScratchObject::Bool(a), ScratchObject::Bool(b)) => return a.cmp(b),
-            _ => {} // We deal with strings below
+            _ => {}
         }
 
         let mut cmp_str = false;
@@ -256,12 +257,12 @@ impl ScratchObject {
         }
 
         if cmp_str {
-            let s1 = a.convert_to_string();
-            let s2 = b.convert_to_string();
+            let s1 = a.convert_to_string().to_lowercase_smolstr();
+            let s2 = b.convert_to_string().to_lowercase_smolstr();
             return s1.cmp(&s2);
         }
 
-        n1.total_cmp(&n2)
+        scratch_num_cmp(n1, n2)
     }
 }
 
@@ -333,4 +334,17 @@ fn convert_base_literal(string: &str, base: u32) -> f64 {
         return 0.0; // Real Scratch behaviour btw
     }
     f64::from(u32::from_str_radix(hex_number, base).unwrap_or_default())
+}
+
+/// - NaN == NaN
+/// - NaN > any non-NaN
+/// - any non-NaN < NaN
+/// - other: follow normal IEE semantics
+pub fn scratch_num_cmp(a: f64, b: f64) -> Ordering {
+    match (a.is_nan(), b.is_nan()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => a.partial_cmp(&b).unwrap(),
+    }
 }
