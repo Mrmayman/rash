@@ -23,6 +23,7 @@ const C: CustomBlockId = CustomBlockId(2);
 
 mod args;
 mod flag;
+mod inline;
 
 /// Adjust this helper to the actual custom-block-call variant in
 /// ScratchBlock. Keeping it here means the tests below don't depend
@@ -635,6 +636,5 @@ fn all_recursive_project_terminates_immediately() {
     ]);
 
     let analysis = builder.analyze_custom_blocks();
-
     assert!(analysis.custom_blocks.is_empty());
 }
