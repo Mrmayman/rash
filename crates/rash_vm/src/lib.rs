@@ -5,7 +5,7 @@
 //! # use rash_vm::{ProjectBuilder, ScratchBlock, Script, SpriteBuilder, SpriteId, RunState};
 //! # use std::collections::HashMap;
 //!
-//! let mut sprite = SpriteBuilder::new(SpriteId(0));
+//! let mut sprite = SpriteBuilder::new();
 //! sprite.add_script(
 //!     Script::new_green_flag(vec![
 //!         ScratchBlock::Log("Hello World".into()),

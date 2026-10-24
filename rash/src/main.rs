@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use rash_core::{RunState, SpriteId};
+use rash_core::RunState;
 use rash_render::{Renderer, WindowSize};
 use rash_vm::{ProjectBuilder, Runtime, SpriteBuilder, runtime::Script};
 use winit::{
@@ -180,7 +180,7 @@ impl App {
 }
 
 fn run_demo() {
-    let mut sprite = SpriteBuilder::new(SpriteId(0));
+    let mut sprite = SpriteBuilder::new();
     sprite.add_script(
         // Script::new_green_flag(vec![
         //     ScratchBlock::Log("Hello World".into()),

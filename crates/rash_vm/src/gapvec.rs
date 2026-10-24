@@ -45,4 +45,10 @@ impl<T> GapVec<T> {
             out.push(item.expect("GapVec shouldn't have gaps after resolving"));
         }
     }
+
+    pub fn inline_map<O>(self, mut f: impl FnMut(T) -> O) -> GapVec<O> {
+        GapVec::<O> {
+            inner: self.inner.into_iter().map(|n| n.map(|n| f(n))).collect(),
+        }
+    }
 }

@@ -128,7 +128,7 @@ impl ProjectBuilder {
 
             // --- Custom blocks ---
             for (id, script) in self.runtime.scripts.custom_blocks.iter().enumerate() {
-                let MaybeCompiled::ToCompile(script) = &script.script else {
+                let MaybeCompiled::ToCompile(script) = &script.1.script else {
                     continue;
                 };
                 let block_id = CustomBlockId(id);
@@ -225,9 +225,9 @@ impl ProjectBuilder {
         inline_inner(
             &inline_candidates(&calls.child_to_parent, &calls.recursive),
             &mut *scripts,
-            |s, id| s.custom_blocks.get(id.0),
-            |s, id| s.custom_blocks[id.0].is_screen_refresh,
-            |s, id| &mut s.custom_blocks[id.0].script,
+            |s, id| &s.custom_blocks[id.0].1,
+            |s, id| s.custom_blocks[id.0].1.is_screen_refresh,
+            |s, id| &mut s.custom_blocks[id.0].1.script,
             &mut inlined_something,
         );
 
@@ -235,7 +235,7 @@ impl ProjectBuilder {
         inline_inner(
             &inline_candidates(&calls.child_to_flags, &calls.recursive),
             &mut *scripts,
-            |s, id| s.custom_blocks.get(id.0),
+            |s, id| &s.custom_blocks[id.0].1,
             |_, _| true,
             |s, flag| &mut s.green_flags[*flag].1,
             &mut inlined_something,
@@ -249,7 +249,7 @@ impl ProjectBuilder {
         let scripts = &self.runtime.scripts;
 
         let mut parent_to_child: CallCheck<CustomBlockId> = HashMap::new();
-        for (id, script) in scripts.custom_blocks.iter().enumerate() {
+        for (id, (_, script)) in scripts.custom_blocks.iter().enumerate() {
             if let MaybeCompiled::ToCompile(script) = &script.script {
                 parent_to_child.insert(CustomBlockId(id), called_blocks(&script.blocks));
             }
@@ -405,15 +405,13 @@ fn inline_candidates<'a, T>(
 fn inline_inner<W, T>(
     calls: &[(CustomBlockId, &HashSet<T>)], // callee, caller pair
     world: &mut W,
-    get_callee: impl Fn(&W, CustomBlockId) -> Option<&CustomBlock>,
+    get_callee: impl Fn(&W, CustomBlockId) -> &CustomBlock,
     is_refresh: impl Fn(&W, &T) -> bool,
     get_script: impl for<'a, 'b> Fn(&'a mut W, &'b T) -> &'a mut MaybeCompiled,
     inlined_something: &mut bool,
 ) {
     for (child, parents) in calls {
-        let Some(info) = get_callee(world, *child).cloned() else {
-            continue;
-        };
+        let info = get_callee(world, *child);
         let MaybeCompiled::ToCompile(s) = &info.script else {
             continue;
         };

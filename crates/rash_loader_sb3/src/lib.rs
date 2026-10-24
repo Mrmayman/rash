@@ -7,7 +7,7 @@ use std::{
 
 use json::{Block, JsonBlock, JsonStruct};
 
-use rash_core::{CostumeStore, SpriteId, SpriteLoadData};
+use rash_core::{CostumeStore, SpriteLoadData};
 use rash_vm::{
     Input, Ptr, ScratchBlock, ScratchObject, data_types,
     error::{ErrorConvert, RashError, Trace},
@@ -76,9 +76,9 @@ impl<R: Read + Seek> ProjectLoader<R> {
 
         let mut sprite_order = Vec::new();
 
-        for (sprite_i, sprite_json) in self.json.targets.iter().enumerate() {
-            let id = SpriteId(sprite_i as i64);
-            let mut sprite = SpriteBuilder::new(id);
+        for sprite_json in self.json.targets.iter() {
+            let id = builder.next_sprite_id();
+            let mut sprite = SpriteBuilder::new();
 
             load_costumes(&mut self.archive, sprite_json, &mut costumes, id).trace(FN_N)?;
 

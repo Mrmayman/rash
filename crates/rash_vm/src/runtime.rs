@@ -49,7 +49,6 @@ pub enum MaybeCompiled {
 #[derive(Clone)]
 pub struct CustomBlock {
     pub script: MaybeCompiled,
-    pub sprite_id: SpriteId,
     pub is_screen_refresh: bool,
     pub num_args: usize,
 }
@@ -140,16 +139,14 @@ impl ScriptKind {
 
 #[derive(Clone)]
 pub struct SpriteBuilder {
-    id: SpriteId,
     scripts: Scripts,
     static_strings: Vec<SmolStr>,
 }
 
 impl SpriteBuilder {
     #[must_use]
-    pub fn new(id: SpriteId) -> Self {
+    pub fn new() -> Self {
         Self {
-            id,
             scripts: Scripts::default(),
             static_strings: Vec::new(),
         }
@@ -164,7 +161,7 @@ impl SpriteBuilder {
         };
         match script.kind {
             ScriptKind::GreenFlag => {
-                self.scripts.green_flags.push((self.id, script));
+                self.scripts.green_flags.push(script);
             }
             ScriptKind::CustomBlock {
                 id,
@@ -178,7 +175,6 @@ impl SpriteBuilder {
                         script: MaybeCompiled::ToCompile(script),
                         is_screen_refresh,
                         num_args,
-                        sprite_id: self.id,
                     },
                 );
             }
@@ -211,8 +207,13 @@ impl ProjectBuilder {
         Self::default()
     }
 
+    pub fn next_sprite_id(&self) -> SpriteId {
+        SpriteId(self.runtime.sprite_order.len() as i64)
+    }
+
     pub fn add_sprite(&mut self, sprite: SpriteBuilder) {
-        self.runtime.sprite_order.push(sprite.id);
+        let id = self.next_sprite_id();
+        self.runtime.sprite_order.push(id);
         self.runtime.static_strings.extend(sprite.static_strings);
 
         let this = &mut self.runtime.scripts;
@@ -221,11 +222,12 @@ impl ProjectBuilder {
                 .scripts
                 .green_flags
                 .into_iter()
-                .map(|(id, s)| (id, MaybeCompiled::ToCompile(s))),
+                .map(|s| (id, MaybeCompiled::ToCompile(s))),
         );
         sprite
             .scripts
             .custom_blocks
+            .inline_map(|s| (id, s))
             .into_regular_vec(&mut this.custom_blocks);
     }
 
@@ -259,7 +261,7 @@ impl ProjectBuilder {
             })
             .collect();
 
-        for script in &mut self.runtime.scripts.custom_blocks {
+        for (sprite_id, script) in &mut self.runtime.scripts.custom_blocks {
             let MaybeCompiled::ToCompile(scr) = &script.script else {
                 continue;
             };
@@ -277,7 +279,7 @@ impl ProjectBuilder {
             let (thread, static_strings) = compile(
                 &scr.blocks,
                 &self.runtime.memory,
-                script.sprite_id,
+                *sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
                 &|id| {
@@ -422,13 +424,13 @@ impl Runtime {
 #[derive(Default, Clone)]
 pub(crate) struct SpawnableScripts {
     pub green_flags: Vec<(SpriteId, MaybeCompiled)>,
-    pub custom_blocks: Vec<CustomBlock>,
+    pub custom_blocks: Vec<(SpriteId, CustomBlock)>,
     // If you add more here, make sure to update analysis passes too
 }
 
 #[derive(Default, Clone)]
 pub struct Scripts {
-    pub green_flags: Vec<(SpriteId, Script)>,
+    pub green_flags: Vec<Script>,
     pub custom_blocks: GapVec<CustomBlock>,
 }
 
