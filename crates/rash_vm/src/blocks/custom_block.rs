@@ -4,8 +4,8 @@ use cranelift::{
 };
 
 use crate::{
-    callbacks, compiler::Compiler, data_types::ScratchObject, input_primitives::Input,
-    runtime::CustomBlockId,
+    callbacks, compiler::Compiler, data_types::ScratchObject, effects::Effects,
+    input_primitives::Input, runtime::CustomBlockId,
 };
 
 impl Compiler<'_> {
@@ -98,5 +98,32 @@ impl Compiler<'_> {
 
         self.vars
             .reinit(builder, &mut self.constants, self.memory, &effects);
+    }
+
+    pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
+        if !self.is_inherently_pausable {
+            return;
+        }
+
+        for _ in 0..2 {
+            // TODO: Hacky workaround for too-fast timing
+            self.break_counter += 1;
+            self.save_vars(builder);
+            let break_counter = self.constants.get_int(self.break_counter as i64, builder);
+
+            builder.ins().return_(&[break_counter]);
+            self.constants.clear();
+
+            let b = builder.create_block();
+            self.break_points.push(b);
+            builder.switch_to_block(b);
+
+            self.vars.reinit(
+                builder,
+                &mut self.constants,
+                self.memory,
+                &Effects::unknown(),
+            );
+        }
     }
 }

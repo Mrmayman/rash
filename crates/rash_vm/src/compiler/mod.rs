@@ -997,33 +997,6 @@ impl<'a> Compiler<'a> {
         None
     }
 
-    pub fn screen_refresh(&mut self, builder: &mut FunctionBuilder<'_>) {
-        if !self.is_inherently_pausable {
-            return;
-        }
-
-        for _ in 0..2 {
-            // TODO: Hacky workaround for too-fast timing
-            self.break_counter += 1;
-            self.save_vars(builder);
-            let break_counter = self.constants.get_int(self.break_counter as i64, builder);
-
-            builder.ins().return_(&[break_counter]);
-            self.constants.clear();
-
-            let b = builder.create_block();
-            self.break_points.push(b);
-            builder.switch_to_block(b);
-
-            self.vars.reinit(
-                builder,
-                &mut self.constants,
-                self.memory,
-                &Effects::unknown(),
-            );
-        }
-    }
-
     pub fn save_vars(&mut self, builder: &mut FunctionBuilder<'_>) {
         self.vars
             .save(builder, &mut self.constants, self.memory, &self.effects);

@@ -408,21 +408,15 @@ fn inline_inner<W, T>(
 ) {
     for (child, parents) in calls {
         let info = get_callee(world, *child);
+        let is_screen_refresh = info.is_screen_refresh;
         let MaybeCompiled::ToCompile(s) = &info.script else {
             continue;
         };
 
         // --- Can we inline? ---
-        // Inlining a refreshing block into a refreshing context would change
-        // refresh semantics, so those stay as calls.
         let performs_refresh = s.blocks.iter().any(ScratchBlock::could_trigger_refresh);
 
-        if info.is_screen_refresh && performs_refresh && info.num_args > 0 {
-            continue;
-        }
-
-        let can_turn_into_refresh = !info.is_screen_refresh && performs_refresh;
-        if can_turn_into_refresh && parents.iter().any(|p| is_refresh(&*world, p)) {
+        if is_screen_refresh && performs_refresh && info.num_args > 0 {
             continue;
         }
 
@@ -458,6 +452,9 @@ fn inline_inner<W, T>(
 
         let mut replaced = false;
         for par in *parents {
+            if !is_screen_refresh && is_refresh(&*world, par) {
+                continue;
+            }
             let MaybeCompiled::ToCompile(scr) = get_script(&mut *world, par) else {
                 continue;
             };

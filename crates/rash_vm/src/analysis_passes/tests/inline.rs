@@ -253,11 +253,16 @@ fn multi_level_inline_in_reverse_order_leaves_call_for_next_round() {
 // ---------------------------------------------------------------------------
 
 fn flag_has_call(builder: &ProjectBuilder) -> bool {
-    let MaybeCompiled::ToCompile(flag) = &builder.runtime.scripts.green_flags[0].1 else {
+    let flag = &builder.runtime.scripts.green_flags[0].1;
+    has_call(flag)
+}
+
+fn has_call(flag: &MaybeCompiled) -> bool {
+    let MaybeCompiled::ToCompile(script) = flag else {
         panic!("expected ToCompile");
     };
     let mut found = false;
-    for b in &flag.blocks {
+    for b in &script.blocks {
         b.walk(
             &mut |b| {
                 if let ScratchBlock::FunctionCallNoScreenRefresh(..)
@@ -285,13 +290,11 @@ fn chain_is_fully_inlined_across_rounds() {
 
     builder.analyze_custom_blocks();
 
-    assert!(!flag_has_call(&builder));
+    assert!(flag_has_call(&builder));
 }
 
 #[test]
 fn inlined_away_caller_does_not_block_inlining_its_callee() {
-    // flag → A → B, and B is only called from A. Once A is inlined into the
-    // flag, B's only live caller is the flag, so B must be inlined too.
     let mut builder = project(vec![
         Script::new_green_flag(vec![call(A)]),
         custom_block(A, vec![call(B)]),
@@ -300,7 +303,10 @@ fn inlined_away_caller_does_not_block_inlining_its_callee() {
 
     builder.analyze_custom_blocks();
 
-    assert!(!flag_has_call(&builder));
+    assert!(flag_has_call(&builder));
+    assert!(!has_call(
+        &builder.runtime.scripts.custom_blocks[A.0].1.script
+    ));
 }
 
 #[test]
