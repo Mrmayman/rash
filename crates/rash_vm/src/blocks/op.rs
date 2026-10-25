@@ -11,7 +11,6 @@ use cranelift::{
 use crate::{
     ScratchBlock, callbacks,
     compiler::{Compiler, VarTypeChecked},
-    config::IMPRECISE_DIVISION,
     data_types::ID_STRING,
     input_primitives::{Input, ScratchValue},
 };
@@ -199,7 +198,9 @@ impl Compiler<'_> {
 
     pub fn op_div(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_number(self, builder);
-        if IMPRECISE_DIVISION && let Input::Obj(obj) = b {
+        if crate::config::fast_division()
+            && let Input::Obj(obj) = b
+        {
             let reciprocal = 1.0 / obj.convert_to_number();
             let r = self.constants.get_float(reciprocal, builder);
             return builder.ins().fmul(a, r);
@@ -254,7 +255,9 @@ impl Compiler<'_> {
         // let div = a / b;
         // let modulo = (div - floor(div)) * b;
 
-        let div = if let (true, Input::Obj(objb)) = (IMPRECISE_DIVISION, b_in) {
+        let div = if let Input::Obj(objb) = b_in
+            && crate::config::fast_division()
+        {
             let reciprocal = 1.0 / objb.convert_to_number();
             let r = self.constants.get_float(reciprocal, builder);
             builder.ins().fmul(a, r)

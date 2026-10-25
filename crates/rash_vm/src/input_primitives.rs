@@ -10,7 +10,6 @@ use smol_str::SmolStr;
 use crate::{
     callbacks,
     compiler::{Compiler, FunctionArg, ScratchBlock, VarTypeChecked},
-    config::ARITHMETIC_NAN_CHECK,
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::VariableWrite,
@@ -215,7 +214,7 @@ impl Input {
         builder: &mut FunctionBuilder<'_>,
         num: &mut Value,
     ) {
-        if ARITHMETIC_NAN_CHECK
+        if !crate::config::fast_nan()
             && self.could_be_nan(
                 |ptr| compiler.vars.get_type(ptr),
                 |n| compiler.get_local_type(n),

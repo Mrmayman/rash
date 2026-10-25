@@ -23,6 +23,34 @@
 //! while !vm.update(&mut state) {}
 //! ```
 
+macro_rules! env_config {
+    ($name:ident) => {
+        pub fn $name() -> bool {
+            fn check() -> bool {
+                std::env::var(format!("RASH_{}", stringify!($name)).to_uppercase())
+                    .is_ok_and(|n| n == "1" || n.eq_ignore_ascii_case("true"))
+            }
+
+            static CHECKED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(check);
+            *CHECKED
+        }
+    };
+}
+
+/// Runtime configuration controlled by env vars
+///
+/// Naming: fast_nan -> `RASH_FAST_NAN`
+///
+/// Set these to 1 or `true` to enable
+mod config {
+    env_config!(fast_nan);
+    env_config!(fast_division);
+    env_config!(skip_inline);
+
+    env_config!(print_blocks);
+    env_config!(print_ir);
+}
+
 mod analysis_passes;
 mod blocks;
 mod callbacks;
@@ -66,29 +94,6 @@ pub fn print_memory(memory: &[ScratchObject]) {
         }
     }
     println!("...: {:?}", ScratchObject::Number(0.0));
-}
-
-mod config {
-    /// Scratch has a special edge case for math with NaN.
-    /// Any operation with NaN will be treated as
-    /// an operation with 0.
-    ///
-    /// For example, `NaN + 1` will be `0 + 1`.
-    ///
-    /// This is a special case for Scratch, and is not
-    /// a standard behavior for most programming languages.
-    /// Enabling this check adds special behavior for NaN in the
-    /// compiled code, making it more correct but slower.
-    ///
-    /// # Performance
-    /// Pi benchmark:
-    /// - Without NaN check: `4.6 ms`
-    /// - With NaN check: `6.5 ms`
-    pub const ARITHMETIC_NAN_CHECK: bool = true;
-
-    /// Sacrifices some floating point precision for
-    /// slightly faster division in certain scenarios
-    pub const IMPRECISE_DIVISION: bool = false;
 }
 
 pub mod builder {

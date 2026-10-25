@@ -24,6 +24,7 @@ use crate::{
     Ptr,
     callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, FunctionArg, ScratchBlock, VarTypeChecked},
+    config::print_ir,
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
     input_primitives::ScratchValue,
@@ -96,7 +97,7 @@ pub fn compile(
     builder.seal_all_blocks();
     builder.finalize();
 
-    if std::env::var("RASH_PRINT_IR").is_ok_and(|n| n == "1" || n.eq_ignore_ascii_case("true")) {
+    if print_ir() {
         println!("{}", func.display());
     }
 

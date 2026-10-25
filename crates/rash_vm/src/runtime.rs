@@ -8,6 +8,7 @@ use crate::{
     Ptr,
     compile_fn::{compile, prepare_buffer},
     compiler::{FuncMap, ScratchBlock},
+    config::print_blocks,
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
     gapvec::GapVec,
@@ -249,9 +250,6 @@ impl ProjectBuilder {
     fn compile(&mut self) {
         let analysis = self.analyze_custom_blocks();
 
-        let print_blocks = std::env::var("RASH_PRINT_BLOCKS")
-            .is_ok_and(|n| n == "1" || n.to_lowercase() == "true");
-
         self.runtime.memory = (0..analysis.var_buf_len)
             .into_iter()
             .map(|n| {
@@ -275,7 +273,7 @@ impl ProjectBuilder {
             };
             let a = analysis.custom_blocks.get(id);
 
-            if print_blocks {
+            if print_blocks() {
                 println!();
                 for block in &scr.blocks {
                     println!("{}", block.format(0));
@@ -329,7 +327,7 @@ impl ProjectBuilder {
                 continue;
             };
 
-            if print_blocks {
+            if print_blocks() {
                 println!();
                 for block in &scr.blocks {
                     println!("{}", block.format(0));

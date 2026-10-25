@@ -41,8 +41,13 @@ You can see the progress in implementing blocks in this [Google Docs spreadsheet
 
 # Environment variables
 
-- `RASH_SKIP_INLINE` to skip inlining functions
+- `RASH_SKIP_INLINE`: skips inlining functions
   (useful for debugging/blackbox benchmarking)
+
+For improving performance (but may break some projects):
+
+- `RASH_FAST_NAN`: skips normalizing `NaN` values to zero
+- `RASH_FAST_DIVISION`: uses faster approximations for division
 
 Debug printing:
 

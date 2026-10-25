@@ -210,10 +210,7 @@ impl ProjectBuilder {
     /// Inline single-caller, non-recursive blocks. Returns whether anything
     /// changed; the caller must then rebuild `calls`, since it is stale.
     fn inline_functions(&mut self, calls: &CallsAnalyzed) -> bool {
-        // Escape hatch for debugging.
-        if std::env::var("RASH_SKIP_INLINE")
-            .is_ok_and(|value| value == "1" || value.to_lowercase() == "true")
-        {
+        if crate::config::skip_inline() {
             return false;
         }
 
