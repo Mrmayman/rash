@@ -1,3 +1,5 @@
+use std::f64::consts::{E, FRAC_1_SQRT_2};
+
 use super::{set_vars, utils::run_code};
 use crate::{
     ScratchBlock,
@@ -389,8 +391,6 @@ fn math_round() {
     assert_eq!(memory[7].convert_to_number(), -3.0);
 }
 
-use std::f64::consts::E;
-
 #[test]
 fn math_log_base10() {
     let memory = run_code(set_vars(vec![
@@ -538,6 +538,116 @@ fn math_10exp() {
     assert_eq!(memory[11].convert_to_number(), 1.0);
     assert_eq!(memory[12].convert_to_number(), f64::INFINITY);
     assert_eq!(memory[13].convert_to_number(), 0.0);
+}
+
+#[test]
+fn math_asin() {
+    let memory = run_code(set_vars(vec![
+        ScratchBlock::OpAsin(0.0.into()).into(),           // 0
+        ScratchBlock::OpAsin(1.0.into()).into(),           // 90
+        ScratchBlock::OpAsin((-1.0).into()).into(),        // -90
+        ScratchBlock::OpAsin(0.5.into()).into(),           // 30
+        ScratchBlock::OpAsin((-0.5).into()).into(),        // -30
+        ScratchBlock::OpAsin(FRAC_1_SQRT_2.into()).into(), // 45
+        ScratchBlock::OpAsin(2.0.into()).into(),           // NaN (domain)
+        ScratchBlock::OpAsin((-2.0).into()).into(),        // NaN (domain)
+        ScratchBlock::OpAsin((-0.0).into()).into(),        // -0
+        ScratchBlock::OpAsin(1e-320.into()).into(),        // tiny positive subnormal -> ~5.73e-319
+        ScratchBlock::OpAsin((-1e-320).into()).into(),     // tiny negative subnormal
+        ScratchBlock::OpAsin(f64::NAN.into()).into(),
+        ScratchBlock::OpAsin(f64::INFINITY.into()).into(),
+        ScratchBlock::OpAsin(f64::NEG_INFINITY.into()).into(),
+    ]));
+
+    let approx = |a: f64, b: f64| (a - b).abs() < 1e-12;
+
+    assert!(approx(memory[0].convert_to_number(), 0.0));
+    assert!(approx(memory[1].convert_to_number(), 90.0));
+    assert!(approx(memory[2].convert_to_number(), -90.0));
+    assert!(approx(memory[3].convert_to_number(), 30.0));
+    assert!(approx(memory[4].convert_to_number(), -30.0));
+    assert!(approx(memory[5].convert_to_number(), 45.0));
+    assert!(memory[6].convert_to_number().is_nan());
+    assert!(memory[7].convert_to_number().is_nan());
+    assert_eq!(memory[8].convert_to_number(), 0.0);
+    assert!(memory[9].convert_to_number() > 0.0);
+    assert!(memory[10].convert_to_number() < 0.0);
+    assert_eq!(memory[11].convert_to_number(), 0.0);
+    assert!(memory[12].convert_to_number().is_nan());
+    assert!(memory[13].convert_to_number().is_nan());
+}
+
+#[test]
+fn math_acos() {
+    let memory = run_code(set_vars(vec![
+        ScratchBlock::OpAcos(1.0.into()).into(),           // 0
+        ScratchBlock::OpAcos(0.5.into()).into(),           // 60
+        ScratchBlock::OpAcos(0.0.into()).into(),           // 90
+        ScratchBlock::OpAcos((-0.5).into()).into(),        // 120
+        ScratchBlock::OpAcos((-1.0).into()).into(),        // 180
+        ScratchBlock::OpAcos(FRAC_1_SQRT_2.into()).into(), // 45
+        ScratchBlock::OpAcos(2.0.into()).into(),           // NaN
+        ScratchBlock::OpAcos((-2.0).into()).into(),        // NaN
+        ScratchBlock::OpAcos((-0.0).into()).into(),        // 90
+        ScratchBlock::OpAcos(1e-320.into()).into(),        // ~90 - tiny
+        ScratchBlock::OpAcos((-1e-320).into()).into(),     // ~90 + tiny
+        ScratchBlock::OpAcos(f64::NAN.into()).into(),
+        ScratchBlock::OpAcos(f64::INFINITY.into()).into(),
+        ScratchBlock::OpAcos(f64::NEG_INFINITY.into()).into(),
+    ]));
+
+    let approx = |a: f64, b: f64| (a - b).abs() < 1e-12;
+
+    assert!(approx(memory[0].convert_to_number(), 0.0));
+    assert!(approx(memory[1].convert_to_number(), 60.0));
+    assert!(approx(memory[2].convert_to_number(), 90.0));
+    assert!(approx(memory[3].convert_to_number(), 120.0));
+    assert!(approx(memory[4].convert_to_number(), 180.0));
+    assert!(approx(memory[5].convert_to_number(), 45.0));
+    assert!(memory[6].convert_to_number().is_nan());
+    assert!(memory[7].convert_to_number().is_nan());
+    assert!(approx(memory[8].convert_to_number(), 90.0));
+    // Actually 89.9999... and 90.0000... but precision loss makes it 90.0
+    assert_eq!(memory[9].convert_to_number(), 90.0);
+    assert_eq!(memory[10].convert_to_number(), 90.0);
+    assert_eq!(memory[11].convert_to_number(), 90.0);
+    assert!(memory[12].convert_to_number().is_nan());
+    assert!(memory[13].convert_to_number().is_nan());
+}
+
+#[test]
+fn math_atan() {
+    let memory = run_code(set_vars(vec![
+        ScratchBlock::OpAtan(0.0.into()).into(),            // 0
+        ScratchBlock::OpAtan(1.0.into()).into(),            // 45
+        ScratchBlock::OpAtan((-1.0).into()).into(),         // -45
+        ScratchBlock::OpAtan(3.0_f64.sqrt().into()).into(), // 60
+        ScratchBlock::OpAtan((1.0 / 3.0_f64.sqrt()).into()).into(), // 30
+        ScratchBlock::OpAtan((-0.0).into()).into(),         // -0
+        ScratchBlock::OpAtan(1e-320.into()).into(),
+        ScratchBlock::OpAtan((-1e-320).into()).into(),
+        ScratchBlock::OpAtan(1e308.into()).into(),    // ~90
+        ScratchBlock::OpAtan((-1e308).into()).into(), // ~-90
+        ScratchBlock::OpAtan(f64::INFINITY.into()).into(), // 90
+        ScratchBlock::OpAtan(f64::NEG_INFINITY.into()).into(), // -90
+        ScratchBlock::OpAtan(f64::NAN.into()).into(),
+    ]));
+
+    let approx = |a: f64, b: f64| (a - b).abs() < 1e-12;
+
+    assert!(approx(memory[0].convert_to_number(), 0.0));
+    assert!(approx(memory[1].convert_to_number(), 45.0));
+    assert!(approx(memory[2].convert_to_number(), -45.0));
+    assert!(approx(memory[3].convert_to_number(), 60.0));
+    assert!(approx(memory[4].convert_to_number(), 30.0));
+    assert_eq!(memory[5].convert_to_number(), 0.0);
+    assert!(memory[6].convert_to_number() > 0.0);
+    assert!(memory[7].convert_to_number() < 0.0);
+    assert!(approx(memory[8].convert_to_number(), 90.0));
+    assert!(approx(memory[9].convert_to_number(), -90.0));
+    assert_eq!(memory[10].convert_to_number(), 90.0);
+    assert_eq!(memory[11].convert_to_number(), -90.0);
+    assert_eq!(memory[12].convert_to_number(), 0.0);
 }
 
 #[test]

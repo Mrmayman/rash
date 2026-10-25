@@ -70,6 +70,9 @@ pub enum ScratchBlock {
     OpSin(Input),
     OpCos(Input),
     OpTan(Input),
+    OpAsin(Input),
+    OpAcos(Input),
+    OpAtan(Input),
     OpLn(Input),
     OpLog(Input),
     OpExp(Input),
@@ -198,6 +201,8 @@ impl ScratchBlock {
             | ScratchBlock::OpMod(_, _)
             | ScratchBlock::OpLn(_)
             | ScratchBlock::OpLog(_)
+            | ScratchBlock::OpAsin(_)
+            | ScratchBlock::OpAcos(_)
             | ScratchBlock::OpDiv(_, _) => Some(VariableWrite::normal(VarTypeChecked::Number)),
             ScratchBlock::FunctionGetArg(_) => Some(VariableWrite::normal(VarTypeChecked::Object)),
 
@@ -216,6 +221,7 @@ impl ScratchBlock {
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::OpExp(_)
             | ScratchBlock::OpExp10(_)
+            | ScratchBlock::OpAtan(_)
             | ScratchBlock::OpStrLen(_) => Some(VariableWrite::skip_nan(VarTypeChecked::Number)),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VariableWrite::normal(VarTypeChecked::String))
@@ -275,6 +281,9 @@ impl ScratchBlock {
             | ScratchBlock::OpLog(_)
             | ScratchBlock::OpExp(_)
             | ScratchBlock::OpExp10(_)
+            | ScratchBlock::OpAsin(_)
+            | ScratchBlock::OpAcos(_)
+            | ScratchBlock::OpAtan(_)
             | ScratchBlock::OpCmp(_, _, _)
             | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpStrLetterOf(_, _)
@@ -379,6 +388,9 @@ impl ScratchBlock {
             | ScratchBlock::OpLog(i)
             | ScratchBlock::OpExp(i)
             | ScratchBlock::OpExp10(i)
+            | ScratchBlock::OpAsin(i)
+            | ScratchBlock::OpAcos(i)
+            | ScratchBlock::OpAtan(i)
             | ScratchBlock::OpNot(i) => {
                 if let Input::Block(b) = i
                     && walk_inputs
@@ -496,6 +508,9 @@ impl ScratchBlock {
             | ScratchBlock::OpLog(i)
             | ScratchBlock::OpExp(i)
             | ScratchBlock::OpExp10(i)
+            | ScratchBlock::OpAsin(i)
+            | ScratchBlock::OpAcos(i)
+            | ScratchBlock::OpAtan(i)
             | ScratchBlock::OpNot(i) => {
                 if let Input::Block(b) = i
                     && walk_inputs
@@ -811,6 +826,21 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpTan(num) => {
                 let num = num.get_number(self, builder);
                 let inst = self.call_function(builder, callbacks::op::TAN, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpAsin(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::ASIN, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpAcos(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::ACOS, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpAtan(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::ATAN, &[F64], &[F64], &[num]);
                 return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
             }
             ScratchBlock::OpLn(num) => {

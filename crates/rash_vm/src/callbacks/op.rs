@@ -3,7 +3,8 @@ use rand::RngExt;
 use crate::ScratchObject;
 
 declare_module!(
-    "op.rs", 3, floor, sin, cos, tan, cmp, random, ceil, trunc, nearest, fma, ln, log10, exp, exp10
+    "op.rs", 3, floor, sin, cos, tan, cmp, random, ceil, trunc, nearest, fma, ln, log10, exp,
+    exp10, asin, acos, atan
 );
 
 pub extern "C" fn sin(value: f64) -> f64 {
@@ -111,4 +112,16 @@ pub extern "C" fn exp(a: f64) -> f64 {
 
 pub extern "C" fn exp10(a: f64) -> f64 {
     10.0f64.powf(a)
+}
+
+pub extern "C" fn asin(value: f64) -> f64 {
+    value.asin().to_degrees()
+}
+
+pub extern "C" fn acos(value: f64) -> f64 {
+    value.acos().to_degrees()
+}
+
+pub extern "C" fn atan(value: f64) -> f64 {
+    value.atan().to_degrees()
 }

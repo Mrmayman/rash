@@ -27,6 +27,9 @@ pub fn mathop(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
         "10 ^" => Ok(ScratchBlock::OpExp10(num)),
         "ln" => Ok(ScratchBlock::OpLn(num)),
         "log" => Ok(ScratchBlock::OpLog(num)),
+        "asin" => Ok(ScratchBlock::OpAsin(num)),
+        "acos" => Ok(ScratchBlock::OpAcos(num)),
+        "atan" => Ok(ScratchBlock::OpAtan(num)),
         _ => {
             eprintln!("Unknown operator (mathop): {operator}\n");
             Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))

@@ -439,7 +439,10 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::OpExp10(input)
             | ScratchBlock::OpSin(input)
             | ScratchBlock::OpCos(input)
-            | ScratchBlock::OpTan(input) => input.effects(c, v, l, e, f),
+            | ScratchBlock::OpTan(input)
+            | ScratchBlock::OpAsin(input)
+            | ScratchBlock::OpAcos(input)
+            | ScratchBlock::OpAtan(input) => input.effects(c, v, l, e, f),
 
             ScratchBlock::ControlRepeatUntil(input, blocks)
             | ScratchBlock::ControlRepeat(input, blocks)
