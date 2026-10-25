@@ -223,8 +223,12 @@ pub fn get_isa() -> Arc<dyn TargetIsa> {
 
     let isa_builder = cranelift_native::builder()
         .unwrap_or_else(|msg| panic!("host machine not supported: {msg}"));
-
     isa_builder.finish(flags).unwrap()
+
+    // match codegen::isa::lookup(target_lexicon::Triple::host()) {
+    //     Err(err) => panic!("Error looking up target: {err}"),
+    //     Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
+    // }
 }
 
 fn create_function(isa: &dyn TargetIsa) -> (Function, CallConv) {
@@ -345,33 +349,25 @@ fn resolve_libcall(libcall: cranelift::codegen::ir::LibCall) -> usize {
     use cranelift::codegen::ir::LibCall;
 
     match libcall {
-        // ── float rounding (f32) ────────────────────────────────
         LibCall::CeilF32 => callbacks::op::ceil_f32 as *const () as usize,
         LibCall::FloorF32 => callbacks::op::floor_f32 as *const () as usize,
         LibCall::TruncF32 => callbacks::op::trunc_f32 as *const () as usize,
         LibCall::NearestF32 => callbacks::op::nearest_f32 as *const () as usize,
 
-        // ── float rounding (f64) ────────────────────────────────
         LibCall::CeilF64 => callbacks::op::ceil as *const () as usize,
-        LibCall::FloorF64 => callbacks::op::floor as *const () as usize, // existing
+        LibCall::FloorF64 => callbacks::op::floor as *const () as usize,
         LibCall::TruncF64 => callbacks::op::trunc as *const () as usize,
         LibCall::NearestF64 => callbacks::op::nearest as *const () as usize,
 
-        // ── fused multiply-add ──────────────────────────────────
         LibCall::FmaF32 => callbacks::op::fma_f32 as *const () as usize,
         LibCall::FmaF64 => callbacks::op::fma as *const () as usize,
 
-        // ── libc memory routines ────────────────────────────────
-        // These are emitted for bulk memory ops (e.g. large memcpy
-        // lowering). Our IR doesn't produce them today, but if a
-        // future optimisation pass does, these libc symbols are
-        // already linked into the process.
         LibCall::Memcpy => libc::memcpy as *const () as usize,
         LibCall::Memset => libc::memset as *const () as usize,
         LibCall::Memmove => libc::memmove as *const () as usize,
         LibCall::Memcmp => libc::memcmp as *const () as usize,
 
-        // ── things we should never emit ─────────────────────────
+        // Things we should never emit
         LibCall::Probestack => panic!(
             "Probestack libcall emitted: enable_probestack should be disabled \
              or the stack size limit raised"
