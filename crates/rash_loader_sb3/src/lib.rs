@@ -330,7 +330,7 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
         "looks_say" => {
             // TODO: implement this properly
             let message = get::string(b, ctx, "MESSAGE").trace("Block::compile.looks_say")?;
-            Ok(ScratchBlock::Log(message))
+            Ok(ScratchBlock::LogPrint(message))
         }
         "control_stop" => {
             const T: &str = "Block::compile.data_setvariableto";

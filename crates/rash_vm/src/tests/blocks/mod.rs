@@ -141,38 +141,38 @@ fn bool_ops() {
     // Testing multiple data types as this caused a real bug earlier
     let memory = run_code(set_vars(vec![
         // Bools
-        ScratchBlock::OpBAnd(true.into(), true.into()).into(),
-        ScratchBlock::OpBAnd(true.into(), false.into()).into(),
-        ScratchBlock::OpBAnd(false.into(), true.into()).into(),
-        ScratchBlock::OpBAnd(false.into(), false.into()).into(),
-        ScratchBlock::OpBOr(true.into(), true.into()).into(),
-        ScratchBlock::OpBOr(true.into(), false.into()).into(),
-        ScratchBlock::OpBOr(false.into(), true.into()).into(),
-        ScratchBlock::OpBOr(false.into(), false.into()).into(),
-        ScratchBlock::OpBNot(true.into()).into(),
-        ScratchBlock::OpBNot(false.into()).into(),
+        ScratchBlock::OpAnd(true.into(), true.into()).into(),
+        ScratchBlock::OpAnd(true.into(), false.into()).into(),
+        ScratchBlock::OpAnd(false.into(), true.into()).into(),
+        ScratchBlock::OpAnd(false.into(), false.into()).into(),
+        ScratchBlock::OpOr(true.into(), true.into()).into(),
+        ScratchBlock::OpOr(true.into(), false.into()).into(),
+        ScratchBlock::OpOr(false.into(), true.into()).into(),
+        ScratchBlock::OpOr(false.into(), false.into()).into(),
+        ScratchBlock::OpNot(true.into()).into(),
+        ScratchBlock::OpNot(false.into()).into(),
         // Numbers
-        ScratchBlock::OpBNot(1.0.into()).into(),
-        ScratchBlock::OpBNot(0.0.into()).into(),
-        ScratchBlock::OpBAnd(1.0.into(), 1.0.into()).into(),
-        ScratchBlock::OpBAnd(1.0.into(), 0.0.into()).into(),
-        ScratchBlock::OpBAnd(0.0.into(), 1.0.into()).into(),
-        ScratchBlock::OpBAnd(0.0.into(), 0.0.into()).into(),
-        ScratchBlock::OpBOr(1.0.into(), 1.0.into()).into(),
-        ScratchBlock::OpBOr(1.0.into(), 0.0.into()).into(),
-        ScratchBlock::OpBOr(0.0.into(), 1.0.into()).into(),
-        ScratchBlock::OpBOr(0.0.into(), 0.0.into()).into(),
+        ScratchBlock::OpNot(1.0.into()).into(),
+        ScratchBlock::OpNot(0.0.into()).into(),
+        ScratchBlock::OpAnd(1.0.into(), 1.0.into()).into(),
+        ScratchBlock::OpAnd(1.0.into(), 0.0.into()).into(),
+        ScratchBlock::OpAnd(0.0.into(), 1.0.into()).into(),
+        ScratchBlock::OpAnd(0.0.into(), 0.0.into()).into(),
+        ScratchBlock::OpOr(1.0.into(), 1.0.into()).into(),
+        ScratchBlock::OpOr(1.0.into(), 0.0.into()).into(),
+        ScratchBlock::OpOr(0.0.into(), 1.0.into()).into(),
+        ScratchBlock::OpOr(0.0.into(), 0.0.into()).into(),
         // Strings
-        ScratchBlock::OpBAnd("true".into(), "true".into()).into(),
-        ScratchBlock::OpBAnd("true".into(), "false".into()).into(),
-        ScratchBlock::OpBAnd("false".into(), "true".into()).into(),
-        ScratchBlock::OpBAnd("false".into(), "false".into()).into(),
-        ScratchBlock::OpBOr("true".into(), "true".into()).into(),
-        ScratchBlock::OpBOr("true".into(), "false".into()).into(),
-        ScratchBlock::OpBOr("false".into(), "true".into()).into(),
-        ScratchBlock::OpBOr("false".into(), "false".into()).into(),
-        ScratchBlock::OpBNot("true".into()).into(),
-        ScratchBlock::OpBNot("false".into()).into(),
+        ScratchBlock::OpAnd("true".into(), "true".into()).into(),
+        ScratchBlock::OpAnd("true".into(), "false".into()).into(),
+        ScratchBlock::OpAnd("false".into(), "true".into()).into(),
+        ScratchBlock::OpAnd("false".into(), "false".into()).into(),
+        ScratchBlock::OpOr("true".into(), "true".into()).into(),
+        ScratchBlock::OpOr("true".into(), "false".into()).into(),
+        ScratchBlock::OpOr("false".into(), "true".into()).into(),
+        ScratchBlock::OpOr("false".into(), "false".into()).into(),
+        ScratchBlock::OpNot("true".into()).into(),
+        ScratchBlock::OpNot("false".into()).into(),
     ]));
 
     check_and(&memory, 0);
@@ -196,7 +196,7 @@ fn bool_ops() {
 fn bool_return() {
     let memory = run_code(vec![set(
         Ptr(0),
-        ScratchBlock::OpBAnd(gt(3.0, 2.0).into(), false.into()),
+        ScratchBlock::OpAnd(gt(3.0, 2.0).into(), false.into()),
     )]);
     assert_eq!(memory[0].convert_to_number(), 0.0);
 }

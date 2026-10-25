@@ -8,7 +8,7 @@
 //! let mut sprite = SpriteBuilder::new();
 //! sprite.add_script(
 //!     Script::new_green_flag(vec![
-//!         ScratchBlock::Log("Hello World".into()),
+//!         ScratchBlock::LogPrint("Hello World".into()),
 //!     ]),
 //! );
 //! // You can also add custom blocks...

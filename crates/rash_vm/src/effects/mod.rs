@@ -415,9 +415,9 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::OpRandom(a, b)
             | ScratchBlock::OpStrLetterOf(a, b)
             | ScratchBlock::OpStrContains(a, b)
-            | ScratchBlock::OpBAnd(a, b)
+            | ScratchBlock::OpAnd(a, b)
             | ScratchBlock::OpCmp(a, b, _)
-            | ScratchBlock::OpBOr(a, b) => {
+            | ScratchBlock::OpOr(a, b) => {
                 a.effects(c, v, l, e, f).then(&b.effects(c, v, l, e, f), v)
             }
 
@@ -425,16 +425,21 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::MotionChangeY(input)
             | ScratchBlock::MotionSetX(input)
             | ScratchBlock::MotionSetY(input)
-            | ScratchBlock::Log(input)
+            | ScratchBlock::LogPrint(input)
             | ScratchBlock::OpRound(input)
             | ScratchBlock::OpStrLen(input)
-            | ScratchBlock::OpBNot(input)
-            | ScratchBlock::OpMFloor(input)
-            | ScratchBlock::OpMAbs(input)
-            | ScratchBlock::OpMSqrt(input)
-            | ScratchBlock::OpMSin(input)
-            | ScratchBlock::OpMCos(input)
-            | ScratchBlock::OpMTan(input) => input.effects(c, v, l, e, f),
+            | ScratchBlock::OpNot(input)
+            | ScratchBlock::OpFloor(input)
+            | ScratchBlock::OpCeil(input)
+            | ScratchBlock::OpAbs(input)
+            | ScratchBlock::OpSqrt(input)
+            | ScratchBlock::OpLn(input)
+            | ScratchBlock::OpLog(input)
+            | ScratchBlock::OpExp(input)
+            | ScratchBlock::OpExp10(input)
+            | ScratchBlock::OpSin(input)
+            | ScratchBlock::OpCos(input)
+            | ScratchBlock::OpTan(input) => input.effects(c, v, l, e, f),
 
             ScratchBlock::ControlRepeatUntil(input, blocks)
             | ScratchBlock::ControlRepeat(input, blocks)

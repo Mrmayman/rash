@@ -3,7 +3,7 @@ use rand::RngExt;
 use crate::ScratchObject;
 
 declare_module!(
-    "op.rs", 3, floor, sin, cos, tan, round, cmp, random, ceil, trunc, nearest, fma
+    "op.rs", 3, floor, sin, cos, tan, cmp, random, ceil, trunc, nearest, fma, ln, log10, exp, exp10
 );
 
 pub extern "C" fn sin(value: f64) -> f64 {
@@ -19,16 +19,6 @@ pub extern "C" fn tan(value: f64) -> f64 {
         0.0 => f64::NEG_INFINITY,
         180.0 | -180.0 => f64::INFINITY,
         _ => value.to_radians().tan(),
-    }
-}
-
-pub extern "C" fn round(value: f64) -> f64 {
-    if value.fract().abs() == 0.5 {
-        // If number ends with .5 round up (Scratch behaviour).
-        // Override of Rust behaviour
-        value.ceil()
-    } else {
-        value.round()
     }
 }
 
@@ -105,4 +95,20 @@ pub extern "C" fn fma_f32(a: f32, b: f32, c: f32) -> f32 {
 
 pub extern "C" fn fma(a: f64, b: f64, c: f64) -> f64 {
     a.mul_add(b, c)
+}
+
+pub extern "C" fn ln(a: f64) -> f64 {
+    a.ln()
+}
+
+pub extern "C" fn log10(a: f64) -> f64 {
+    a.log10()
+}
+
+pub extern "C" fn exp(a: f64) -> f64 {
+    a.exp()
+}
+
+pub extern "C" fn exp10(a: f64) -> f64 {
+    10.0f64.powf(a)
 }

@@ -103,9 +103,9 @@ fn multiple_arguments_mixed_types() {
                 vec![
                     set(X, ScratchBlock::FunctionGetArg(0)),
                     change(X, ScratchBlock::FunctionGetArg(1)),
-                    ScratchBlock::Log(ScratchBlock::VarRead(X).into()),
+                    ScratchBlock::LogPrint(ScratchBlock::VarRead(X).into()),
                     change(X, ScratchBlock::FunctionGetArg(2)),
-                    ScratchBlock::Log(ScratchBlock::VarRead(X).into()),
+                    ScratchBlock::LogPrint(ScratchBlock::VarRead(X).into()),
                 ],
                 3,
                 CustomBlockId(0),

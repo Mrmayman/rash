@@ -17,52 +17,6 @@ use crate::{
 };
 
 impl Compiler<'_> {
-    pub fn op_m_tan(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op::TAN, &[F64], &[F64], &[num]);
-        builder.inst_results(inst)[0]
-    }
-
-    pub fn op_m_cos(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op::COS, &[F64], &[F64], &[num]);
-        builder.inst_results(inst)[0]
-    }
-
-    pub fn op_m_sin(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op::SIN, &[F64], &[F64], &[num]);
-        builder.inst_results(inst)[0]
-    }
-
-    pub fn op_m_sqrt(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let num = num.get_number(self, builder);
-        builder.ins().sqrt(num)
-    }
-
-    pub fn op_m_abs(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let num = num.get_number(self, builder);
-        builder.ins().fabs(num)
-    }
-
-    pub fn op_b_or(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_bool(self, builder);
-        let b = b.get_bool(self, builder);
-        builder.ins().bor(a, b)
-    }
-
-    pub fn op_b_not(&mut self, a: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_bool(self, builder);
-        let one = self.constants.get_int(1, builder);
-        builder.ins().isub(one, a)
-    }
-
-    pub fn op_b_and(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_bool(self, builder);
-        let b = b.get_bool(self, builder);
-        builder.ins().band(a, b)
-    }
-
     pub fn op_cmp(
         &mut self,
         a: &Input,
@@ -243,12 +197,6 @@ impl Compiler<'_> {
         builder.ins().fsub(a, b)
     }
 
-    pub fn op_mul(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
-        let a = a.get_number(self, builder);
-        let b = b.get_number(self, builder);
-        builder.ins().fmul(a, b)
-    }
-
     pub fn op_div(&mut self, a: &Input, b: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let a = a.get_number(self, builder);
         if IMPRECISE_DIVISION && let Input::Obj(obj) = b {
@@ -350,12 +298,6 @@ impl Compiler<'_> {
         ScratchValue::Num(res)
     }
 
-    pub fn op_m_floor(&mut self, n: &Input, builder: &mut FunctionBuilder<'_>) -> ScratchValue {
-        let n = n.get_number(self, builder);
-        let result = builder.ins().floor(n);
-        ScratchValue::Num(result)
-    }
-
     pub fn op_str_letter(
         &mut self,
         letter: &Input,
@@ -402,8 +344,14 @@ impl Compiler<'_> {
 
     pub fn op_round(&mut self, num: &Input, builder: &mut FunctionBuilder<'_>) -> Value {
         let num = num.get_number(self, builder);
-        let inst = self.call_function(builder, callbacks::op::ROUND, &[F64], &[F64], &[num]);
-        builder.inst_results(inst)[0]
+        let floor = builder.ins().floor(num);
+        let fract = builder.ins().fsub(num, floor);
+
+        let half = self.constants.get_float(0.5, builder);
+        let is_low = builder.ins().fcmp(FloatCC::LessThan, fract, half);
+
+        let ceil = builder.ins().ceil(num);
+        builder.ins().select(is_low, floor, ceil)
     }
 }
 

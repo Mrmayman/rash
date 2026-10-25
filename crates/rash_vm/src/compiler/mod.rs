@@ -47,27 +47,38 @@ pub enum ScratchBlock {
     /// Reads a value from a value and returns it.
     /// Meant to be used as the input to other blocks.
     VarRead(Ptr),
+
     OpAdd(Input, Input),
     OpSub(Input, Input),
     OpMul(Input, Input),
     OpDiv(Input, Input),
+
     OpRound(Input),
     OpStrJoin(Input, Input),
     OpMod(Input, Input),
-    OpStrLen(Input),
-    OpBAnd(Input, Input),
-    OpBNot(Input),
-    OpBOr(Input, Input),
-    OpMFloor(Input),
-    OpMAbs(Input),
-    OpMSqrt(Input),
-    OpMSin(Input),
-    OpMCos(Input),
-    OpMTan(Input),
     OpCmp(Input, Input, Ordering),
     OpRandom(Input, Input),
+
+    OpAnd(Input, Input),
+    OpNot(Input),
+    OpOr(Input, Input),
+
+    OpFloor(Input),
+    OpCeil(Input),
+    OpAbs(Input),
+    OpSqrt(Input),
+    OpSin(Input),
+    OpCos(Input),
+    OpTan(Input),
+    OpLn(Input),
+    OpLog(Input),
+    OpExp(Input),
+    OpExp10(Input),
+
+    OpStrLen(Input),
     OpStrLetterOf(Input, Input),
     OpStrContains(Input, Input),
+
     ControlIf(Input, Vec<ScratchBlock>),
     ControlIfElse(Input, Vec<ScratchBlock>, Vec<ScratchBlock>),
     /// A repeat loop that *supports* screen refresh
@@ -81,6 +92,7 @@ pub enum ScratchBlock {
     ControlRepeatUntil(Input, Vec<ScratchBlock>),
     ControlForever(Vec<ScratchBlock>),
     ControlStopThisScript,
+
     FunctionCallNoScreenRefresh(CustomBlockId, Vec<Input>),
     FunctionCallScreenRefresh(CustomBlockId, Vec<Input>),
     FunctionGetArg(usize),
@@ -106,6 +118,7 @@ pub enum ScratchBlock {
     /// loop as screen refreshes are auto-inserted in
     /// loops matching Scratch behaviour.
     ScreenRefresh,
+
     MotionGoToXY(Input, Input),
     MotionChangeX(Input),
     MotionChangeY(Input),
@@ -113,10 +126,11 @@ pub enum ScratchBlock {
     MotionSetY(Input),
     MotionGetX,
     MotionGetY,
+
     LooksSetShown(bool),
     SensingDaysSince2000,
 
-    Log(Input),
+    LogPrint(Input),
 }
 
 #[derive(PartialEq, Eq, Debug, Default, Clone, Copy)]
@@ -180,30 +194,35 @@ impl ScratchBlock {
             ScratchBlock::VarRead(ptr) => Some(vartype(*ptr)),
             ScratchBlock::LocalsGet(n) => Some(localtype(*n)),
             ScratchBlock::OpRandom(_, _)
-            | ScratchBlock::OpMSqrt(_)
+            | ScratchBlock::OpSqrt(_)
             | ScratchBlock::OpMod(_, _)
+            | ScratchBlock::OpLn(_)
+            | ScratchBlock::OpLog(_)
             | ScratchBlock::OpDiv(_, _) => Some(VariableWrite::normal(VarTypeChecked::Number)),
             ScratchBlock::FunctionGetArg(_) => Some(VariableWrite::normal(VarTypeChecked::Object)),
 
             ScratchBlock::OpAdd(_, _)
             | ScratchBlock::OpSub(_, _)
             | ScratchBlock::OpMul(_, _)
-            | ScratchBlock::OpMFloor(_)
+            | ScratchBlock::OpFloor(_)
+            | ScratchBlock::OpCeil(_)
             | ScratchBlock::OpRound(_)
-            | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpMSin(_)
-            | ScratchBlock::OpMCos(_)
-            | ScratchBlock::OpMTan(_)
+            | ScratchBlock::OpAbs(_)
+            | ScratchBlock::OpSin(_)
+            | ScratchBlock::OpCos(_)
+            | ScratchBlock::OpTan(_)
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::SensingDaysSince2000
+            | ScratchBlock::OpExp(_)
+            | ScratchBlock::OpExp10(_)
             | ScratchBlock::OpStrLen(_) => Some(VariableWrite::skip_nan(VarTypeChecked::Number)),
             ScratchBlock::OpStrLetterOf(_, _) | ScratchBlock::OpStrJoin(_, _) => {
                 Some(VariableWrite::normal(VarTypeChecked::String))
             }
-            ScratchBlock::OpBAnd(_, _)
-            | ScratchBlock::OpBNot(_)
-            | ScratchBlock::OpBOr(_, _)
+            ScratchBlock::OpAnd(_, _)
+            | ScratchBlock::OpNot(_)
+            | ScratchBlock::OpOr(_, _)
             | ScratchBlock::OpStrContains(_, _)
             | ScratchBlock::OpCmp(_, _, _) => Some(VariableWrite::normal(VarTypeChecked::Bool)),
             ScratchBlock::VarSet(_, _)
@@ -224,7 +243,7 @@ impl ScratchBlock {
             | ScratchBlock::ControlRepeatUntil(_, _)
             | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::LocalsWith(_, _)
-            | ScratchBlock::Log(_) => None,
+            | ScratchBlock::LogPrint(_) => None,
         }
     }
 
@@ -242,15 +261,20 @@ impl ScratchBlock {
             | ScratchBlock::OpStrJoin(_, _)
             | ScratchBlock::OpMod(_, _)
             | ScratchBlock::OpStrLen(_)
-            | ScratchBlock::OpBAnd(_, _)
-            | ScratchBlock::OpBNot(_)
-            | ScratchBlock::OpBOr(_, _)
-            | ScratchBlock::OpMFloor(_)
-            | ScratchBlock::OpMAbs(_)
-            | ScratchBlock::OpMSqrt(_)
-            | ScratchBlock::OpMSin(_)
-            | ScratchBlock::OpMCos(_)
-            | ScratchBlock::OpMTan(_)
+            | ScratchBlock::OpAnd(_, _)
+            | ScratchBlock::OpNot(_)
+            | ScratchBlock::OpOr(_, _)
+            | ScratchBlock::OpFloor(_)
+            | ScratchBlock::OpCeil(_)
+            | ScratchBlock::OpAbs(_)
+            | ScratchBlock::OpSqrt(_)
+            | ScratchBlock::OpSin(_)
+            | ScratchBlock::OpCos(_)
+            | ScratchBlock::OpTan(_)
+            | ScratchBlock::OpLn(_)
+            | ScratchBlock::OpLog(_)
+            | ScratchBlock::OpExp(_)
+            | ScratchBlock::OpExp10(_)
             | ScratchBlock::OpCmp(_, _, _)
             | ScratchBlock::OpRandom(_, _)
             | ScratchBlock::OpStrLetterOf(_, _)
@@ -281,7 +305,7 @@ impl ScratchBlock {
             ScratchBlock::FunctionCallScreenRefresh(_, _) => true,
 
             ScratchBlock::ScreenRefresh
-            | ScratchBlock::Log(_)
+            | ScratchBlock::LogPrint(_)
             | ScratchBlock::MotionGoToXY(_, _)
             | ScratchBlock::MotionChangeX(_)
             | ScratchBlock::MotionChangeY(_)
@@ -337,20 +361,25 @@ impl ScratchBlock {
             }
             ScratchBlock::VarSet(_, i)
             | ScratchBlock::VarChange(_, i)
-            | ScratchBlock::Log(i)
+            | ScratchBlock::LogPrint(i)
             | ScratchBlock::MotionChangeX(i)
             | ScratchBlock::MotionChangeY(i)
             | ScratchBlock::MotionSetX(i)
             | ScratchBlock::MotionSetY(i)
             | ScratchBlock::OpRound(i)
-            | ScratchBlock::OpMAbs(i)
-            | ScratchBlock::OpMSqrt(i)
-            | ScratchBlock::OpMSin(i)
-            | ScratchBlock::OpMCos(i)
-            | ScratchBlock::OpMTan(i)
+            | ScratchBlock::OpAbs(i)
+            | ScratchBlock::OpSqrt(i)
+            | ScratchBlock::OpSin(i)
+            | ScratchBlock::OpCos(i)
+            | ScratchBlock::OpTan(i)
             | ScratchBlock::OpStrLen(i)
-            | ScratchBlock::OpMFloor(i)
-            | ScratchBlock::OpBNot(i) => {
+            | ScratchBlock::OpFloor(i)
+            | ScratchBlock::OpCeil(i)
+            | ScratchBlock::OpLn(i)
+            | ScratchBlock::OpLog(i)
+            | ScratchBlock::OpExp(i)
+            | ScratchBlock::OpExp10(i)
+            | ScratchBlock::OpNot(i) => {
                 if let Input::Block(b) = i
                     && walk_inputs
                 {
@@ -364,8 +393,8 @@ impl ScratchBlock {
             | ScratchBlock::OpDiv(a, b)
             | ScratchBlock::OpStrJoin(a, b)
             | ScratchBlock::OpMod(a, b)
-            | ScratchBlock::OpBAnd(a, b)
-            | ScratchBlock::OpBOr(a, b)
+            | ScratchBlock::OpAnd(a, b)
+            | ScratchBlock::OpOr(a, b)
             | ScratchBlock::OpCmp(a, b, _)
             | ScratchBlock::OpRandom(a, b)
             | ScratchBlock::OpStrLetterOf(a, b)
@@ -449,20 +478,25 @@ impl ScratchBlock {
             }
             ScratchBlock::VarSet(_, i)
             | ScratchBlock::VarChange(_, i)
-            | ScratchBlock::Log(i)
+            | ScratchBlock::LogPrint(i)
             | ScratchBlock::MotionChangeX(i)
             | ScratchBlock::MotionChangeY(i)
             | ScratchBlock::MotionSetX(i)
             | ScratchBlock::MotionSetY(i)
             | ScratchBlock::OpRound(i)
-            | ScratchBlock::OpMAbs(i)
-            | ScratchBlock::OpMSqrt(i)
-            | ScratchBlock::OpMSin(i)
-            | ScratchBlock::OpMCos(i)
-            | ScratchBlock::OpMTan(i)
+            | ScratchBlock::OpAbs(i)
+            | ScratchBlock::OpSqrt(i)
+            | ScratchBlock::OpSin(i)
+            | ScratchBlock::OpCos(i)
+            | ScratchBlock::OpTan(i)
             | ScratchBlock::OpStrLen(i)
-            | ScratchBlock::OpMFloor(i)
-            | ScratchBlock::OpBNot(i) => {
+            | ScratchBlock::OpFloor(i)
+            | ScratchBlock::OpCeil(i)
+            | ScratchBlock::OpLn(i)
+            | ScratchBlock::OpLog(i)
+            | ScratchBlock::OpExp(i)
+            | ScratchBlock::OpExp10(i)
+            | ScratchBlock::OpNot(i) => {
                 if let Input::Block(b) = i
                     && walk_inputs
                 {
@@ -476,8 +510,8 @@ impl ScratchBlock {
             | ScratchBlock::OpDiv(a, b)
             | ScratchBlock::OpStrJoin(a, b)
             | ScratchBlock::OpMod(a, b)
-            | ScratchBlock::OpBAnd(a, b)
-            | ScratchBlock::OpBOr(a, b)
+            | ScratchBlock::OpAnd(a, b)
+            | ScratchBlock::OpOr(a, b)
             | ScratchBlock::OpCmp(a, b, _)
             | ScratchBlock::OpRandom(a, b)
             | ScratchBlock::OpStrLetterOf(a, b)
@@ -668,7 +702,9 @@ impl<'a> Compiler<'a> {
                 return Some(ScratchValue::Num(self.op_sub(a, b, builder)));
             }
             ScratchBlock::OpMul(a, b) => {
-                return Some(ScratchValue::Num(self.op_mul(a, b, builder)));
+                let a = a.get_number(self, builder);
+                let b = b.get_number(self, builder);
+                return Some(ScratchValue::Num(builder.ins().fmul(a, b)));
             }
             ScratchBlock::OpDiv(a, b) => {
                 return Some(ScratchValue::Num(self.op_div(a, b, builder)));
@@ -679,7 +715,7 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpStrJoin(a, b) => {
                 return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));
             }
-            ScratchBlock::Log(msg) => self.dbg_log(msg, builder),
+            ScratchBlock::LogPrint(msg) => self.dbg_log(msg, builder),
             ScratchBlock::ControlRepeat(input, vec) => {
                 self.control_repeat(builder, input, vec);
             }
@@ -716,16 +752,31 @@ impl<'a> Compiler<'a> {
                 return Some(self.op_str_len(input, builder));
             }
             ScratchBlock::OpRandom(a, b) => return Some(self.op_random(a, b, builder)),
-            ScratchBlock::OpBAnd(a, b) => {
-                return Some(ScratchValue::Bool(self.op_b_and(a, b, builder)));
+            ScratchBlock::OpAnd(a, b) => {
+                let a = a.get_bool(self, builder);
+                let b = b.get_bool(self, builder);
+                return Some(ScratchValue::Bool(builder.ins().band(a, b)));
             }
-            ScratchBlock::OpBNot(a) => {
-                return Some(ScratchValue::Bool(self.op_b_not(a, builder)));
+            ScratchBlock::OpNot(a) => {
+                let a = a.get_bool(self, builder);
+                let one = self.constants.get_int(1, builder);
+                return Some(ScratchValue::Bool(builder.ins().isub(one, a)));
             }
-            ScratchBlock::OpBOr(a, b) => {
-                return Some(ScratchValue::Bool(self.op_b_or(a, b, builder)));
+            ScratchBlock::OpOr(a, b) => {
+                let a = a.get_bool(self, builder);
+                let b = b.get_bool(self, builder);
+                return Some(ScratchValue::Bool(builder.ins().bor(a, b)));
             }
-            ScratchBlock::OpMFloor(n) => return Some(self.op_m_floor(n, builder)),
+            ScratchBlock::OpFloor(n) => {
+                let n = n.get_number(self, builder);
+                let result = builder.ins().floor(n);
+                return Some(ScratchValue::Num(result));
+            }
+            ScratchBlock::OpCeil(n) => {
+                let n = n.get_number(self, builder);
+                let result = builder.ins().ceil(n);
+                return Some(ScratchValue::Num(result));
+            }
             ScratchBlock::OpStrLetterOf(letter, string) => {
                 return Some(ScratchValue::Object(
                     self.op_str_letter(letter, string, builder),
@@ -739,20 +790,50 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpRound(num) => {
                 return Some(ScratchValue::Num(self.op_round(num, builder)));
             }
-            ScratchBlock::OpMAbs(num) => {
-                return Some(ScratchValue::Num(self.op_m_abs(num, builder)));
+            ScratchBlock::OpAbs(num) => {
+                let num = num.get_number(&mut *self, builder);
+                return Some(ScratchValue::Num(builder.ins().fabs(num)));
             }
-            ScratchBlock::OpMSqrt(num) => {
-                return Some(ScratchValue::Num(self.op_m_sqrt(num, builder)));
+            ScratchBlock::OpSqrt(num) => {
+                let num = num.get_number(self, builder);
+                return Some(ScratchValue::Num(builder.ins().sqrt(num)));
             }
-            ScratchBlock::OpMSin(num) => {
-                return Some(ScratchValue::Num(self.op_m_sin(num, builder)));
+            ScratchBlock::OpSin(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::SIN, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
             }
-            ScratchBlock::OpMCos(num) => {
-                return Some(ScratchValue::Num(self.op_m_cos(num, builder)));
+            ScratchBlock::OpCos(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::COS, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
             }
-            ScratchBlock::OpMTan(num) => {
-                return Some(ScratchValue::Num(self.op_m_tan(num, builder)));
+            ScratchBlock::OpTan(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::TAN, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpLn(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::LN, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpLog(num) => {
+                let num = num.get_number(self, builder);
+                let inst =
+                    self.call_function(builder, callbacks::op::LOG10, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpExp(num) => {
+                let num = num.get_number(self, builder);
+                let inst = self.call_function(builder, callbacks::op::EXP, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
+            }
+            ScratchBlock::OpExp10(num) => {
+                let num = num.get_number(self, builder);
+                let inst =
+                    self.call_function(builder, callbacks::op::EXP10, &[F64], &[F64], &[num]);
+                return Some(ScratchValue::Num(builder.inst_results(inst)[0]));
             }
             ScratchBlock::ScreenRefresh => {
                 self.screen_refresh(builder);

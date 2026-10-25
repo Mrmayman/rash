@@ -16,15 +16,19 @@ pub fn mathop(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
     let operator = expect_str(operator, "b.fields.OPERATOR").trace(F)?;
 
     match operator {
-        "abs" => Ok(ScratchBlock::OpMAbs(num)),
-        "floor" => Ok(ScratchBlock::OpMFloor(num)),
-        // "ceiling" => Ok(ScratchBlock::OpMCeiling(num)),
-        "sqrt" => Ok(ScratchBlock::OpMSqrt(num)),
-        "sin" => Ok(ScratchBlock::OpMSin(num)),
-        "cos" => Ok(ScratchBlock::OpMCos(num)),
-        "tan" => Ok(ScratchBlock::OpMTan(num)),
+        "abs" => Ok(ScratchBlock::OpAbs(num)),
+        "floor" => Ok(ScratchBlock::OpFloor(num)),
+        "ceiling" => Ok(ScratchBlock::OpCeil(num)),
+        "sqrt" => Ok(ScratchBlock::OpSqrt(num)),
+        "sin" => Ok(ScratchBlock::OpSin(num)),
+        "cos" => Ok(ScratchBlock::OpCos(num)),
+        "tan" => Ok(ScratchBlock::OpTan(num)),
+        "e ^" => Ok(ScratchBlock::OpExp(num)),
+        "10 ^" => Ok(ScratchBlock::OpExp10(num)),
+        "ln" => Ok(ScratchBlock::OpLn(num)),
+        "log" => Ok(ScratchBlock::OpLog(num)),
         _ => {
-            println!("Unknown operator (mathop): {operator}\n");
+            eprintln!("Unknown operator (mathop): {operator}\n");
             Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
         }
     }
@@ -32,19 +36,19 @@ pub fn mathop(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
 
 pub fn not(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Error> {
     let bool = get::boolean(b, ctx, "OPERAND").trace("op::not")?;
-    Ok(ScratchBlock::OpBNot(bool))
+    Ok(ScratchBlock::OpNot(bool))
 }
 
 pub fn and(b: &Block, ctx: &mut CompileContext) -> ScratchBlock {
     let bool1 = get::number(b, ctx, "OPERAND1").unwrap_or(false.into());
     let bool2 = get::number(b, ctx, "OPERAND2").unwrap_or(false.into());
-    ScratchBlock::OpBAnd(bool1, bool2)
+    ScratchBlock::OpAnd(bool1, bool2)
 }
 
 pub fn or(b: &Block, ctx: &mut CompileContext) -> ScratchBlock {
     let bool1 = get::number(b, ctx, "OPERAND1").unwrap_or(false.into());
     let bool2 = get::number(b, ctx, "OPERAND2").unwrap_or(false.into());
-    ScratchBlock::OpBOr(bool1, bool2)
+    ScratchBlock::OpOr(bool1, bool2)
 }
 
 pub fn cmp(b: &Block, ctx: &mut CompileContext, cmp: Ordering) -> Result<ScratchBlock, Sb3Error> {
