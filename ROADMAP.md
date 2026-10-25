@@ -1,59 +1,29 @@
 # Roadmap of this project
 
-> WIP means Work-In-Progress
+Progress on each Scratch block can be found in this [Google Docs spreadsheet](https://docs.google.com/spreadsheets/d/1jYi5lsAyq6XeJPCKCpk4UkqF1YWVPX9C4d7-eTbXw9U/edit?usp=sharing)
 
-Note: my current goal is performance and correctness fixes
-rather than chasing wide compatibility, although that's definitely on the roadmap.
+Here are other things:
 
-Control operations:
-
-- [x] If, If-Else
-- [x] Repeat, Repeat Until, Forever
-- [ ] Wait,
-- [ ] Wait Until
-- [x] Stop this script
-- [ ] Stop all
-- [ ] Stop other scripts in sprite
-
-Math Operations:
-
-- [x] Add, subtract, multiply, divide
-- [x] && || !
-- [x] < > ==
-- [x] String: Join, Contains, Length
-- [x] Mod, Round, Abs
-- [x] Floor
-- [ ] Ceiling
-- [x] Sqrt
-- [x] Sin, Cos, Tan
-- [ ] ASin, ACos, ATan
-- [ ] Ln, Log
-- [ ] E^, 10^
-
-Other blocks:
-
-- [x] Days since 2000
-- [ ] Timer, reset timer
-- [ ] Keyboard/mouse input
-
-Core features:
+## Core features
 
 - [x] Custom Blocks
 - [x] Variables
+- [ ] Local variables
 - [ ] Lists
+- [ ] Local lists
 - [ ] Broadcasts
 - [ ] Clones
 
-Graphics:
-- [ ] Hide, Show blocks
-- [x] Position blocks
-- [ ] Rotation blocks
-- [ ] Size block
+## Graphics
+- [x] Hide, Show blocks
+- [x] Position
+- [ ] Go to target
+- [ ] Rotation, move steps
+- [ ] Size
 - [x] Render sprites & stage
-- [ ] Render text
-- [ ] Render speech and thought bubbles
-- [ ] Sprite costumes and backdrops
-- [ ] Sprite graphical effects (Ghost, Fisheye, etc)
+- [ ] Render text (speech and thought bubbles)
+- [ ] Switch costumes and backdrops
+- [ ] Effects (Ghost, Fisheye, etc)
 - [ ] Pen canvas and clear operation
 - [ ] Pen stamps
 - [ ] Pen lines
