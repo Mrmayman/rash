@@ -50,17 +50,13 @@ fn get_char_at_index(index: f64, string: &str) -> Option<char> {
 
 /// Callback from JIT code to join two strings
 pub unsafe extern "C" fn join(a: *mut EcoString, b: *mut EcoString, out: *mut EcoString) {
-    let a_ref = unsafe { &*a };
+    // TODO: verify the safety of this
+    let mut a = unsafe { a.read() };
     let b_ref = unsafe { &*b };
 
-    // TODO: Optimizations after analysing EcoString's lifetimes
-    let mut result = EcoString::new();
-    result.push_str(a_ref);
-    result.push_str(b_ref);
+    a.push_str(b_ref);
     unsafe {
-        out.write(result);
-
-        std::ptr::drop_in_place(a);
+        out.write(a);
         std::ptr::drop_in_place(b);
     }
 }

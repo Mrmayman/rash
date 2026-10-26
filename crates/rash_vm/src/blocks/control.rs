@@ -249,19 +249,23 @@ impl Compiler<'_> {
             match param.val {
                 ScratchValue::Num(_) => {
                     let ScratchValue::Num(v) = val.val else {
-                        panic!("Not a number? Some type checking went wrong (val: {val:?})");
+                        panic!(
+                            "Not a number? Some type checking went wrong ({ptr:?} val: {val:?})"
+                        );
                     };
                     direct_params.push(v.into());
                 }
                 ScratchValue::Bool(_) => {
                     let ScratchValue::Bool(v) = val.val else {
-                        panic!("Not a bool? Some type checking went wrong (val: {val:?})");
+                        panic!("Not a bool? Some type checking went wrong ({ptr:?} val: {val:?})");
                     };
                     direct_params.push(v.into());
                 }
                 ScratchValue::String(_) => {
                     let ScratchValue::String(s) = val.val else {
-                        panic!("Not a string? Some type checking went wrong (val: {val:?})");
+                        panic!(
+                            "Not a string? Some type checking went wrong ({ptr:?} val: {val:?})"
+                        );
                     };
                     let [i1, i2] = s.0;
                     direct_params.push(i1.into());

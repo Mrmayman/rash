@@ -11,8 +11,7 @@ use cranelift::{
 use crate::{
     ScratchBlock, callbacks,
     compiler::{Compiler, VarTypeChecked},
-    data_types::ID_STRING,
-    input_primitives::{CompObj, Input, ScratchValue},
+    input_primitives::{CompStr, Input, ScratchValue},
 };
 
 impl Compiler<'_> {
@@ -208,7 +207,7 @@ impl Compiler<'_> {
         a: &Input,
         b: &Input,
         builder: &mut FunctionBuilder<'_>,
-    ) -> CompObj {
+    ) -> CompStr {
         // Get strings
         let a = a.get_string(self, builder);
         let b = b.get_string(self, builder);
@@ -221,10 +220,9 @@ impl Compiler<'_> {
             &[a, b, self.temp_slot4.0],
         );
         // Read resulting string
-        let id = self.constants.get_int(ID_STRING, builder);
         let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
         let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
-        CompObj([id, i1, i2])
+        CompStr([i1, i2])
     }
 
     pub fn dbg_log(&mut self, msg: &Input, builder: &mut FunctionBuilder<'_>) {
@@ -299,7 +297,7 @@ impl Compiler<'_> {
         letter: &Input,
         string: &Input,
         builder: &mut FunctionBuilder<'_>,
-    ) -> CompObj {
+    ) -> CompStr {
         let string = string.get_string(self, builder);
         let letter = letter.get_number(self, builder);
 
@@ -311,10 +309,9 @@ impl Compiler<'_> {
             &[string, letter, self.temp_slot4.0],
         );
 
-        let id = self.constants.get_int(ID_STRING, builder);
         let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
         let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
-        CompObj([id, i1, i2])
+        CompStr([i1, i2])
     }
 
     pub fn op_str_contains(
