@@ -76,8 +76,6 @@ pub use input_primitives::{Input, Ptr};
 pub use rash_core::*;
 pub use runtime::{ProjectBuilder, Runtime, Script, SpriteBuilder};
 
-use smol_str::SmolStr;
-
 pub fn print_memory(memory: &[ScratchObject]) {
     println!("memory: {:X}", memory.as_ptr() as usize);
 
@@ -189,8 +187,4 @@ pub mod builder {
     pub fn lt(a: impl Into<Input>, b: impl Into<Input>) -> ScratchBlock {
         ScratchBlock::OpCmp(a.into(), b.into(), std::cmp::Ordering::Less)
     }
-}
-
-fn stat(s: &'static str) -> SmolStr {
-    SmolStr::new_static(s)
 }

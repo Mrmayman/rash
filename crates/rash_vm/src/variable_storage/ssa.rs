@@ -14,7 +14,7 @@ use crate::{
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING},
     effects::{Effects, VariableWrite},
-    input_primitives::ScratchValue,
+    input_primitives::{CompObj, CompStr, ScratchValue},
     variable_storage::VariableSlot,
 };
 
@@ -67,16 +67,14 @@ impl SsaVarStore {
                 VarTypeChecked::String => {
                     let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
                     let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
-                    let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
-                    ScratchValue::String([i2, i3, i4])
+                    ScratchValue::String(CompStr([i2, i3]))
                 }
                 VarTypeChecked::Object => {
                     let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
                     let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
                     let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
-                    let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
 
-                    ScratchValue::Object([i1, i2, i3, i4])
+                    ScratchValue::Object(CompObj([i1, i2, i3]))
                 }
             };
 
@@ -169,14 +167,14 @@ impl super::VarStore for SsaVarStore {
                     let id = constants.get_int(ID_STRING, builder);
                     builder.ins().store(MemFlags::new(), id, ptr, 0);
 
-                    for (i, val) in vals.iter().enumerate() {
+                    for (i, val) in vals.0.iter().enumerate() {
                         builder
                             .ins()
                             .store(MemFlags::new(), *val, ptr, ((i + 1) * 8) as i32);
                     }
                 }
                 ScratchValue::Object(vals) => {
-                    for (i, val) in vals.iter().enumerate() {
+                    for (i, val) in vals.0.iter().enumerate() {
                         builder
                             .ins()
                             .store(MemFlags::new(), *val, ptr, (i * 8) as i32);
@@ -201,9 +199,8 @@ impl super::VarStore for SsaVarStore {
                 let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
                 let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
                 let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
 
-                *val = VariableSlot::normal(ScratchValue::Object([i1, i2, i3, i4]));
+                *val = VariableSlot::normal(ScratchValue::Object(CompObj([i1, i2, i3])));
                 continue;
             }
             let Some(write) = write else { continue };
@@ -220,8 +217,7 @@ impl super::VarStore for SsaVarStore {
                 VarTypeChecked::String => {
                     let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
                     let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
-                    let i4 = builder.ins().load(I64, MemFlags::new(), ptr, 24);
-                    *val = VariableSlot::normal(ScratchValue::String([i2, i3, i4]));
+                    *val = VariableSlot::normal(ScratchValue::String(CompStr([i2, i3])));
                 }
                 VarTypeChecked::Object => unreachable!(),
             }

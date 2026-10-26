@@ -11,8 +11,7 @@ use cranelift::{
 use crate::{
     ScratchBlock, callbacks,
     compiler::{Compiler, VarTypeChecked},
-    data_types::ID_STRING,
-    input_primitives::{Input, ScratchValue},
+    input_primitives::{CompStr, Input, ScratchValue},
 };
 
 impl Compiler<'_> {
@@ -134,21 +133,15 @@ impl Compiler<'_> {
         let obj_first = a.get_object(self, builder);
         let obj_second = b.get_object(self, builder);
 
+        let [a1, a2, a3] = obj_first.0;
+        let [b1, b2, b3] = obj_second.0;
+
         let inst = self.call_function(
             builder,
             callbacks::op::CMP,
-            &[I64; 8],
+            &[I64; 6],
             &[I64],
-            &[
-                obj_first[0],
-                obj_first[1],
-                obj_first[2],
-                obj_first[3],
-                obj_second[0],
-                obj_second[1],
-                obj_second[2],
-                obj_second[3],
-            ],
+            &[a1, a2, a3, b1, b2, b3],
         );
         let r = builder.inst_results(inst)[0];
         let out = builder.ins().icmp_imm(IntCC::Equal, r, comp as i64);
@@ -214,7 +207,7 @@ impl Compiler<'_> {
         a: &Input,
         b: &Input,
         builder: &mut FunctionBuilder<'_>,
-    ) -> [Value; 4] {
+    ) -> CompStr {
         // Get strings
         let a = a.get_string(self, builder);
         let b = b.get_string(self, builder);
@@ -227,11 +220,9 @@ impl Compiler<'_> {
             &[a, b, self.temp_slot4.0],
         );
         // Read resulting string
-        let id = self.constants.get_int(ID_STRING, builder);
         let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
         let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
-        let i3 = builder.ins().stack_load(I64, self.temp_slot4.1, 16);
-        [id, i1, i2, i3]
+        CompStr([i1, i2])
     }
 
     pub fn dbg_log(&mut self, msg: &Input, builder: &mut FunctionBuilder<'_>) {
@@ -306,7 +297,7 @@ impl Compiler<'_> {
         letter: &Input,
         string: &Input,
         builder: &mut FunctionBuilder<'_>,
-    ) -> [Value; 4] {
+    ) -> CompStr {
         let string = string.get_string(self, builder);
         let letter = letter.get_number(self, builder);
 
@@ -318,11 +309,9 @@ impl Compiler<'_> {
             &[string, letter, self.temp_slot4.0],
         );
 
-        let id = self.constants.get_int(ID_STRING, builder);
         let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
         let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
-        let i3 = builder.ins().stack_load(I64, self.temp_slot4.1, 16);
-        [id, i1, i2, i3]
+        CompStr([i1, i2])
     }
 
     pub fn op_str_contains(

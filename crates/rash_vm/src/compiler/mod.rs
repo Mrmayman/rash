@@ -17,7 +17,7 @@ use cranelift::{
         types::{F64, I64},
     },
 };
-use smol_str::SmolStr;
+use ecow::EcoString;
 
 use crate::{
     callbacks::{
@@ -27,7 +27,7 @@ use crate::{
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
     effects::{Effects, VariableWrite, analyze},
-    input_primitives::{Input, Ptr, ScratchValue},
+    input_primitives::{CompObj, CompStr, Input, Ptr, RtStr, ScratchValue},
     jit_func::JitArgs,
     runtime::CustomBlockId,
     variable_storage::{GenericVarStore, SsaVarStore, VarStore},
@@ -586,11 +586,25 @@ pub struct Compiler<'compiler> {
     pub memory: &'compiler [ScratchObject],
     pub effects: Effects,
     pub call_conv: CallConv,
-    pub static_strings: Vec<SmolStr>,
+    pub static_strings: Vec<EcoString>,
 
     /// See [`Compiler::vars_to_avoid_clobbering`] for more info.
     pub clobber_stack: HashSet<Ptr>,
     pub locals_stack: Vec<Vec<(ScratchValue, bool)>>,
+    /// Before:
+    ///
+    /// ```txt
+    /// temp = some_operation(x.clone())
+    /// drop(x)
+    /// x = temp
+    /// ```
+    ///
+    /// After:
+    ///
+    /// ```txt
+    /// x = some_operation(x) // dropped inside the function
+    /// ```
+    pub move_optimize: Ptr,
 
     pub constants: ConstantMap,
     pub func_store: FunctionStore,
@@ -690,6 +704,7 @@ impl<'a> Compiler<'a> {
             static_strings: Vec::new(),
             clobber_stack: HashSet::new(),
             locals_stack: Vec::new(),
+            move_optimize: Ptr(usize::MAX),
             memory,
             args_list,
             sprite_id,
@@ -727,9 +742,6 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpMod(a, b) => {
                 return Some(ScratchValue::Num(self.op_modulo(a, b, builder)));
             }
-            ScratchBlock::OpStrJoin(a, b) => {
-                return Some(ScratchValue::Object(self.op_str_join(a, b, builder)));
-            }
             ScratchBlock::LogPrint(msg) => self.dbg_log(msg, builder),
             ScratchBlock::ControlRepeat(input, vec) => {
                 self.control_repeat(builder, input, vec);
@@ -763,8 +775,21 @@ impl<'a> Compiler<'a> {
             ScratchBlock::OpCmp(a, b, ordering) => {
                 return Some(ScratchValue::Bool(self.op_cmp(a, b, builder, *ordering)));
             }
+            ScratchBlock::OpStrJoin(a, b) => {
+                return Some(ScratchValue::String(self.op_str_join(a, b, builder)));
+            }
             ScratchBlock::OpStrLen(input) => {
                 return Some(self.op_str_len(input, builder));
+            }
+            ScratchBlock::OpStrLetterOf(letter, string) => {
+                return Some(ScratchValue::String(
+                    self.op_str_letter(letter, string, builder),
+                ));
+            }
+            ScratchBlock::OpStrContains(string, pattern) => {
+                return Some(ScratchValue::Bool(
+                    self.op_str_contains(string, pattern, builder),
+                ));
             }
             ScratchBlock::OpRandom(a, b) => return Some(self.op_random(a, b, builder)),
             ScratchBlock::OpAnd(a, b) => {
@@ -791,16 +816,6 @@ impl<'a> Compiler<'a> {
                 let n = n.get_number(self, builder);
                 let result = builder.ins().ceil(n);
                 return Some(ScratchValue::Num(result));
-            }
-            ScratchBlock::OpStrLetterOf(letter, string) => {
-                return Some(ScratchValue::Object(
-                    self.op_str_letter(letter, string, builder),
-                ));
-            }
-            ScratchBlock::OpStrContains(string, pattern) => {
-                return Some(ScratchValue::Bool(
-                    self.op_str_contains(string, pattern, builder),
-                ));
             }
             ScratchBlock::OpRound(num) => {
                 return Some(ScratchValue::Num(self.op_round(num, builder)));
@@ -1002,32 +1017,24 @@ impl<'a> Compiler<'a> {
             .save(builder, &mut self.constants, self.memory, &self.effects);
     }
 
-    pub fn clone_str(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-        i2: i64,
-        i3: i64,
-        i4: i64,
-    ) -> (Value, Value, Value) {
-        let v2 = self.constants.get_int(i2, builder);
-        let v3 = self.constants.get_int(i3, builder);
-        let v4 = self.constants.get_int(i4, builder);
+    pub fn clone_str(&mut self, builder: &mut FunctionBuilder<'_>, s: RtStr) -> CompStr {
+        let [v1, v2] = s.make_constant(builder, &mut self.constants).0;
 
         self.static_strings
-            .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
+            .push(unsafe { std::mem::transmute::<RtStr, EcoString>(s) });
 
         self.call_function(
             builder,
             callbacks::types::CLONE_STR,
-            &[I64, I64, I64, I64],
+            &[I64, I64, I64],
             &[],
-            &[v2, v3, v4, self.temp_slot4.0],
+            &[v1, v2, self.temp_slot4.0],
         );
 
-        let o2 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
-        let o3 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
-        let o4 = builder.ins().stack_load(I64, self.temp_slot4.1, 16);
-        (o2, o3, o4)
+        CompStr([
+            builder.ins().stack_load(I64, self.temp_slot4.1, 0),
+            builder.ins().stack_load(I64, self.temp_slot4.1, 8),
+        ])
     }
 
     pub fn get_local_type(&self, n: usize) -> VariableWrite {
@@ -1055,17 +1062,15 @@ impl<'a> Compiler<'a> {
     pub fn call_to_num_with_decimal_check(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        i1: Value,
-        i2: Value,
-        i3: Value,
-        i4: Value,
+        obj: CompObj,
     ) -> (Value, Value) {
+        let [i1, i2, i3] = obj.0;
         self.call_function(
             builder,
             callbacks::types::TO_NUMBER_WITH_DECIMAL_CHECK,
-            &[I64, I64, I64, I64, I64],
+            &[I64, I64, I64, I64],
             &[],
-            &[i1, i2, i3, i4, self.temp_slot4.0],
+            &[i1, i2, i3, self.temp_slot4.0],
         );
         let n = builder.ins().stack_load(F64, self.temp_slot4.1, 0);
         let b = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
