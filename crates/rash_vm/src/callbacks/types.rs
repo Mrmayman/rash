@@ -1,4 +1,4 @@
-use smol_str::SmolStr;
+use ecow::EcoString;
 
 use crate::data_types::{ScratchObject, string_to_number};
 
@@ -28,18 +28,11 @@ declare_module!(
 /// # Return
 /// - `i64` - The boolean value of the `ScratchObject`
 ///   (represented as `i64` for predictable layout).
-pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
+pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64) -> i64 {
     let i1 = i64::from(i1 as i32);
-    #[cfg(debug_assertions)]
-    {
-        if !(0..4).contains(&i1) {
-            eprintln!("error converting to bool - enum id: {i1}");
-            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-        }
-    }
     debug_assert!(i1 < 4);
     debug_assert!(i1 >= 0);
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3]) };
     i64::from(obj.convert_to_bool())
 }
 
@@ -54,23 +47,16 @@ pub unsafe extern "C" fn to_bool(i1: i64, i2: i64, i3: i64, i4: i64) -> i64 {
 ///
 /// # Return
 /// - `f64` - The number value of the `ScratchObject`
-pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64, i4: i64) -> f64 {
+pub unsafe extern "C" fn to_number(i1: i64, i2: i64, i3: i64) -> f64 {
     let i1 = i64::from(i1 as i32);
-    #[cfg(debug_assertions)]
-    {
-        if !(0..4).contains(&i1) {
-            eprintln!("error converting to number - enum id: {i1}");
-            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-        }
-    }
     debug_assert!(i1 < 4);
     debug_assert!(i1 >= 0);
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3]) };
     obj.convert_to_number()
 }
 
-pub unsafe extern "C" fn to_number_from_string(i1: i64, i2: i64, i3: i64) -> f64 {
-    let s: SmolStr = unsafe { std::mem::transmute([i1, i2, i3]) };
+pub unsafe extern "C" fn to_number_from_string(i1: i64, i2: i64) -> f64 {
+    let s: EcoString = unsafe { std::mem::transmute([i1, i2]) };
     string_to_number(&s)
 }
 
@@ -92,20 +78,12 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
     i1: i64,
     i2: i64,
     i3: i64,
-    i4: i64,
     out: *mut DecimalCheck,
 ) {
     let i1 = i64::from(i1 as i32);
-    #[cfg(debug_assertions)]
-    {
-        if !(0..4).contains(&i1) {
-            eprintln!("error converting to number (decimal check) - enum id: {i1}");
-            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-        }
-    }
     debug_assert!(i1 < 4);
     debug_assert!(i1 >= 0);
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3]) };
     let (n, d) = obj.convert_to_number_with_decimal_check();
     unsafe {
         out.write(DecimalCheck {
@@ -122,18 +100,11 @@ pub unsafe extern "C" fn to_number_with_decimal_check(
 ///   (represented this way for a predictable layout in JIT code,
 ///   can be `std::mem::transmute`d).
 /// - `out` - The pointer to the memory location to write the string to.
-pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut SmolStr) {
+pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, out: *mut EcoString) {
     let i1 = i64::from(i1 as i32);
-    #[cfg(debug_assertions)]
-    {
-        if !(0..4).contains(&i1) {
-            eprintln!("error converting to string - enum id: {i1}");
-            eprintln!("hex: {i1:X} {i2:X} {i3:X} {i4:X}");
-        }
-    }
     debug_assert!(i1 < 4);
     debug_assert!(i1 >= 0);
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3]) };
     let string = obj.convert_to_string();
     unsafe {
         out.write(string);
@@ -141,7 +112,7 @@ pub unsafe extern "C" fn to_string(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut
 }
 
 /// Converts an f64 to a String `ScratchObject`.
-pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut SmolStr) {
+pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut EcoString) {
     let obj = ScratchObject::Number(i1);
     let string = obj.convert_to_string();
     unsafe { out.write(string) }
@@ -151,7 +122,7 @@ pub unsafe extern "C" fn to_string_from_num(i1: f64, out: *mut SmolStr) {
 ///
 /// - If the boolean is true (1), the string will be "true".
 /// - If the boolean is false (0), the string will be "false".
-pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut SmolStr) {
+pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut EcoString) {
     let obj = ScratchObject::Bool(i1 != 0);
     let string = obj.convert_to_string();
     unsafe { out.write(string) }
@@ -162,26 +133,26 @@ pub unsafe extern "C" fn to_string_from_bool(i1: i64, out: *mut SmolStr) {
 ///
 /// Ran when a variable is set to a new value,
 /// dropping the old value.
-pub unsafe extern "C" fn drop_obj(i1: i64, i2: i64, i3: i64, i4: i64) {
-    let _: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+pub unsafe extern "C" fn drop_obj(i1: i64, i2: i64, i3: i64) {
+    let _: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3]) };
     // Dropped
 }
 
 /// Drops a `SmolStr` in memory.
-pub unsafe extern "C" fn drop_str(i1: i64, i2: i64, i3: i64) {
-    let _: SmolStr = unsafe { std::mem::transmute([i1, i2, i3]) };
+pub unsafe extern "C" fn drop_str(i1: i64, i2: i64) {
+    let _: EcoString = unsafe { std::mem::transmute([i1, i2]) };
     // Dropped
 }
 
-pub unsafe extern "C" fn clone_obj(i1: i64, i2: i64, i3: i64, i4: i64, out: *mut ScratchObject) {
-    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3, i4]) };
+pub unsafe extern "C" fn clone_obj(i1: i64, i2: i64, i3: i64, out: *mut ScratchObject) {
+    let obj: ScratchObject = unsafe { std::mem::transmute([i1, i2, i3]) };
     let new_obj = obj.clone();
     std::mem::forget(obj);
     unsafe { out.write(new_obj) };
 }
 
-pub unsafe extern "C" fn clone_str(i2: i64, i3: i64, i4: i64, out: *mut SmolStr) {
-    let obj: SmolStr = unsafe { std::mem::transmute([i2, i3, i4]) };
+pub unsafe extern "C" fn clone_str(i2: i64, i3: i64, out: *mut EcoString) {
+    let obj: EcoString = unsafe { std::mem::transmute([i2, i3]) };
     let new_obj = obj.clone();
     std::mem::forget(obj);
     unsafe { out.write(new_obj) };

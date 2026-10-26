@@ -13,7 +13,7 @@ use crate::{
     compiler::VarTypeChecked,
     constant_set::ConstantMap,
     effects::{Effects, VariableWrite},
-    input_primitives::ScratchValue,
+    input_primitives::{CompObj, CompStr, ScratchValue},
     variable_storage::{VarStore, VariableSlot},
 };
 
@@ -61,14 +61,13 @@ impl VarStore for GenericVarStore {
                 ScratchValue::Bool(val)
             }
             VarTypeChecked::String => {
-                ScratchValue::String([load_val(I64, 8), load_val(I64, 16), load_val(I64, 24)])
+                ScratchValue::String(CompStr([load_val(I64, 8), load_val(I64, 16)]))
             }
-            VarTypeChecked::Object => ScratchValue::Object([
+            VarTypeChecked::Object => ScratchValue::Object(CompObj([
                 load_val(I64, 0),
                 load_val(I64, 8),
                 load_val(I64, 16),
-                load_val(I64, 24),
-            ]),
+            ])),
         };
         VariableSlot {
             val,
@@ -106,16 +105,16 @@ impl VarStore for GenericVarStore {
             ScratchValue::Num(value) | ScratchValue::Bool(value) => {
                 store_val(value, 8);
             }
-            ScratchValue::String([i1, i2, i3]) => {
+            ScratchValue::String(s) => {
+                let [i1, i2] = s.0;
                 store_val(i1, 8);
                 store_val(i2, 16);
-                store_val(i3, 24);
             }
-            ScratchValue::Object([i1, i2, i3, i4]) => {
+            ScratchValue::Object(obj) => {
+                let [i1, i2, i3] = obj.0;
                 store_val(i1, 0);
                 store_val(i2, 8);
                 store_val(i3, 16);
-                store_val(i4, 24);
             }
         }
 

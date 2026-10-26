@@ -1,11 +1,11 @@
-use smol_str::{SmolStr, SmolStrBuilder, StrExt};
+use ecow::EcoString;
 
 declare_module!("string.rs", 5, contains, letter, join, len);
 
-pub unsafe extern "C" fn contains(string: *mut SmolStr, substring: *mut SmolStr) -> i64 {
+pub unsafe extern "C" fn contains(string: *mut EcoString, substring: *mut EcoString) -> i64 {
     let contains = {
-        let string = unsafe { &*string }.to_lowercase_smolstr();
-        let substring = unsafe { &*substring }.to_lowercase_smolstr();
+        let string = unsafe { &*string }.to_lowercase();
+        let substring = unsafe { &*substring }.to_lowercase();
 
         string.contains(&*substring)
     };
@@ -16,17 +16,17 @@ pub unsafe extern "C" fn contains(string: *mut SmolStr, substring: *mut SmolStr)
     i64::from(contains)
 }
 
-pub unsafe extern "C" fn letter(string: *mut SmolStr, index: f64, out: *mut SmolStr) {
+pub unsafe extern "C" fn letter(string: *mut EcoString, index: f64, out: *mut EcoString) {
     let string = unsafe { string.read() };
     let letter = get_char_at_index(index, &string);
 
-    let mut output = SmolStrBuilder::new();
+    let mut output = EcoString::new();
     if let Some(letter) = letter {
         output.push(letter);
     }
 
     unsafe {
-        out.write(output.finish());
+        out.write(output);
     }
 }
 
@@ -49,15 +49,16 @@ fn get_char_at_index(index: f64, string: &str) -> Option<char> {
 }
 
 /// Callback from JIT code to join two strings
-pub unsafe extern "C" fn join(a: *mut SmolStr, b: *mut SmolStr, out: *mut SmolStr) {
+pub unsafe extern "C" fn join(a: *mut EcoString, b: *mut EcoString, out: *mut EcoString) {
     let a_ref = unsafe { &*a };
     let b_ref = unsafe { &*b };
 
-    let mut result = SmolStrBuilder::new();
+    // TODO: Optimizations after analysing EcoString's lifetimes
+    let mut result = EcoString::new();
     result.push_str(a_ref);
     result.push_str(b_ref);
     unsafe {
-        out.write(result.finish());
+        out.write(result);
 
         std::ptr::drop_in_place(a);
         std::ptr::drop_in_place(b);
@@ -65,7 +66,7 @@ pub unsafe extern "C" fn join(a: *mut SmolStr, b: *mut SmolStr, out: *mut SmolSt
 }
 
 /// Callback from JIT code to get the length of a string
-pub unsafe extern "C" fn len(s: *mut SmolStr) -> usize {
+pub unsafe extern "C" fn len(s: *mut EcoString) -> usize {
     let string = unsafe { &*s };
     // Scratch stores Strings in UTF-16 (unlike rust).
     // For example, skull emoji ("💀") is 4 chars in rust,

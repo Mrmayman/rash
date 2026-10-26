@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use cranelift::codegen::CompiledCode;
+use ecow::EcoString;
 use memmap2::Mmap;
-use smol_str::SmolStr;
 
 use crate::{
     Ptr,
@@ -141,7 +141,7 @@ impl ScriptKind {
 #[derive(Clone, Default)]
 pub struct SpriteBuilder {
     scripts: Scripts,
-    static_strings: Vec<SmolStr>,
+    static_strings: Vec<EcoString>,
 }
 
 impl SpriteBuilder {
@@ -372,7 +372,7 @@ pub struct Runtime {
     pub costumes: CostumeStore,
 
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
-    static_strings: Vec<SmolStr>,
+    static_strings: Vec<EcoString>,
     pub memory: Box<[ScratchObject]>,
 }
 

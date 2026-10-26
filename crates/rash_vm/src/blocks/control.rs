@@ -260,19 +260,18 @@ impl Compiler<'_> {
                     direct_params.push(v.into());
                 }
                 ScratchValue::String(_) => {
-                    let ScratchValue::String([i1, i2, i3]) = val.val else {
+                    let ScratchValue::String(s) = val.val else {
                         panic!("Not a string? Some type checking went wrong (val: {val:?})");
                     };
+                    let [i1, i2] = s.0;
                     direct_params.push(i1.into());
                     direct_params.push(i2.into());
-                    direct_params.push(i3.into());
                 }
                 ScratchValue::Object(_) => {
-                    let [i1, i2, i3, i4] = val.val.get_object(builder, &mut self.constants);
+                    let [i1, i2, i3] = val.val.get_object(builder, &mut self.constants).0;
                     direct_params.push(i1.into());
                     direct_params.push(i2.into());
                     direct_params.push(i3.into());
-                    direct_params.push(i4.into());
                 }
             }
         }

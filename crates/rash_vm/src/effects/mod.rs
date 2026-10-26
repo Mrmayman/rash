@@ -11,7 +11,7 @@ use cranelift::{
 use crate::{
     Input, Ptr, ScratchBlock,
     compiler::{VarType, VarTypeChecked},
-    input_primitives::ScratchValue,
+    input_primitives::{CompObj, CompStr, ScratchValue},
     runtime::CustomBlockId,
     variable_storage::{VarStore, VariableSlot},
 };
@@ -331,12 +331,11 @@ impl Effects {
                     let string = [
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
-                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                     ];
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ScratchValue::String(string),
+                            val: ScratchValue::String(CompStr(string)),
                             skip_nan,
                         },
                     ));
@@ -346,12 +345,11 @@ impl Effects {
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                         izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
-                        izero.unwrap_or_else(|| builder.append_block_param(block, I64)),
                     ];
                     param_values.push((
                         *ptr,
                         VariableSlot {
-                            val: ScratchValue::Object(obj),
+                            val: ScratchValue::Object(CompObj(obj)),
                             skip_nan,
                         },
                     ));

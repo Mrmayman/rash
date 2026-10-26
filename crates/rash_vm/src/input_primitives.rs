@@ -5,7 +5,7 @@ use cranelift::{
         types::{F64, I64},
     },
 };
-use smol_str::SmolStr;
+use ecow::EcoString;
 
 use crate::{
     callbacks,
@@ -97,8 +97,8 @@ impl From<&str> for Input {
     }
 }
 
-impl From<SmolStr> for Input {
-    fn from(s: SmolStr) -> Self {
+impl From<EcoString> for Input {
+    fn from(s: EcoString) -> Self {
         Input::Obj(ScratchObject::String(s))
     }
 }
@@ -242,22 +242,20 @@ impl Input {
                 let stack_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
                 let string = scratch_object.convert_to_string();
-
-                let bytes: [i64; 3] = unsafe { std::mem::transmute(string) };
+                let rtstr: RtStr = unsafe { std::mem::transmute(string) };
                 compiler
                     .static_strings
-                    .push(unsafe { std::mem::transmute::<[i64; 3], smol_str::SmolStr>(bytes) });
+                    .push(unsafe { std::mem::transmute::<RtStr, EcoString>(rtstr) });
 
-                let val1 = compiler.constants.get_int(bytes[0], builder);
-                let val2 = compiler.constants.get_int(bytes[1], builder);
-                let val3 = compiler.constants.get_int(bytes[2], builder);
+                let compstr = rtstr.make_constant(builder, &mut compiler.constants);
+                let [val1, val2] = compstr.0;
 
                 compiler.call_function(
                     builder,
                     callbacks::types::CLONE_STR,
-                    &[I64, I64, I64, I64],
+                    &[I64, I64, I64],
                     &[],
-                    &[val1, val2, val3, stack_ptr],
+                    &[val1, val2, stack_ptr],
                 );
 
                 stack_ptr
@@ -290,36 +288,29 @@ impl Input {
         &self,
         compiler: &mut Compiler,
         builder: &mut FunctionBuilder<'_>,
-    ) -> [Value; 4] {
+    ) -> CompObj {
         match self {
             Input::Obj(scratch_object) => {
-                // Transmute to [i64; 4]
+                // Transmute to ints
                 let scratch_object = scratch_object.clone();
                 let is_str = scratch_object.is_heap_allocated();
 
-                let [i_id, i2, i3, i4] =
-                    unsafe { std::mem::transmute::<ScratchObject, [i64; 4]>(scratch_object) };
-
-                let v_id = compiler.constants.get_int(i_id, builder);
+                let rtobj = unsafe { std::mem::transmute::<ScratchObject, RtObj>(scratch_object) };
 
                 if is_str {
-                    let (o2, o3, o4) = compiler.clone_str(builder, i2, i3, i4);
-                    [v_id, o2, o3, o4]
+                    let rtstr = rtobj.get_str().unwrap();
+                    compiler
+                        .clone_str(builder, rtstr)
+                        .to_object(builder, &mut compiler.constants)
                 } else {
-                    let v2 = compiler.constants.get_int(i2, builder);
-                    let v3 = compiler.constants.get_int(i3, builder);
-                    let v4 = compiler.constants.get_int(i4, builder);
-                    [v_id, v2, v3, v4]
+                    rtobj.make_constant(builder, &mut compiler.constants)
                 }
             }
             Input::Block(scratch_block) => {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
                     ScratchValue::Object(arr) => arr,
-                    ScratchValue::String([i2, i3, i4]) => {
-                        let i1 = compiler.constants.get_int(ID_STRING, builder);
-                        [i1, i2, i3, i4]
-                    }
+                    ScratchValue::String(s) => s.to_object(builder, &mut compiler.constants),
                     ScratchValue::Num(value) => {
                         let id = compiler.constants.get_int(ID_NUMBER, builder);
                         let zero = compiler.constants.get_int(0, builder);
@@ -328,12 +319,12 @@ impl Input {
                             cranelift::codegen::ir::MemFlags::new(),
                             value,
                         );
-                        [id, value, zero, zero]
+                        CompObj([id, value, zero])
                     }
                     ScratchValue::Bool(value) => {
                         let id = compiler.constants.get_int(ID_BOOL, builder);
                         let zero = compiler.constants.get_int(0, builder);
-                        [id, value, zero, zero]
+                        CompObj([id, value, zero])
                     }
                 }
             }
@@ -356,12 +347,13 @@ impl Input {
                 let o = compiler.compile_block(scratch_block, builder).unwrap();
                 match o {
                     ScratchValue::Num(value) => (value, compiler.constants.get_int(0, builder)),
-                    ScratchValue::Object([i1, i2, i3, i4]) => {
-                        compiler.call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                    ScratchValue::Object(obj) => {
+                        compiler.call_to_num_with_decimal_check(builder, obj)
                     }
-                    ScratchValue::String([i2, i3, i4]) => {
-                        let i1 = compiler.constants.get_int(ID_STRING, builder);
-                        compiler.call_to_num_with_decimal_check(builder, i1, i2, i3, i4)
+                    ScratchValue::String(string) => {
+                        // TODO: fast path
+                        let obj = string.to_object(builder, &mut compiler.constants);
+                        compiler.call_to_num_with_decimal_check(builder, obj)
                     }
                     ScratchValue::Bool(value) => (
                         builder.ins().fcvt_from_sint(F64, value),
@@ -405,15 +397,15 @@ impl Input {
                     ScratchValue::Bool(b)
                 }
                 ScratchObject::String(smol_str) => {
-                    let [i2, i3, i4] =
-                        unsafe { std::mem::transmute::<SmolStr, [i64; 3]>(smol_str.clone()) };
+                    let rtstr =
+                        unsafe { std::mem::transmute::<EcoString, RtStr>(smol_str.clone()) };
 
                     compiler
                         .static_strings
-                        .push(unsafe { std::mem::transmute::<[i64; 3], SmolStr>([i2, i3, i4]) });
+                        .push(unsafe { std::mem::transmute::<RtStr, EcoString>(rtstr) });
 
-                    let (o2, o3, o4) = compiler.clone_str(builder, i2, i3, i4);
-                    ScratchValue::String([o2, o3, o4])
+                    let cloned = compiler.clone_str(builder, rtstr);
+                    ScratchValue::String(cloned)
                 }
             },
             Input::Block(block) => compiler
@@ -434,12 +426,71 @@ impl From<ScratchValue> for VarTypeChecked {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug)]
+pub struct CompStr(pub [Value; 2]);
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug)]
+pub struct CompObj(pub [Value; 3]);
+
+impl CompStr {
+    pub fn to_object(
+        self,
+        builder: &mut FunctionBuilder<'_>,
+        constants: &mut ConstantMap,
+    ) -> CompObj {
+        let id = constants.get_int(ID_STRING, builder);
+        let [i1, i2] = self.0;
+        CompObj([id, i1, i2])
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RtStr(pub [i64; 2]);
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RtObj([i64; 3]);
+
+impl RtStr {
+    pub fn make_constant(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        constants: &mut ConstantMap,
+    ) -> CompStr {
+        let c1 = constants.get_int(self.0[0], builder);
+        let c2 = constants.get_int(self.0[1], builder);
+        CompStr([c1, c2])
+    }
+}
+
+impl RtObj {
+    pub fn get_str(self) -> Option<RtStr> {
+        if self.0[0] == ID_STRING {
+            Some(RtStr([self.0[1], self.0[2]]))
+        } else {
+            None
+        }
+    }
+
+    pub fn make_constant(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        constants: &mut ConstantMap,
+    ) -> CompObj {
+        let c1 = constants.get_int(self.0[0], builder);
+        let c2 = constants.get_int(self.0[1], builder);
+        let c3 = constants.get_int(self.0[2], builder);
+        CompObj([c1, c2, c3])
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ScratchValue {
     Num(Value),
     Bool(Value),
-    String([Value; 3]),
-    Object([Value; 4]),
+    String(CompStr),
+    Object(CompObj),
 }
 
 impl ScratchValue {
@@ -454,9 +505,9 @@ impl ScratchValue {
                 let num = compiler.call_function(
                     builder,
                     callbacks::types::TO_NUMBER,
-                    &[I64, I64, I64, I64],
+                    &[I64, I64, I64],
                     &[F64],
-                    &arr,
+                    &arr.0,
                 );
                 builder.inst_results(num)[0]
             }
@@ -464,9 +515,9 @@ impl ScratchValue {
                 let num = compiler.call_function(
                     builder,
                     callbacks::types::TO_NUMBER_FROM_STRING,
-                    &[I64, I64, I64],
+                    &[I64, I64],
                     &[F64],
-                    &arr,
+                    &arr.0,
                 );
                 builder.inst_results(num)[0]
             }
@@ -492,23 +543,22 @@ impl ScratchValue {
                 );
                 stack_ptr
             }
-            ScratchValue::String([i2, i3, i4]) => {
+            ScratchValue::String(s) => {
                 // We don't clone it since it's already owned by self
+                // TODO: slot pool
                 let slot =
                     builder.create_sized_stack_slot(cranelift::codegen::ir::StackSlotData::new(
                         cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
-                        3 * std::mem::size_of::<i64>() as u32,
+                        std::mem::size_of::<EcoString>() as u32,
                         0,
                     ));
 
-                builder.ins().stack_store(i2, slot, 0);
-                builder.ins().stack_store(i3, slot, 8);
-                builder.ins().stack_store(i4, slot, 16);
+                let [i1, i2] = s.0;
+                builder.ins().stack_store(i1, slot, 0);
+                builder.ins().stack_store(i2, slot, 8);
                 builder.ins().stack_addr(I64, slot, 0)
             }
-            ScratchValue::Object([i1, i2, i3, i4]) => {
-                get_string_from_obj(builder, compiler, i1, i2, i3, i4)
-            }
+            ScratchValue::Object(obj) => get_string_from_obj(builder, compiler, obj),
             ScratchValue::Bool(value) => {
                 let stack_ptr = Compiler::create_string_stack_slot(builder);
 
@@ -542,13 +592,12 @@ impl ScratchValue {
                 builder.ins().select(res, one, zero)
             }
             ScratchValue::Bool(value) => *value,
-            ScratchValue::String([i2, i3, i4]) => {
-                let i1 = compiler.constants.get_int(ID_STRING, builder);
-                obj_to_bool(compiler, builder, i1, *i2, *i3, *i4)
+            ScratchValue::String(s) => {
+                // TODO: fast path
+                let obj = s.to_object(builder, &mut compiler.constants);
+                obj_to_bool(compiler, builder, obj)
             }
-            ScratchValue::Object([i1, i2, i3, i4]) => {
-                obj_to_bool(compiler, builder, *i1, *i2, *i3, *i4)
-            }
+            ScratchValue::Object(obj) => obj_to_bool(compiler, builder, *obj),
         }
     }
 
@@ -560,32 +609,32 @@ impl ScratchValue {
         match self {
             ScratchValue::Num(value) => ScratchValue::Num(*value),
             ScratchValue::Bool(value) => ScratchValue::Bool(*value),
-            ScratchValue::String([i1, i2, i3]) => {
+            ScratchValue::String(s) => {
+                let [i1, i2] = s.0;
                 compiler.call_function(
                     builder,
                     callbacks::types::CLONE_STR,
-                    &[I64, I64, I64, I64],
+                    &[I64, I64, I64],
                     &[],
-                    &[*i1, *i2, *i3, compiler.temp_slot4.0],
+                    &[i1, i2, compiler.temp_slot4.0],
                 );
                 let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
                 let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
-                let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
-                ScratchValue::String([i1, i2, i3])
+                ScratchValue::String(CompStr([i1, i2]))
             }
-            ScratchValue::Object([i1, i2, i3, i4]) => {
+            ScratchValue::Object(obj) => {
+                let [i1, i2, i3] = obj.0;
                 compiler.call_function(
                     builder,
                     callbacks::types::CLONE_OBJ,
-                    &[I64, I64, I64, I64, I64],
+                    &[I64, I64, I64, I64],
                     &[],
-                    &[*i1, *i2, *i3, *i4, compiler.temp_slot4.0],
+                    &[i1, i2, i3, compiler.temp_slot4.0],
                 );
                 let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
                 let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
                 let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
-                let i4 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 24);
-                ScratchValue::Object([i1, i2, i3, i4])
+                ScratchValue::Object(CompObj([i1, i2, i3]))
             }
         }
     }
@@ -594,21 +643,15 @@ impl ScratchValue {
         match self {
             ScratchValue::Num(_) | ScratchValue::Bool(_) => {}
             ScratchValue::String(s) => {
-                compiler.call_function(
-                    builder,
-                    callbacks::types::DROP_STR,
-                    &[I64, I64, I64],
-                    &[],
-                    s,
-                );
+                compiler.call_function(builder, callbacks::types::DROP_STR, &[I64, I64], &[], &s.0);
             }
             ScratchValue::Object(obj) => {
                 compiler.call_function(
                     builder,
                     callbacks::types::DROP_OBJ,
-                    &[I64, I64, I64, I64],
+                    &[I64, I64, I64],
                     &[],
-                    obj,
+                    &obj.0,
                 );
             }
         }
@@ -618,23 +661,20 @@ impl ScratchValue {
         &self,
         builder: &mut FunctionBuilder<'_>,
         constants: &mut ConstantMap,
-    ) -> [Value; 4] {
+    ) -> CompObj {
         match self {
             ScratchValue::Num(n) => {
                 let n = builder.ins().bitcast(I64, MemFlags::new(), *n);
                 let id = constants.get_int(ID_NUMBER, builder);
                 let zero = constants.get_int(0, builder);
-                [id, n, zero, zero]
+                CompObj([id, n, zero])
             }
             ScratchValue::Bool(n) => {
                 let id = constants.get_int(ID_BOOL, builder);
                 let zero = constants.get_int(0, builder);
-                [id, *n, zero, zero]
+                CompObj([id, *n, zero])
             }
-            ScratchValue::String([i2, i3, i4]) => {
-                let i1 = constants.get_int(ID_STRING, builder);
-                [i1, *i2, *i3, *i4]
-            }
+            ScratchValue::String(s) => s.to_object(builder, constants),
             ScratchValue::Object(n) => *n,
         }
     }
@@ -643,17 +683,14 @@ impl ScratchValue {
 fn obj_to_bool(
     compiler: &mut Compiler<'_>,
     builder: &mut FunctionBuilder<'_>,
-    i1: Value,
-    i2: Value,
-    i3: Value,
-    i4: Value,
+    obj: CompObj,
 ) -> Value {
     let ins = compiler.call_function(
         builder,
         callbacks::types::TO_BOOL,
-        &[I64, I64, I64, I64],
+        &[I64, I64, I64],
         &[I64],
-        &[i1, i2, i3, i4],
+        &obj.0,
     );
     builder.inst_results(ins)[0]
 }
@@ -661,19 +698,17 @@ fn obj_to_bool(
 fn get_string_from_obj(
     builder: &mut FunctionBuilder<'_>,
     compiler: &mut Compiler,
-    i1: Value,
-    i2: Value,
-    i3: Value,
-    i4: Value,
+    obj: CompObj,
 ) -> Value {
     let stack_ptr = Compiler::create_string_stack_slot(builder);
+    let [i1, i2, i3] = obj.0;
 
     compiler.call_function(
         builder,
         callbacks::types::TO_STRING,
-        &[I64, I64, I64, I64, I64],
+        &[I64, I64, I64, I64],
         &[],
-        &[i1, i2, i3, i4, stack_ptr],
+        &[i1, i2, i3, stack_ptr],
     );
 
     stack_ptr
