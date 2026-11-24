@@ -28,7 +28,7 @@ pub struct JitArgs {
     pub loop_stack_ptr: Value,
     pub args_ptr: Value,
     pub script_ptr: Value,
-    pub graphics_ptr: Value,
+    pub runstate_ptr: Value,
     pub is_called_by_pausable: Value,
     pub child_thread_ptr: Value,
 }
@@ -40,7 +40,7 @@ impl JitArgs {
             loop_stack_ptr: args[1],
             args_ptr: args[2],
             script_ptr: args[3],
-            graphics_ptr: args[4],
+            runstate_ptr: args[4],
             is_called_by_pausable: args[5],
             child_thread_ptr: args[6],
         }

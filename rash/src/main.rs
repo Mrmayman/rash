@@ -159,6 +159,14 @@ impl App {
                 WindowEvent::Resized(s) => {
                     self.resize(*s);
                 }
+                WindowEvent::MouseInput {
+                    state,
+                    button: winit::event::MouseButton::Left,
+                    ..
+                } => {
+                    let pressed = matches!(state, winit::event::ElementState::Pressed);
+                    self.renderer.state.on_left_click(pressed);
+                }
                 _ => {}
             },
             _ => {}
@@ -192,7 +200,7 @@ fn run_demo() {
 
     let mut vm = builder.build();
 
-    let mut state = RunState::new(); // No graphics operations here
+    let mut state = RunState::default(); // No graphics operations here
     while !vm.update(&mut state) {}
 
     rash_vm::print_memory(&vm.memory);

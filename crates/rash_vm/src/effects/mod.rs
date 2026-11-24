@@ -522,6 +522,7 @@ impl CheckEffects for ScratchBlock {
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY
             | ScratchBlock::LocalsGet(_)
+            | ScratchBlock::SensingMouseDown
             | ScratchBlock::SensingDaysSince2000 => Effects::new(),
         }
     }

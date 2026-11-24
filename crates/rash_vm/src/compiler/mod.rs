@@ -22,7 +22,7 @@ use ecow::EcoString;
 use crate::{
     callbacks::{
         self,
-        external::{looks, motion},
+        external::{looks, motion, sensing},
     },
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
@@ -132,6 +132,7 @@ pub enum ScratchBlock {
 
     LooksSetShown(bool),
     SensingDaysSince2000,
+    SensingMouseDown,
 
     LogPrint(Input),
 }
@@ -230,6 +231,7 @@ impl ScratchBlock {
             | ScratchBlock::OpNot(_)
             | ScratchBlock::OpOr(_, _)
             | ScratchBlock::OpStrContains(_, _)
+            | ScratchBlock::SensingMouseDown
             | ScratchBlock::OpCmp(_, _, _) => Some(VariableWrite::normal(VarTypeChecked::Bool)),
             ScratchBlock::VarSet(_, _)
             | ScratchBlock::VarChange(_, _)
@@ -293,6 +295,7 @@ impl ScratchBlock {
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::FunctionCallNoScreenRefresh(_, _)
             | ScratchBlock::LocalsGet(_)
+            | ScratchBlock::SensingMouseDown
             | ScratchBlock::MotionGetX
             | ScratchBlock::MotionGetY => false,
 
@@ -440,6 +443,7 @@ impl ScratchBlock {
             | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::LocalsGet(_)
+            | ScratchBlock::SensingMouseDown
             | ScratchBlock::VarRead(_) => {}
         }
     }
@@ -560,6 +564,7 @@ impl ScratchBlock {
             | ScratchBlock::LooksSetShown(_)
             | ScratchBlock::SensingDaysSince2000
             | ScratchBlock::LocalsGet(_)
+            | ScratchBlock::SensingMouseDown
             | ScratchBlock::VarRead(_) => {}
         }
         on_block(self);
@@ -907,7 +912,7 @@ impl<'a> Compiler<'a> {
                     motion::C_GO_TO,
                     &[I64, I64, F64, F64],
                     &[],
-                    &[self.jit_args.graphics_ptr, id, x, y],
+                    &[self.jit_args.runstate_ptr, id, x, y],
                 );
             }
             ScratchBlock::MotionChangeX(x) => {
@@ -920,7 +925,7 @@ impl<'a> Compiler<'a> {
                     motion::C_CHANGE_X,
                     &[I64, I64, F64],
                     &[],
-                    &[self.jit_args.graphics_ptr, id, x],
+                    &[self.jit_args.runstate_ptr, id, x],
                 );
             }
             ScratchBlock::MotionChangeY(y) => {
@@ -933,7 +938,7 @@ impl<'a> Compiler<'a> {
                     motion::C_CHANGE_Y,
                     &[I64, I64, F64],
                     &[],
-                    &[self.jit_args.graphics_ptr, id, y],
+                    &[self.jit_args.runstate_ptr, id, y],
                 );
             }
             ScratchBlock::MotionSetX(x) => {
@@ -946,7 +951,7 @@ impl<'a> Compiler<'a> {
                     motion::C_SET_X,
                     &[I64, I64, F64],
                     &[],
-                    &[self.jit_args.graphics_ptr, id, x],
+                    &[self.jit_args.runstate_ptr, id, x],
                 );
             }
             ScratchBlock::MotionSetY(y) => {
@@ -959,7 +964,7 @@ impl<'a> Compiler<'a> {
                     motion::C_SET_Y,
                     &[I64, I64, F64],
                     &[],
-                    &[self.jit_args.graphics_ptr, id, y],
+                    &[self.jit_args.runstate_ptr, id, y],
                 );
             }
             ScratchBlock::MotionGetX => {
@@ -970,7 +975,7 @@ impl<'a> Compiler<'a> {
                     motion::C_GET_X,
                     &[I64, I64],
                     &[F64],
-                    &[self.jit_args.graphics_ptr, id],
+                    &[self.jit_args.runstate_ptr, id],
                 );
 
                 let val = builder.inst_results(inst)[0];
@@ -984,7 +989,7 @@ impl<'a> Compiler<'a> {
                     motion::C_GET_Y,
                     &[I64, I64],
                     &[F64],
-                    &[self.jit_args.graphics_ptr, id],
+                    &[self.jit_args.runstate_ptr, id],
                 );
 
                 let val = builder.inst_results(inst)[0];
@@ -996,17 +1001,27 @@ impl<'a> Compiler<'a> {
 
                 self.call_function(
                     builder,
-                    looks::C_SHOWN,
+                    looks::C_SET_SHOWN,
                     &[I64, I64, I64],
                     &[],
-                    &[self.jit_args.graphics_ptr, id, shown],
+                    &[self.jit_args.runstate_ptr, id, shown],
                 );
             }
             ScratchBlock::SensingDaysSince2000 => {
-                let inst =
-                    self.call_function(builder, callbacks::env::DAYS_SINCE_2000, &[], &[F64], &[]);
+                let inst = self.call_function(builder, sensing::DAYS_SINCE_2000, &[], &[F64], &[]);
                 let val = builder.inst_results(inst)[0];
                 return Some(ScratchValue::Num(val));
+            }
+            ScratchBlock::SensingMouseDown => {
+                let inst = self.call_function(
+                    builder,
+                    sensing::MOUSE_DOWN,
+                    &[I64],
+                    &[I64],
+                    &[self.jit_args.runstate_ptr],
+                );
+                let val = builder.inst_results(inst)[0];
+                return Some(ScratchValue::Bool(val));
             }
         }
         None

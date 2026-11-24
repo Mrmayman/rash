@@ -21,13 +21,21 @@ pub struct CostumeId(pub i32);
 /// The global state of the VM at runtime.
 #[derive(Debug, Clone, Default)]
 pub struct RunState {
-    pub sprites: Vec<(SpriteId, SpriteData)>,
+    sprites: Vec<(SpriteId, SpriteData)>,
+    mouse_down: bool,
 }
 
 impl RunState {
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn with_sprites(sprites: Vec<(SpriteId, SpriteData)>) -> Self {
+        Self {
+            sprites,
+            mouse_down: false,
+        }
+    }
+
+    pub fn generate_shader_buffer(&self) -> Vec<ShaderState> {
+        self.sprites.iter().map(|n| n.1.graphics).collect()
     }
 
     // TODO: Implement Pen trails
@@ -47,13 +55,13 @@ impl RunState {
         state.graphics.y = y;
     }
 
-    pub fn get_x(&mut self, id: SpriteId) -> f32 {
-        let state = &mut self.sprites[id.0 as usize].1;
+    pub fn get_x(&self, id: SpriteId) -> f32 {
+        let state = &self.sprites[id.0 as usize].1;
         state.graphics.x
     }
 
-    pub fn get_y(&mut self, id: SpriteId) -> f32 {
-        let state = &mut self.sprites[id.0 as usize].1;
+    pub fn get_y(&self, id: SpriteId) -> f32 {
+        let state = &self.sprites[id.0 as usize].1;
         state.graphics.y
     }
 
@@ -67,9 +75,19 @@ impl RunState {
         state.graphics.y += y;
     }
 
-    pub fn shown(&mut self, id: SpriteId, shown: bool) {
+    pub fn set_shown(&mut self, id: SpriteId, shown: bool) {
         let state = &mut self.sprites[id.0 as usize].1;
         state.graphics.shown = i32::from(shown);
+    }
+
+    // TODO: "When clicked" events
+    pub fn on_left_click(&mut self, pressed: bool) {
+        self.mouse_down = pressed;
+    }
+
+    #[inline]
+    pub fn mouse_down(&self) -> bool {
+        self.mouse_down
     }
 }
 

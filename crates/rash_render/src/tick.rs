@@ -99,7 +99,7 @@ impl Renderer {
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
     ) {
-        let graphics: Vec<ShaderState> = self.state.sprites.iter().map(|n| n.1.graphics).collect();
+        let graphics: Vec<ShaderState> = self.state.generate_shader_buffer();
 
         queue.write_buffer(&self.sprites_buffer, 0, bytemuck::cast_slice(&graphics));
 

@@ -61,7 +61,7 @@ impl Compiler<'_> {
                     slot_ptr,
                     custom_block_id,
                     self.jit_args.script_ptr,
-                    self.jit_args.graphics_ptr,
+                    self.jit_args.runstate_ptr,
                     self.jit_args.child_thread_ptr,
                     self.jit_args.is_called_by_pausable,
                 ],
@@ -96,7 +96,7 @@ impl Compiler<'_> {
                     slot_ptr,
                     custom_block_id,
                     self.jit_args.script_ptr,
-                    self.jit_args.graphics_ptr,
+                    self.jit_args.runstate_ptr,
                 ],
             );
         }

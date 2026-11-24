@@ -357,6 +357,7 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
             }
         }
         "sensing_dayssince2000" => Ok(ScratchBlock::SensingDaysSince2000),
+        "sensing_mousedown" => Ok(ScratchBlock::SensingMouseDown),
         "procedures_call" => {
             let block = ctx.get_custom_block(b)?;
 

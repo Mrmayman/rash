@@ -73,7 +73,7 @@ macro_rules! declare_module {
 
 pub mod custom_block; // 1
 pub mod env; // 2
-pub mod external; // 7, 8
+pub mod external; // 7, 8, 9
 pub mod op; // 3
 pub mod repeat_stack; // 4
 pub mod string; // 5
@@ -93,6 +93,7 @@ pub static FUNCS: LazyLock<HashMap<UserExternalName, usize>> = LazyLock::new(|| 
     funcs.extend(types::FUNCS.iter().map(m));
     funcs.extend(external::motion::FUNCS.iter().map(m));
     funcs.extend(external::looks::FUNCS.iter().map(m));
+    funcs.extend(external::sensing::FUNCS.iter().map(m));
     funcs
 });
 
@@ -105,6 +106,7 @@ pub fn print_function_addresses() {
     types::print_function_addresses();
     external::motion::print_function_addresses();
     external::looks::print_function_addresses();
+    external::sensing::print_function_addresses();
 }
 
 pub fn declare_callbacks(func: &mut Function) -> FuncMap {
@@ -128,5 +130,6 @@ pub fn declare_callbacks(func: &mut Function) -> FuncMap {
     import_module(func, &mut func_map, types::FUNCS);
     import_module(func, &mut func_map, external::motion::FUNCS);
     import_module(func, &mut func_map, external::looks::FUNCS);
+    import_module(func, &mut func_map, external::sensing::FUNCS);
     func_map
 }

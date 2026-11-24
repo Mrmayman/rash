@@ -10,7 +10,7 @@ fn run(program: Vec<ScratchBlock>) -> Box<[ScratchObject]> {
     let mut builder = ProjectBuilder::new();
     builder.add_sprite(sprite);
     let mut vm = builder.build();
-    let mut state = RunState::new(); // No graphics operations here
+    let mut state = RunState::default(); // No graphics operations here
 
     while !vm.update(&mut state) {}
     vm.memory

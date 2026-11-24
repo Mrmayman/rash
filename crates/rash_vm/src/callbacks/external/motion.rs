@@ -27,14 +27,14 @@ pub unsafe extern "C" fn c_set_y(this: *mut RunState, id: SpriteId, y: f64) {
     (unsafe { &mut *this }).set_y(id, y as f32);
 }
 
-pub unsafe extern "C" fn c_get_x(this: *mut RunState, id: SpriteId) -> f64 {
+pub unsafe extern "C" fn c_get_x(this: *const RunState, id: SpriteId) -> f64 {
     debug_assert!(!this.is_null());
-    f64::from((unsafe { &mut *this }).get_x(id))
+    f64::from((unsafe { &*this }).get_x(id))
 }
 
-pub unsafe extern "C" fn c_get_y(this: *mut RunState, id: SpriteId) -> f64 {
+pub unsafe extern "C" fn c_get_y(this: *const RunState, id: SpriteId) -> f64 {
     debug_assert!(!this.is_null());
-    f64::from((unsafe { &mut *this }).get_y(id))
+    f64::from((unsafe { &*this }).get_y(id))
 }
 
 pub unsafe extern "C" fn c_change_x(this: *mut RunState, id: SpriteId, x: f64) {
