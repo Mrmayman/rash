@@ -17,11 +17,6 @@ mod init;
 mod texture;
 mod tick;
 
-fn to_bytes<T>(s: &[T]) -> &[u8] {
-    let ptr = s.as_ptr().cast();
-    unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of_val(s)) }
-}
-
 pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,

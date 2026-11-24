@@ -9,5 +9,4 @@ svg_render.path = "../svg_render"
 
 wgpu.workspace = true
 image.workspace = true
-
-bytemuck = { version = "1.20.0", features = ["derive"] }
+bytemuck.workspace = true

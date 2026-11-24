@@ -8,7 +8,6 @@ use crate::WindowSize;
 use crate::texture::load::load_textures;
 
 use super::texture::Texture;
-use super::to_bytes;
 
 use super::{Renderer, buffers::GlobalBuffer};
 
@@ -64,7 +63,7 @@ impl Renderer {
 
         let sprites_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sprite State Buffer"),
-            contents: to_bytes(sprites_state.as_slice()),
+            contents: bytemuck::cast_slice(&sprites_state),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -73,7 +72,7 @@ impl Renderer {
         };
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Global Buffer"),
-            contents: to_bytes(&[global_state]),
+            contents: bytemuck::bytes_of(&global_state),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -122,7 +121,7 @@ impl Renderer {
             global_buffer,
             last_time: Instant::now(),
             textures,
-            state: RunState { sprites },
+            state: RunState::with_sprites(sprites),
         }
     }
 }

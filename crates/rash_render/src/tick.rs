@@ -2,7 +2,6 @@ use std::time::Instant;
 
 use rash_core::{ShaderState, SpriteId};
 
-use super::to_bytes;
 use crate::WindowSize;
 
 use super::Renderer;
@@ -27,7 +26,11 @@ impl Renderer {
     }
 
     fn update_global_state(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(&self.global_buffer, 0, to_bytes(&[self.global_state]));
+        queue.write_buffer(
+            &self.global_buffer,
+            0,
+            bytemuck::bytes_of(&self.global_state),
+        );
     }
 
     fn render_inner(
@@ -98,7 +101,7 @@ impl Renderer {
     ) {
         let graphics: Vec<ShaderState> = self.state.sprites.iter().map(|n| n.1.graphics).collect();
 
-        queue.write_buffer(&self.sprites_buffer, 0, to_bytes(&graphics));
+        queue.write_buffer(&self.sprites_buffer, 0, bytemuck::cast_slice(&graphics));
 
         match self.render_inner(sprite_order, &graphics, device, queue, surface) {
             Ok(()) => {}

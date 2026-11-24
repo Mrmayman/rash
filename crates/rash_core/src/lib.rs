@@ -14,7 +14,8 @@ pub struct SpriteId(pub i64);
 /// Not necessarily in any meaningful Scratch-related order,
 /// purely used for internal storage and access.
 /// If you want to access by-index or by-name, see [`CostumeStore`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(transparent)]
 pub struct CostumeId(pub i32);
 
 /// The global state of the VM at runtime.
@@ -81,7 +82,7 @@ const _E: () = {
 // `crates/rash_render/src/shaders/common.wgsl`
 /// The graphical state of each sprite. Passed to the shader.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ShaderState {
     pub x: f32,
     pub y: f32,
