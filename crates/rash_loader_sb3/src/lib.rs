@@ -135,7 +135,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
                             Value::Number(number) => ScratchObject::Number(number.as_f64()?),
                             Value::String(s) => {
                                 let num = data_types::string_to_number(s);
-                                if data_types::number_to_string(num) == s {
+                                if data_types::number_to_string(num).as_str() == s {
                                     ScratchObject::Number(num)
                                 } else {
                                     ScratchObject::String(s.into())

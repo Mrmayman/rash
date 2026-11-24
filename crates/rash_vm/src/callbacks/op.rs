@@ -24,18 +24,9 @@ pub extern "C" fn tan(value: f64) -> f64 {
 }
 
 /// Callback to compare objects (Scratch-spec), returns i8-shaped value
-pub unsafe extern "C" fn cmp(
-    a1: i64,
-    a2: i64,
-    a3: i64,
-    a4: i64,
-    b1: i64,
-    b2: i64,
-    b3: i64,
-    b4: i64,
-) -> i64 {
-    let a: ScratchObject = unsafe { std::mem::transmute([a1, a2, a3, a4]) };
-    let b: ScratchObject = unsafe { std::mem::transmute([b1, b2, b3, b4]) };
+pub unsafe extern "C" fn cmp(a1: i64, a2: i64, a3: i64, b1: i64, b2: i64, b3: i64) -> i64 {
+    let a: ScratchObject = unsafe { std::mem::transmute([a1, a2, a3]) };
+    let b: ScratchObject = unsafe { std::mem::transmute([b1, b2, b3]) };
     a.scratch_cmp(&b) as i64
 }
 

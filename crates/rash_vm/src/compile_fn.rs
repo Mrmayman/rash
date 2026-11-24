@@ -18,7 +18,7 @@ use cranelift::{
         types::I64,
     },
 };
-use smol_str::SmolStr;
+use ecow::EcoString;
 
 use crate::{
     Ptr,
@@ -27,7 +27,7 @@ use crate::{
     config::print_ir,
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
-    input_primitives::ScratchValue,
+    input_primitives::{CompObj, CompStr, ScratchValue},
     jit_func::JitArgs,
     runtime::{CustomBlockId, ScratchThread},
 };
@@ -48,7 +48,7 @@ pub fn compile(
     custom_block_effects: &dyn Fn(CustomBlockId) -> Effects,
     external_env: &dyn Fn(Ptr) -> VariableWrite,
     arg_types: &[VariableWrite],
-) -> (ScratchThread, Vec<SmolStr>) {
+) -> (ScratchThread, Vec<EcoString>) {
     let isa = get_isa();
 
     let (mut func, call_conv) = create_function(&*isa);
@@ -147,15 +147,13 @@ fn fetch_function_arguments(
             VarTypeChecked::String => {
                 let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
                 let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 24);
-                ScratchValue::String([i2, i3, i4])
+                ScratchValue::String(CompStr([i2, i3]))
             }
             VarTypeChecked::Object => {
                 let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, o);
                 let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
                 let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
-                let i4 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 24);
-                ScratchValue::Object([i1, i2, i3, i4])
+                ScratchValue::Object(CompObj([i1, i2, i3]))
             }
         };
 
@@ -172,7 +170,7 @@ pub fn create_main_slot(
 ) -> (cranelift::prelude::Value, codegen::ir::StackSlot) {
     let slot = builder.create_sized_stack_slot(StackSlotData {
         kind: StackSlotKind::ExplicitSlot,
-        size: 4 * std::mem::size_of::<i64>() as u32,
+        size: std::mem::size_of::<ScratchObject>() as u32,
         align_shift: 0,
         key: None,
     });

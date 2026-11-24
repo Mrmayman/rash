@@ -1,12 +1,11 @@
 use cranelift::prelude::FunctionBuilder;
-use smol_str::SmolStr;
+use ecow::EcoString;
 
 use crate::{
     ScratchObject,
     constant_set::ConstantMap,
-    data_types::ID_STRING,
     effects::{Effects, VariableWrite},
-    input_primitives::{Ptr, ScratchValue},
+    input_primitives::{Ptr, RtStr, ScratchValue},
 };
 
 mod ssa;
@@ -94,31 +93,18 @@ pub trait VarStore {
         builder: &mut FunctionBuilder<'_>,
         string: &str,
         constants: &mut ConstantMap,
-    ) -> SmolStr {
-        // Transmute the SmolStr into a [i64; 3] array
-        let arr: [i64; 3] = unsafe { std::mem::transmute(SmolStr::from(string)) };
-
-        let id = constants.get_int(ID_STRING, builder);
-        let i1 = constants.get_int(arr[0], builder);
-        let i2 = constants.get_int(arr[1], builder);
-        let i3 = constants.get_int(arr[2], builder);
+    ) -> EcoString {
+        let arr: RtStr = unsafe { std::mem::transmute(EcoString::from(string)) };
+        let s = arr.make_constant(builder, constants);
 
         self.store(
             ptr,
-            VariableSlot::normal(ScratchValue::Object([id, i1, i2, i3])),
+            VariableSlot::normal(ScratchValue::String(s)),
             builder,
             constants,
         );
 
-        // # Safety
-        //
-        // The string is intentionally owned in two places:
-        //
-        // - The generated machine code.
-        // - The compiler's `static_strings`.
-        //
-        // Neither mutates the string, and both the machine code AND the strings
-        // are dropped with the `Runtime`, so there's no use-after-free.
+        // Safety: See `Compiler::clone_str` for more info
         unsafe { std::mem::transmute(arr) }
     }
 }

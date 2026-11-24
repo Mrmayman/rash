@@ -1,4 +1,4 @@
-use crate::{ScratchObject, stat};
+use crate::ScratchObject;
 
 /// Tests for checking the conversion between values of different types.
 ///
@@ -9,26 +9,26 @@ use crate::{ScratchObject, stat};
 
 #[test]
 fn conversion_bool() {
-    assert_eq!(ScratchObject::String(stat("True")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("true")).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("True".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("true".into()).convert_to_bool(), true);
     assert_eq!(
-        ScratchObject::String(stat("false")).convert_to_bool(),
+        ScratchObject::String("false".into()).convert_to_bool(),
         false
     );
     assert_eq!(
-        ScratchObject::String(stat("False")).convert_to_bool(),
+        ScratchObject::String("False".into()).convert_to_bool(),
         false
     );
 
-    assert_eq!(ScratchObject::String(stat("1")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("0")).convert_to_bool(), false);
+    assert_eq!(ScratchObject::String("1".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("0".into()).convert_to_bool(), false);
 
-    assert_eq!(ScratchObject::String(stat("1.0")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("0.0")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("-1")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("-1.0")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("0e10")).convert_to_bool(), true);
-    assert_eq!(ScratchObject::String(stat("")).convert_to_bool(), false);
+    assert_eq!(ScratchObject::String("1.0".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("0.0".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("-1".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("-1.0".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("0e10".into()).convert_to_bool(), true);
+    assert_eq!(ScratchObject::String("".into()).convert_to_bool(), false);
 
     assert_eq!(ScratchObject::Number(20.0).convert_to_bool(), true);
     assert_eq!(ScratchObject::Number(-20.0).convert_to_bool(), true);
@@ -41,7 +41,7 @@ macro_rules! string_to_number {
     ($(($input_str:expr, $expected:expr)),* $(,)?) => {
         $(
             assert_eq!(
-                ScratchObject::String(stat($input_str)).convert_to_number(),
+                ScratchObject::String($input_str.into()).convert_to_number(),
                 $expected
             );
         )*
@@ -125,23 +125,23 @@ fn conversion_number() {
     assert_eq!(ScratchObject::Bool(false).convert_to_number(), 0.0);
 
     assert!(
-        ScratchObject::String(stat("Infinity"))
+        ScratchObject::String("Infinity".into())
             .convert_to_number()
             .is_sign_positive()
     );
     assert!(
-        ScratchObject::String(stat("Infinity"))
+        ScratchObject::String("Infinity".into())
             .convert_to_number()
             .is_infinite()
     );
 
     assert!(
-        ScratchObject::String(stat("-Infinity"))
+        ScratchObject::String("-Infinity".into())
             .convert_to_number()
             .is_sign_negative()
     );
     assert!(
-        ScratchObject::String(stat("-Infinity"))
+        ScratchObject::String("-Infinity".into())
             .convert_to_number()
             .is_infinite()
     );

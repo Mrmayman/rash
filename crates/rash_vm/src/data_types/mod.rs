@@ -15,9 +15,9 @@
 use std::cmp::Ordering;
 
 use colored::Colorize;
-use smol_str::{SmolStr, StrExt, ToSmolStr, format_smolstr};
+use ecow::{EcoString, eco_format, string::ToEcoString};
 
-use crate::{compiler::VarType, stat};
+use crate::compiler::VarType;
 
 #[cfg(test)]
 mod tests;
@@ -30,20 +30,20 @@ mod tests;
 #[repr(C, u64)]
 #[derive(PartialEq, Clone)]
 pub enum ScratchObject {
-    Number(f64),     // 0
-    String(SmolStr), // 1
-    Bool(bool),      // 2
+    Number(f64),       // 0
+    String(EcoString), // 1
+    Bool(bool),        // 2
 }
 
 const _E: () = {
-    assert!(std::mem::size_of::<ScratchObject>() == 32);
+    assert!(std::mem::size_of::<ScratchObject>() == 24);
 };
 
 // Debugging code for checking if the objects are being dropped
 // Lets you know when the object is being dropped by the JIT compiled code
 // impl Drop for ScratchObject {
 //     fn drop(&mut self) {
-//         let bytes = unsafe { std::mem::transmute::<&Self, &[i64; 4]>(&self) };
+//         let bytes = unsafe { std::mem::transmute::<&Self, &crate::input_primitives::RtObj>(&self) };
 //         println!(
 //             "Dropping self: {self:?} (bytes: {:X} {:X} {:X} {:X})",
 //             bytes[0] as i32 as i64, bytes[1], bytes[2], bytes[3]
@@ -189,12 +189,12 @@ impl ScratchObject {
     /// ```
     #[inline]
     #[must_use]
-    pub fn convert_to_string(&self) -> SmolStr {
+    pub fn convert_to_string(&self) -> EcoString {
         match self {
             ScratchObject::Number(num) => number_to_string(*num),
             ScratchObject::String(s) => s.clone(),
-            ScratchObject::Bool(true) => stat("true"),
-            ScratchObject::Bool(false) => stat("false"),
+            ScratchObject::Bool(true) => "true".into(),
+            ScratchObject::Bool(false) => "false".into(),
         }
     }
 
@@ -257,8 +257,8 @@ impl ScratchObject {
         }
 
         if cmp_str {
-            let s1 = a.convert_to_string().to_lowercase_smolstr();
-            let s2 = b.convert_to_string().to_lowercase_smolstr();
+            let s1 = a.convert_to_string().to_lowercase();
+            let s2 = b.convert_to_string().to_lowercase();
             return s1.cmp(&s2);
         }
 
@@ -268,37 +268,37 @@ impl ScratchObject {
 
 #[inline]
 #[must_use]
-pub fn number_to_string(num: f64) -> SmolStr {
+pub fn number_to_string(num: f64) -> EcoString {
     // If number is bigger than this then represent as exponentials.
     const POSITIVE_EXPONENTIAL_THRESHOLD: f64 = 1e21;
     // If number is smaller than this then represent as exponentials.
     const NEGATIVE_EXPONENTIAL_THRESHOLD: f64 = 2e-6;
 
     if num == 0.0 {
-        stat("0")
+        "0".into()
     } else if num.is_infinite() {
         if num.is_sign_positive() {
-            stat("Infinity")
+            "Infinity".into()
         } else {
-            stat("-Infinity")
+            "-Infinity".into()
         }
     } else if num.abs() >= POSITIVE_EXPONENTIAL_THRESHOLD {
         // Number so big it is exponential
         // Eg: 1000000000000000000000 is 1e+21
-        let formatted = format_smolstr!("{num:e}");
+        let formatted = eco_format!("{num:e}");
         if formatted.contains("e-") {
             formatted
         } else {
             // Rust formats it as 1e21, ignoring the plus
             // So we must add it ourselves to match Scratch
-            formatted.replace_smolstr("e", "e+")
+            formatted.replace("e", "e+")
         }
     } else if num.abs() < NEGATIVE_EXPONENTIAL_THRESHOLD {
         // Number so small it is exponential
         // Eg: 0.0000001 is 1e-7
-        format_smolstr!("{num:e}")
+        eco_format!("{num:e}")
     } else {
-        num.to_smolstr()
+        num.to_eco_string()
     }
 }
 

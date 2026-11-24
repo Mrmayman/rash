@@ -1,6 +1,7 @@
 use cranelift::prelude::{FunctionBuilder, InstBuilder};
 
 use crate::{
+    ScratchBlock,
     compiler::Compiler,
     data_types::ScratchObject,
     input_primitives::{Input, Ptr, ScratchValue},
@@ -9,10 +10,12 @@ use crate::{
 
 impl Compiler<'_> {
     pub fn var_read(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ScratchValue {
-        self.vars
-            .get(ptr, builder, &mut self.constants)
-            .val
-            .clone_in_code(self, builder)
+        let val = self.vars.get(ptr, builder, &mut self.constants).val;
+        if self.move_optimize == ptr {
+            val
+        } else {
+            val.clone_in_code(self, builder)
+        }
     }
 
     pub fn var_set(&mut self, obj: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
@@ -46,13 +49,33 @@ impl Compiler<'_> {
                 }
             }
             Input::Block(block) => {
+                // See docs of `self.move_optimize` for more info
+                let mut count = 0;
+                block.walk(
+                    &mut |b| {
+                        if let ScratchBlock::VarRead(p) = b
+                            && *p == ptr
+                        {
+                            count += 1;
+                        }
+                    },
+                    true,
+                );
+                if count == 1 {
+                    self.move_optimize = ptr;
+                }
+
                 let val = self.compile_block(block, builder)
                     .expect("blocks inside other blocks (like an add operator in a set var block) should return something!");
 
-                self.vars
-                    .get(ptr, builder, &mut self.constants)
-                    .val
-                    .drop_in_code(self, builder);
+                self.move_optimize = Ptr(usize::MAX);
+
+                if count != 1 {
+                    self.vars
+                        .get(ptr, builder, &mut self.constants)
+                        .val
+                        .drop_in_code(self, builder);
+                }
                 self.vars.store(
                     ptr,
                     VariableSlot {

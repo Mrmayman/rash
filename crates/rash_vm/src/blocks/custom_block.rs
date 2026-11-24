@@ -1,11 +1,15 @@
 use cranelift::{
     codegen::ir::types::I8,
-    prelude::{FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value, types::I64},
+    prelude::{FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, types::I64},
 };
 
 use crate::{
-    callbacks, compiler::Compiler, data_types::ScratchObject, effects::Effects,
-    input_primitives::Input, runtime::CustomBlockId,
+    callbacks,
+    compiler::Compiler,
+    data_types::ScratchObject,
+    effects::Effects,
+    input_primitives::{CompObj, Input},
+    runtime::CustomBlockId,
 };
 
 impl Compiler<'_> {
@@ -25,24 +29,25 @@ impl Compiler<'_> {
 
         self.vars
             .save(builder, &mut self.constants, self.memory, &effects);
-        let args: Vec<[Value; 4]> = args
+        let args: Vec<CompObj> = args
             .iter()
             .map(|n| n.get_object(self, builder))
             .collect::<Vec<_>>();
 
+        // TODO: pool slots
         let stack_slot = builder.create_sized_stack_slot(StackSlotData {
             kind: StackSlotKind::ExplicitSlot,
             size: (std::mem::size_of::<ScratchObject>() * args.len()) as u32,
             align_shift: 0,
             key: None,
         });
-        for (i, [i1, i2, i3, i4]) in args.into_iter().enumerate() {
+        for (i, obj) in args.into_iter().enumerate() {
+            let [i1, i2, i3] = obj.0;
             let o = (i * std::mem::size_of::<ScratchObject>()) as i32;
             // This will later be dropped inside the callback
             builder.ins().stack_store(i1, stack_slot, o);
             builder.ins().stack_store(i2, stack_slot, o + 8);
             builder.ins().stack_store(i3, stack_slot, o + 16);
-            builder.ins().stack_store(i4, stack_slot, o + 24);
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 
