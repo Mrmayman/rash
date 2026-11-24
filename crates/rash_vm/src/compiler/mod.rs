@@ -1017,6 +1017,21 @@ impl<'a> Compiler<'a> {
             .save(builder, &mut self.constants, self.memory, &self.effects);
     }
 
+    // Lifetime/ownership of the string:
+    //
+    // `s` is embedded into the machine code as a constant. The machine code
+    // references it, but Rust doesn't track that reference or its lifetime.
+    //
+    // We keep `s` alive by transferring ownership to `self.static_strings`,
+    // effectively tying its lifetime to that of the machine code.
+    //
+    // This is safe because `static_strings`:
+    // - Outlives the machine code.
+    // - Never accesses or modifies the strings.
+    // - Only drops them when the machine code is de-initialized.
+    //
+    // The string returned by this function is a separate runtime clone,
+    // with its own independent lifetime.
     pub fn clone_str(&mut self, builder: &mut FunctionBuilder<'_>, s: RtStr) -> CompStr {
         let [v1, v2] = s.make_constant(builder, &mut self.constants).0;
 

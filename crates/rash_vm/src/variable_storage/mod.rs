@@ -94,7 +94,6 @@ pub trait VarStore {
         string: &str,
         constants: &mut ConstantMap,
     ) -> EcoString {
-        // Transmute the SmolStr into a RtStr array
         let arr: RtStr = unsafe { std::mem::transmute(EcoString::from(string)) };
         let s = arr.make_constant(builder, constants);
 
@@ -105,15 +104,7 @@ pub trait VarStore {
             constants,
         );
 
-        // # Safety
-        //
-        // The string is intentionally owned in two places:
-        //
-        // - The generated machine code.
-        // - The compiler's `static_strings`.
-        //
-        // Neither mutates the string, and both the machine code AND the strings
-        // are dropped with the `Runtime`, so there's no use-after-free.
+        // Safety: See `Compiler::clone_str` for more info
         unsafe { std::mem::transmute(arr) }
     }
 }

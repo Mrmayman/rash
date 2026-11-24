@@ -404,6 +404,8 @@ impl Input {
                         .static_strings
                         .push(unsafe { std::mem::transmute::<RtStr, EcoString>(rtstr) });
 
+                    // To understand the lifetime semantics here,
+                    // check the docs of this function
                     let cloned = compiler.clone_str(builder, rtstr);
                     ScratchValue::String(cloned)
                 }
