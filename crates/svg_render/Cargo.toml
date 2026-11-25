@@ -5,10 +5,9 @@ edition = "2024"
 
 [dependencies]
 serde.workspace = true
-serde-xml-rs = "0.7"
+quick-xml = { version = "0.42", features = ["serialize"] }
 
 image.workspace = true
-usvg-text-layout = "0.29"
-usvg = "0.29"
-resvg = "0.29"
-tiny-skia = "0.8"
+usvg-text-layout = "0.38"
+usvg = "0.38"
+resvg = "0.38"

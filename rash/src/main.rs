@@ -86,9 +86,12 @@ pub struct App {
 
 impl App {
     pub async fn new(mut vm: Runtime, window: Arc<Window>) -> anyhow::Result<Self> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
-            ..Default::default()
+            flags: Default::default(),
+            memory_budget_thresholds: Default::default(),
+            backend_options: Default::default(),
+            display: None,
         });
 
         let surface = instance.create_surface(window.clone()).unwrap();
@@ -98,13 +101,14 @@ impl App {
                 power_preference: wgpu::PowerPreference::from_env().unwrap_or_default(),
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
+                apply_limit_buckets: true,
             })
             .await
             .unwrap();
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::TEXTURE_BINDING_ARRAY,
+                required_features: wgpu::Features::default(),
                 required_limits: wgpu::Limits::default(),
                 label: None,
                 memory_hints: wgpu::MemoryHints::default(),

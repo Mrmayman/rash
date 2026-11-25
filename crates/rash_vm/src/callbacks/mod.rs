@@ -16,7 +16,7 @@ macro_rules! print_func {
             println!("{}", $module);
             println!("========");
 
-            paste::paste! {
+            pastey::paste! {
                 $(
                     // println!(
                     //     "{:20} {:20} = {:#018x}",
@@ -37,7 +37,7 @@ macro_rules! print_func {
 
 macro_rules! declare_module {
     ($file:literal, $namespace:expr, $($func:ident),+ $(,)?) => {
-        paste::paste! {
+        pastey::paste! {
             print_func!(
                 $file,
                 $($func),*,
@@ -63,7 +63,7 @@ macro_rules! declare_module {
     (@consts $n:expr; ) => {};
 
     (@consts $n:expr; $func:ident $(, $rest:ident)*) => {
-        paste::paste! {
+        pastey::paste! {
             pub const [<$func:upper>]: cranelift::codegen::ir::UserExternalName = name($n);
         }
 

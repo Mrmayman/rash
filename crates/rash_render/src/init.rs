@@ -159,6 +159,7 @@ fn create_surface_config(
         alpha_mode: surface_caps.alpha_modes[0],
         view_formats: vec![],
         desired_maximum_frame_latency: 2,
+        color_space: wgpu::SurfaceColorSpace::Auto,
     }
 }
 
@@ -183,7 +184,7 @@ fn create_render_pipeline(
 
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
-        bind_group_layouts: &[bind_group_layout, costume_layout],
+        bind_group_layouts: &[Some(bind_group_layout), Some(costume_layout)],
         immediate_size: 0,
     });
 

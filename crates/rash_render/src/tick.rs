@@ -40,8 +40,24 @@ impl Renderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
-    ) -> Result<(), wgpu::SurfaceError> {
-        let output = surface.get_current_texture()?;
+    ) {
+        let output = match surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(s)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(s) => s,
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Validation
+            | wgpu::CurrentSurfaceTexture::Occluded => {
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                self.resize(self.window_size, device, queue, surface);
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                // TODO: recreate device and all resources
+                panic!("Surface lost");
+            }
+        };
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -87,9 +103,7 @@ impl Renderer {
 
         // submit will accept anything that implements IntoIter
         queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-
-        Ok(())
+        queue.present(output);
     }
 
     pub fn render(
@@ -103,20 +117,7 @@ impl Renderer {
 
         queue.write_buffer(&self.sprites_buffer, 0, bytemuck::cast_slice(&graphics));
 
-        match self.render_inner(sprite_order, &graphics, device, queue, surface) {
-            Ok(()) => {}
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                self.resize(self.window_size, device, queue, surface); // Reconfigure
-            }
-            Err(wgpu::SurfaceError::OutOfMemory) => {
-                eprintln!("[error] Graphics: Out Of Memory");
-                return;
-            }
-            // Frame took too long to present
-            Err(err) => {
-                eprintln!("[error] {err}");
-            }
-        }
+        self.render_inner(sprite_order, &graphics, device, queue, surface);
 
         let frametime = self.last_time.elapsed().as_secs_f64();
         self.last_time = Instant::now();
