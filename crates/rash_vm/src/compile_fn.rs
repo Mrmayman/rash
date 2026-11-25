@@ -2,17 +2,17 @@ use std::sync::Arc;
 
 use cranelift::{
     codegen::{
-        self, CompiledCode, FinalizedRelocTarget,
+        self, CompiledCode,
         binemit::Reloc,
         control::ControlPlane,
         ir::{
-            ExternalName, Function, StackSlotData, StackSlotKind, UserFuncName,
+            ExternalName, Function, MemFlagsData, StackSlotData, StackSlotKind, UserFuncName,
             types::{F64, I8},
         },
     },
     prelude::{
         AbiParam, Block, Configurable, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
-        MemFlags, Signature,
+        Signature,
         isa::{CallConv, TargetIsa},
         settings,
         types::I64,
@@ -95,7 +95,7 @@ pub fn compile(
     prepare_screen_refresh_points(&compiler, &mut builder, jmp1_block);
 
     builder.seal_all_blocks();
-    builder.finalize();
+    builder.finalize(isa.frontend_config());
 
     if print_ir() {
         println!("{}", func.display());
@@ -136,23 +136,36 @@ fn fetch_function_arguments(
         let datatype = arg_types.get(i).copied().unwrap_or_default();
 
         let val = match datatype.ty {
-            VarTypeChecked::Number => {
-                ScratchValue::Num(builder.ins().load(F64, MemFlags::new(), args_ptr, o + 8))
-            }
+            VarTypeChecked::Number => ScratchValue::Num(builder.ins().load(
+                F64,
+                MemFlagsData::new(),
+                args_ptr,
+                o + 8,
+            )),
             VarTypeChecked::Bool => {
-                let raw = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
-                let val = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                let raw = builder
+                    .ins()
+                    .load(I64, MemFlagsData::new(), args_ptr, o + 8);
+                let val = builder.ins().band_imm_u(raw, 0xff); // Fixes a UB issue (garbage data)
                 ScratchValue::Bool(val)
             }
             VarTypeChecked::String => {
-                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
+                let i2 = builder
+                    .ins()
+                    .load(I64, MemFlagsData::new(), args_ptr, o + 8);
+                let i3 = builder
+                    .ins()
+                    .load(I64, MemFlagsData::new(), args_ptr, o + 16);
                 ScratchValue::String(CompStr([i2, i3]))
             }
             VarTypeChecked::Object => {
-                let i1 = builder.ins().load(I64, MemFlags::new(), args_ptr, o);
-                let i2 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), args_ptr, o + 16);
+                let i1 = builder.ins().load(I64, MemFlagsData::new(), args_ptr, o);
+                let i2 = builder
+                    .ins()
+                    .load(I64, MemFlagsData::new(), args_ptr, o + 8);
+                let i3 = builder
+                    .ins()
+                    .load(I64, MemFlagsData::new(), args_ptr, o + 16);
                 ScratchValue::Object(CompObj([i1, i2, i3]))
             }
         };
@@ -202,7 +215,7 @@ fn prepare_screen_refresh_points(
     for (i, point) in compiler.break_points.iter().enumerate() {
         builder.switch_to_block(jmp1_block);
         let param = builder.block_params(jmp1_block)[0];
-        let cmp = builder.ins().icmp_imm(IntCC::Equal, param, i as i64);
+        let cmp = builder.ins().icmp_imm_u(IntCC::Equal, param, i as i64);
         jmp1_block = builder.create_block();
         builder.append_block_param(jmp1_block, I64);
         builder
@@ -252,7 +265,7 @@ pub fn prepare_buffer(code: &CompiledCode, buffer: &memmap2::MmapMut, func_map: 
     let end_ptr = unsafe { start_ptr.add(buffer.len()) };
 
     for reloc in code.buffer.relocs() {
-        let FinalizedRelocTarget::ExternalName(target_name) = &reloc.target else {
+        let codegen::RelocTarget::ExternalName(target_name) = &reloc.target else {
             continue;
         };
         let target_addr: usize = match target_name {

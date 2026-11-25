@@ -45,9 +45,9 @@ impl Compiler<'_> {
             let [i1, i2, i3] = obj.0;
             let o = (i * std::mem::size_of::<ScratchObject>()) as i32;
             // This will later be dropped inside the callback
-            builder.ins().stack_store(i1, stack_slot, o);
-            builder.ins().stack_store(i2, stack_slot, o + 8);
-            builder.ins().stack_store(i3, stack_slot, o + 16);
+            builder.ins().stack_store(I64, i1, stack_slot, o);
+            builder.ins().stack_store(I64, i2, stack_slot, o + 8);
+            builder.ins().stack_store(I64, i3, stack_slot, o + 16);
         }
         let slot_ptr = builder.ins().stack_addr(I64, stack_slot, 0);
 

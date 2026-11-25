@@ -1,5 +1,5 @@
 use cranelift::{
-    codegen::ir::{MemFlags, condcodes::IntCC},
+    codegen::ir::{MemFlagsData, condcodes::IntCC},
     prelude::{
         FloatCC, FunctionBuilder, InstBuilder, StackSlotData, StackSlotKind, Value,
         types::{F64, I64},
@@ -314,11 +314,7 @@ impl Input {
                     ScratchValue::Num(value) => {
                         let id = compiler.constants.get_int(ID_NUMBER, builder);
                         let zero = compiler.constants.get_int(0, builder);
-                        let value = builder.ins().bitcast(
-                            I64,
-                            cranelift::codegen::ir::MemFlags::new(),
-                            value,
-                        );
+                        let value = builder.ins().bitcast(I64, MemFlagsData::new(), value);
                         CompObj([id, value, zero])
                     }
                     ScratchValue::Bool(value) => {
@@ -556,8 +552,8 @@ impl ScratchValue {
                     ));
 
                 let [i1, i2] = s.0;
-                builder.ins().stack_store(i1, slot, 0);
-                builder.ins().stack_store(i2, slot, 8);
+                builder.ins().stack_store(I64, i1, slot, 0);
+                builder.ins().stack_store(I64, i2, slot, 8);
                 builder.ins().stack_addr(I64, slot, 0)
             }
             ScratchValue::Object(obj) => get_string_from_obj(builder, compiler, obj),
@@ -583,8 +579,8 @@ impl ScratchValue {
 
                 // In Scratch, -0.0 is truthy. But IEEE 754 says -0.0 == +0.0.
                 // So we bitcast and check against raw bits of +0.0 (which is just 0)
-                let bits = builder.ins().bitcast(I64, MemFlags::new(), *value);
-                let is_not_zero = builder.ins().icmp_imm(IntCC::NotEqual, bits, 0);
+                let bits = builder.ins().bitcast(I64, MemFlagsData::new(), *value);
+                let is_not_zero = builder.ins().icmp_imm_u(IntCC::NotEqual, bits, 0);
                 let is_not_nan = builder.ins().fcmp(FloatCC::Equal, *value, *value);
 
                 let res = builder.ins().band(is_not_zero, is_not_nan);
@@ -620,8 +616,8 @@ impl ScratchValue {
                     &[],
                     &[i1, i2, compiler.temp_slot4.0],
                 );
-                let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
-                let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
+                let i1 = builder.ins().stack_load(I64, I64, compiler.temp_slot4.1, 0);
+                let i2 = builder.ins().stack_load(I64, I64, compiler.temp_slot4.1, 8);
                 ScratchValue::String(CompStr([i1, i2]))
             }
             ScratchValue::Object(obj) => {
@@ -633,9 +629,11 @@ impl ScratchValue {
                     &[],
                     &[i1, i2, i3, compiler.temp_slot4.0],
                 );
-                let i1 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 0);
-                let i2 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 8);
-                let i3 = builder.ins().stack_load(I64, compiler.temp_slot4.1, 16);
+                let i1 = builder.ins().stack_load(I64, I64, compiler.temp_slot4.1, 0);
+                let i2 = builder.ins().stack_load(I64, I64, compiler.temp_slot4.1, 8);
+                let i3 = builder
+                    .ins()
+                    .stack_load(I64, I64, compiler.temp_slot4.1, 16);
                 ScratchValue::Object(CompObj([i1, i2, i3]))
             }
         }
@@ -666,7 +664,7 @@ impl ScratchValue {
     ) -> CompObj {
         match self {
             ScratchValue::Num(n) => {
-                let n = builder.ins().bitcast(I64, MemFlags::new(), *n);
+                let n = builder.ins().bitcast(I64, MemFlagsData::new(), *n);
                 let id = constants.get_int(ID_NUMBER, builder);
                 let zero = constants.get_int(0, builder);
                 CompObj([id, n, zero])

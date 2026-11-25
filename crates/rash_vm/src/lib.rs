@@ -19,7 +19,7 @@
 //! let mut vm = builder.build();
 //! // Make sure `memory` lives as long as `vm`
 //!
-//! let mut state = RunState::new(); // No graphics operations
+//! let mut state = RunState::default(); // No graphics operations
 //! while !vm.update(&mut state) {}
 //! ```
 

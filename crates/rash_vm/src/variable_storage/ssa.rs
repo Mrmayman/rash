@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cranelift::{
     codegen::ir::{
-        InstBuilder, MemFlags,
+        InstBuilder, MemFlagsData,
         types::{F64, I64},
     },
     frontend::FunctionBuilder,
@@ -56,23 +56,23 @@ impl SsaVarStore {
 
             let val = match external_env.ty {
                 VarTypeChecked::Number => {
-                    let i2 = builder.ins().load(F64, MemFlags::new(), ptr, 8);
+                    let i2 = builder.ins().load(F64, MemFlagsData::new(), ptr, 8);
                     ScratchValue::Num(i2)
                 }
                 VarTypeChecked::Bool => {
-                    let raw = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                    let val = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                    let raw = builder.ins().load(I64, MemFlagsData::new(), ptr, 8);
+                    let val = builder.ins().band_imm_u(raw, 0xff); // Fixes a UB issue (garbage data)
                     ScratchValue::Bool(val)
                 }
                 VarTypeChecked::String => {
-                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                    let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                    let i2 = builder.ins().load(I64, MemFlagsData::new(), ptr, 8);
+                    let i3 = builder.ins().load(I64, MemFlagsData::new(), ptr, 16);
                     ScratchValue::String(CompStr([i2, i3]))
                 }
                 VarTypeChecked::Object => {
-                    let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
-                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                    let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                    let i1 = builder.ins().load(I64, MemFlagsData::new(), ptr, 0);
+                    let i2 = builder.ins().load(I64, MemFlagsData::new(), ptr, 8);
+                    let i3 = builder.ins().load(I64, MemFlagsData::new(), ptr, 16);
 
                     ScratchValue::Object(CompObj([i1, i2, i3]))
                 }
@@ -155,29 +155,29 @@ impl super::VarStore for SsaVarStore {
             match &val.val {
                 ScratchValue::Num(value) => {
                     let id = constants.get_int(ID_NUMBER, builder);
-                    builder.ins().store(MemFlags::new(), id, ptr, 0);
-                    builder.ins().store(MemFlags::new(), *value, ptr, 8);
+                    builder.ins().store(MemFlagsData::new(), id, ptr, 0);
+                    builder.ins().store(MemFlagsData::new(), *value, ptr, 8);
                 }
                 ScratchValue::Bool(value) => {
                     let id = constants.get_int(ID_BOOL, builder);
-                    builder.ins().store(MemFlags::new(), id, ptr, 0);
-                    builder.ins().store(MemFlags::new(), *value, ptr, 8);
+                    builder.ins().store(MemFlagsData::new(), id, ptr, 0);
+                    builder.ins().store(MemFlagsData::new(), *value, ptr, 8);
                 }
                 ScratchValue::String(vals) => {
                     let id = constants.get_int(ID_STRING, builder);
-                    builder.ins().store(MemFlags::new(), id, ptr, 0);
+                    builder.ins().store(MemFlagsData::new(), id, ptr, 0);
 
                     for (i, val) in vals.0.iter().enumerate() {
                         builder
                             .ins()
-                            .store(MemFlags::new(), *val, ptr, ((i + 1) * 8) as i32);
+                            .store(MemFlagsData::new(), *val, ptr, ((i + 1) * 8) as i32);
                     }
                 }
                 ScratchValue::Object(vals) => {
                     for (i, val) in vals.0.iter().enumerate() {
                         builder
                             .ins()
-                            .store(MemFlags::new(), *val, ptr, (i * 8) as i32);
+                            .store(MemFlagsData::new(), *val, ptr, (i * 8) as i32);
                     }
                 }
             }
@@ -196,9 +196,9 @@ impl super::VarStore for SsaVarStore {
             let write = effects.writes.get(var).copied();
 
             if effects.is_unknown || write.is_some_and(|n| n.ty == VarTypeChecked::Object) {
-                let i1 = builder.ins().load(I64, MemFlags::new(), ptr, 0);
-                let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                let i1 = builder.ins().load(I64, MemFlagsData::new(), ptr, 0);
+                let i2 = builder.ins().load(I64, MemFlagsData::new(), ptr, 8);
+                let i3 = builder.ins().load(I64, MemFlagsData::new(), ptr, 16);
 
                 *val = VariableSlot::normal(ScratchValue::Object(CompObj([i1, i2, i3])));
                 continue;
@@ -206,17 +206,17 @@ impl super::VarStore for SsaVarStore {
             let Some(write) = write else { continue };
             match write.ty {
                 VarTypeChecked::Number => {
-                    let i2 = builder.ins().load(F64, MemFlags::new(), ptr, 8);
+                    let i2 = builder.ins().load(F64, MemFlagsData::new(), ptr, 8);
                     *val = VariableSlot::normal(ScratchValue::Num(i2));
                 }
                 VarTypeChecked::Bool => {
-                    let raw = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                    let i2 = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                    let raw = builder.ins().load(I64, MemFlagsData::new(), ptr, 8);
+                    let i2 = builder.ins().band_imm_u(raw, 0xff); // Fixes a UB issue (garbage data)
                     *val = VariableSlot::normal(ScratchValue::Bool(i2));
                 }
                 VarTypeChecked::String => {
-                    let i2 = builder.ins().load(I64, MemFlags::new(), ptr, 8);
-                    let i3 = builder.ins().load(I64, MemFlags::new(), ptr, 16);
+                    let i2 = builder.ins().load(I64, MemFlagsData::new(), ptr, 8);
+                    let i3 = builder.ins().load(I64, MemFlagsData::new(), ptr, 16);
                     *val = VariableSlot::normal(ScratchValue::String(CompStr([i2, i3])));
                 }
                 VarTypeChecked::Object => unreachable!(),

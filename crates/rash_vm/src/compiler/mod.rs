@@ -1062,8 +1062,8 @@ impl<'a> Compiler<'a> {
         );
 
         CompStr([
-            builder.ins().stack_load(I64, self.temp_slot4.1, 0),
-            builder.ins().stack_load(I64, self.temp_slot4.1, 8),
+            builder.ins().stack_load(I64, I64, self.temp_slot4.1, 0),
+            builder.ins().stack_load(I64, I64, self.temp_slot4.1, 8),
         ])
     }
 
@@ -1102,8 +1102,8 @@ impl<'a> Compiler<'a> {
             &[],
             &[i1, i2, i3, self.temp_slot4.0],
         );
-        let n = builder.ins().stack_load(F64, self.temp_slot4.1, 0);
-        let b = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        let n = builder.ins().stack_load(I64, F64, self.temp_slot4.1, 0);
+        let b = builder.ins().stack_load(I64, I64, self.temp_slot4.1, 8);
         (n, b)
     }
 }

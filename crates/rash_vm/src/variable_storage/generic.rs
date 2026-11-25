@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use cranelift::{
     codegen::ir::{
-        InstBuilder, MemFlags,
+        InstBuilder, MemFlagsData,
         types::{F64, I64},
     },
     frontend::FunctionBuilder,
@@ -50,14 +50,14 @@ impl VarStore for GenericVarStore {
         let mut load_val = |t, off| {
             builder
                 .ins()
-                .load(t, MemFlags::new(), load_ptr, offset + off)
+                .load(t, MemFlagsData::new(), load_ptr, offset + off)
         };
 
         let val = match variable.ty {
             VarTypeChecked::Number => ScratchValue::Num(load_val(F64, 8)),
             VarTypeChecked::Bool => {
                 let raw = load_val(I64, 8);
-                let val = builder.ins().band_imm(raw, 0xff); // Fixes a UB issue (garbage data)
+                let val = builder.ins().band_imm_u(raw, 0xff); // Fixes a UB issue (garbage data)
                 ScratchValue::Bool(val)
             }
             VarTypeChecked::String => {
@@ -92,13 +92,15 @@ impl VarStore for GenericVarStore {
             && let Some(id) = new_ty.get_id()
         {
             let id = constants.get_int(id, builder);
-            builder.ins().store(MemFlags::new(), id, load_ptr, offset);
+            builder
+                .ins()
+                .store(MemFlagsData::new(), id, load_ptr, offset);
         }
 
         let mut store_val = |v, off| {
             builder
                 .ins()
-                .store(MemFlags::new(), v, load_ptr, offset + off)
+                .store(MemFlagsData::new(), v, load_ptr, offset + off)
         };
 
         match value.val {

@@ -144,7 +144,7 @@ impl Compiler<'_> {
             &[a1, a2, a3, b1, b2, b3],
         );
         let r = builder.inst_results(inst)[0];
-        let out = builder.ins().icmp_imm(IntCC::Equal, r, comp as i64);
+        let out = builder.ins().icmp_imm_u(IntCC::Equal, r, comp as i64);
         builder.ins().uextend(I64, out)
     }
 
@@ -220,8 +220,8 @@ impl Compiler<'_> {
             &[a, b, self.temp_slot4.0],
         );
         // Read resulting string
-        let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
-        let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        let i1 = builder.ins().stack_load(I64, I64, self.temp_slot4.1, 0);
+        let i2 = builder.ins().stack_load(I64, I64, self.temp_slot4.1, 8);
         CompStr([i1, i2])
     }
 
@@ -309,8 +309,8 @@ impl Compiler<'_> {
             &[string, letter, self.temp_slot4.0],
         );
 
-        let i1 = builder.ins().stack_load(I64, self.temp_slot4.1, 0);
-        let i2 = builder.ins().stack_load(I64, self.temp_slot4.1, 8);
+        let i1 = builder.ins().stack_load(I64, I64, self.temp_slot4.1, 0);
+        let i2 = builder.ins().stack_load(I64, I64, self.temp_slot4.1, 8);
         CompStr([i1, i2])
     }
 
