@@ -134,7 +134,7 @@ impl super::VarStore for SsaVarStore {
         self.variable_vals.extend(info);
     }
 
-    fn get(&self, ptr: Ptr, _: &mut FunctionBuilder<'_>, _: &mut ConstantMap) -> VariableSlot {
+    fn get(&self, ptr: Ptr, _: &mut FunctionBuilder<'_>) -> VariableSlot {
         self.get_inner(ptr)
     }
 

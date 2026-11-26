@@ -249,7 +249,7 @@ impl Compiler<'_> {
         }
 
         for (ptr, param) in final_params {
-            let val = self.vars.get(*ptr, builder, &mut self.constants);
+            let val = self.vars.get(*ptr, builder);
             match param.val {
                 ScratchValue::Num(_) => {
                     let ScratchValue::Num(v) = val.val else {

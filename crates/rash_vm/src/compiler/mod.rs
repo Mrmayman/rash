@@ -684,7 +684,7 @@ impl<'a> Compiler<'a> {
         );
 
         let vars: Box<dyn VarStore> = if effects.is_unknown {
-            Box::new(GenericVarStore::new(memory))
+            Box::new(GenericVarStore::new(builder, memory))
         } else {
             Box::new(SsaVarStore::new(
                 builder,

@@ -16,12 +16,7 @@ pub use generic::GenericVarStore;
 pub trait VarStore {
     fn clone_box(&self) -> Box<dyn VarStore>;
 
-    fn get(
-        &self,
-        ptr: Ptr,
-        builder: &mut FunctionBuilder<'_>,
-        constants: &mut ConstantMap,
-    ) -> VariableSlot;
+    fn get(&self, ptr: Ptr, builder: &mut FunctionBuilder<'_>) -> VariableSlot;
     fn store(
         &mut self,
         ptr: Ptr,
