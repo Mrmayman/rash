@@ -1,5 +1,7 @@
 use crate::{
-    Input, ScratchBlock, builder::set, compiler::VarTypeChecked, effects::CallSiteInfo,
+    Input, ScratchBlock,
+    builder::set,
+    effects::{CallSiteInfo, VarTypeChecked},
     runtime::CustomBlockId,
 };
 

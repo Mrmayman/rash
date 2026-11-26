@@ -127,6 +127,9 @@ pub struct BlockFields {
     #[serde(rename = "VALUE")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<Value>,
+    #[serde(rename = "LIST")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list: Option<Vec<Value>>,
     #[serde(flatten)]
     pub others: BTreeMap<String, Value>,
 }

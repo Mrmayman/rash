@@ -55,6 +55,12 @@ pub fn variable_field(b: &Block) -> Result<&str, Sb3Error> {
     expect_str(variable, "b.fields.VARIABLE").trace(F)
 }
 
+pub fn list_field(b: &Block) -> Result<&str, Sb3Error> {
+    const F: &str = "get::list_field";
+    let list = get_idx_array(b.fields.list.as_ref(), 1, "b.fields.LIST").trace(F)?;
+    expect_str(list, "b.fields.LIST").trace(F)
+}
+
 pub fn boolean(b: &Block, ctx: &mut CompileContext, name: &str) -> Result<Input, Sb3Error> {
     const F: &str = "get::boolean";
     let Some(input) = b.inputs.get(name) else {

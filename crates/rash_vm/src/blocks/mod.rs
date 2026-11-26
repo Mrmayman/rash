@@ -5,10 +5,11 @@ use cranelift::{
 
 use crate::compiler::Compiler;
 
-pub mod control;
-pub mod custom_block;
-pub mod op;
-pub mod var;
+mod control;
+mod custom_block;
+mod list;
+mod op;
+mod var;
 
 impl Compiler<'_> {
     pub fn call_function(

@@ -63,6 +63,7 @@ pub mod error;
 mod gapvec;
 mod input_primitives;
 mod jit_func;
+mod lists;
 pub mod runtime;
 mod variable_storage;
 
@@ -72,7 +73,7 @@ mod tests;
 pub use callbacks::print_function_addresses;
 pub use compiler::ScratchBlock;
 pub use data_types::ScratchObject;
-pub use input_primitives::{Input, Ptr};
+pub use input_primitives::{Input, ListId, Ptr};
 pub use rash_core::*;
 pub use runtime::{ProjectBuilder, Runtime, Script, SpriteBuilder};
 

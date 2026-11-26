@@ -6,7 +6,7 @@ use std::{
 use rash_core::{CostumeStore, RawCostumeData, SpriteId};
 use rash_loader_sb3_json::{JsonBlock, Target};
 use rash_vm::{
-    Ptr, ScratchBlock, SpriteBuilder,
+    ListId, Ptr, ScratchBlock, SpriteBuilder,
     error::{ErrorConvert, RashError, Trace},
     runtime::Script,
 };
@@ -61,6 +61,7 @@ fn get_costume_bytes<R: Read + Seek>(
 pub fn load_blocks(
     sprite_json: &Target,
     variable_map: &mut HashMap<String, Ptr>,
+    list_map: &mut HashMap<String, ListId>,
     custom_block_num: &mut usize,
     sprite: &mut SpriteBuilder,
 ) -> Result<(), Sb3Error> {
@@ -69,6 +70,7 @@ pub fn load_blocks(
     let mut ctx = CompileContext {
         sprite_json: sprite_json.clone(),
         variable_map,
+        list_map,
         custom_block_defs: HashMap::new(),
         custom_block_num,
         current_custom_block: None,

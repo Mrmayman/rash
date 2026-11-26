@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ProjectBuilder, Ptr, ScratchBlock, SpriteBuilder,
     builder::set,
-    compiler::VarTypeChecked,
-    effects::Effects,
+    effects::{Effects, VarTypeChecked},
     runtime::{CustomBlockId, Script},
 };
 

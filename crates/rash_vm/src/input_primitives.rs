@@ -9,11 +9,20 @@ use ecow::EcoString;
 
 use crate::{
     callbacks,
-    compiler::{Compiler, FunctionArg, ScratchBlock, VarTypeChecked},
+    compiler::{Compiler, FunctionArg, ScratchBlock},
     constant_set::ConstantMap,
     data_types::{ID_BOOL, ID_NUMBER, ID_STRING, ScratchObject},
-    effects::VariableWrite,
+    effects::{VarTypeChecked, VariableWrite},
 };
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ListId(pub usize);
+
+impl std::fmt::Debug for ListId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "list{}", self.0)
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(pub usize);

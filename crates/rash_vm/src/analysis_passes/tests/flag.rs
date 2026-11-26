@@ -1,4 +1,4 @@
-use crate::{ScratchBlock, Script, builder::set, compiler::VarTypeChecked};
+use crate::{ScratchBlock, Script, builder::set, effects::VarTypeChecked};
 
 use super::{A, B, X, Y, assert_writes, call, custom_block, project};
 

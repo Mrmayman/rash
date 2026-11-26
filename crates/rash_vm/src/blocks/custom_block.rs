@@ -5,9 +5,9 @@ use cranelift::{
 
 use crate::{
     callbacks,
-    compiler::{Compiler, VarTypeChecked},
+    compiler::Compiler,
     data_types::ScratchObject,
-    effects::Effects,
+    effects::{Effects, VarTypeChecked},
     input_primitives::Input,
     runtime::CustomBlockId,
 };
