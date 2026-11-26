@@ -242,8 +242,9 @@ impl CompileContext<'_> {
                 id: CustomBlockId(*self.custom_block_num),
             };
             *self.custom_block_num += 1;
-            self.custom_block_defs.insert(proccode.clone(), blockdef);
-            Ok(self.custom_block_defs.get(proccode).unwrap().clone())
+            self.custom_block_defs
+                .insert(proccode.clone(), blockdef.clone());
+            Ok(blockdef)
         }
     }
 }
@@ -349,9 +350,11 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
             if s == Some("this script") {
                 Ok(ScratchBlock::ControlStopThisScript)
             } else if s == Some("all") {
-                todo!("Stop all")
+                println!("TODO: Stop all");
+                Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
             } else if s == Some("other scripts in sprite") {
-                todo!("Stop other scripts in sprite")
+                println!("TODO: Stop other scripts in sprite");
+                Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))
             } else {
                 unreachable!();
             }

@@ -88,11 +88,7 @@ impl Target {
             matches!(
                 block,
                 JsonBlock::Block {
-                    block: Block {
-                        next: Some(_),
-                        parent: None,
-                        ..
-                    }
+                    block: Block { parent: None, .. }
                 }
             )
         })

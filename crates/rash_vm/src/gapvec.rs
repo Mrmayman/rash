@@ -31,7 +31,7 @@ impl<T> GapVec<T> {
         self.inner.push(Some(item));
     }
 
-    pub fn into_regular_vec(self, out: &mut Vec<T>) {
+    pub fn push_to_regular_vec(self, out: &mut Vec<T>) {
         if self.inner.len() <= out.len() {
             if cfg!(debug_assertions) {
                 for i in &self.inner {
@@ -40,9 +40,13 @@ impl<T> GapVec<T> {
             }
             return;
         }
+
         out.reserve(self.inner.len() - out.len());
-        for item in self.inner.into_iter().skip(out.len()) {
-            out.push(item.expect("GapVec shouldn't have gaps after resolving"));
+        for (i, item) in self.inner.into_iter().enumerate().skip(out.len()) {
+            let Some(item) = item else {
+                panic!("GapVec has a gap at index {i}");
+            };
+            out.push(item);
         }
     }
 

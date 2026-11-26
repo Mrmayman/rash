@@ -229,7 +229,11 @@ impl Compiler<'_> {
         let end_params = self.generate_params(builder, &final_params);
         builder.ins().jump(end_block, &end_params);
         builder.switch_to_block(end_block);
-        self.constants = old_consts;
+        if effects.yields {
+            self.constants.clear();
+        } else {
+            self.constants = old_consts;
+        }
         self.vars = old_vars;
         self.vars.extend(final_params);
     }
@@ -327,7 +331,11 @@ impl Compiler<'_> {
         builder.ins().jump(end_block, &else_params);
 
         builder.switch_to_block(end_block);
-        self.constants = old_consts;
+        if effects.yields {
+            self.constants.clear();
+        } else {
+            self.constants = old_consts;
+        }
         self.vars = old_vars;
         self.vars.extend(final_params);
     }

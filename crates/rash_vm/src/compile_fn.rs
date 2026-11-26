@@ -24,7 +24,7 @@ use crate::{
     Ptr,
     callbacks::{self, declare_callbacks},
     compiler::{Compiler, FuncMap, FunctionArg, ScratchBlock, VarTypeChecked},
-    config::print_ir,
+    config::{print_blocks, print_ir},
     data_types::ScratchObject,
     effects::{Effects, VariableWrite},
     input_primitives::{CompObj, CompStr, ScratchValue},
@@ -97,20 +97,44 @@ pub fn compile(
     builder.seal_all_blocks();
     builder.finalize(isa.frontend_config());
 
+    let ir_displayed = func.display().to_string();
     if print_ir() {
-        println!("{}", func.display());
+        println!("{ir_displayed}");
     }
 
-    (
-        compile_ir(
-            func,
-            &compiler.func_store.func_map,
-            &isa,
-            id,
-            compiler.is_inherently_pausable,
-        ),
-        compiler.static_strings,
-    )
+    let thread = match compile_ir(
+        func,
+        &compiler.func_store.func_map,
+        &isa,
+        id,
+        compiler.is_inherently_pausable,
+    ) {
+        Ok(thread) => thread,
+        Err(err) => {
+            print_diagnostics(script, ir_displayed, err);
+        }
+    };
+    (thread, compiler.static_strings)
+}
+
+fn print_diagnostics(
+    script: &[ScratchBlock],
+    ir_displayed: String,
+    err: codegen::CodegenError,
+) -> ! {
+    eprintln!("========================================");
+    eprintln!("Error compiling script:\n");
+    if !print_blocks() {
+        for block in script {
+            eprintln!("{}", block.format(0));
+        }
+        eprintln!("\n========================================");
+    }
+    if !print_ir() {
+        eprintln!("\n{ir_displayed}\n");
+    }
+    eprintln!("{err}\n{err:?}");
+    std::process::exit(1);
 }
 
 fn get_call_args<'a>(builder: &'a mut FunctionBuilder<'_>) -> &'a [cranelift::prelude::Value] {
@@ -197,14 +221,14 @@ fn compile_ir(
     isa: &Arc<dyn TargetIsa>,
     id: SpriteId,
     is_screen_refresh: bool,
-) -> ScratchThread {
+) -> Result<ScratchThread, codegen::CodegenError> {
     let mut ctx = codegen::Context::for_function(func);
     let mut plane = ControlPlane::default();
-    ctx.optimize(isa.as_ref(), &mut plane).unwrap();
+    ctx.optimize(isa.as_ref(), &mut plane)?;
 
-    let code = ctx.compile(&**isa, &mut plane).unwrap();
+    let code = ctx.compile(&**isa, &mut plane).map_err(|n| n.inner)?;
 
-    ScratchThread::new(code, func_map, id, is_screen_refresh)
+    Ok(ScratchThread::new(code, func_map, id, is_screen_refresh))
 }
 
 fn prepare_screen_refresh_points(

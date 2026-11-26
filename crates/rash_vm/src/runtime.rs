@@ -227,7 +227,7 @@ impl ProjectBuilder {
             .scripts
             .custom_blocks
             .inline_map(|s| (id, s))
-            .into_regular_vec(&mut this.custom_blocks);
+            .push_to_regular_vec(&mut this.custom_blocks);
     }
 
     pub fn set_sprite_order(&mut self, order: Vec<SpriteId>) {
