@@ -1,6 +1,6 @@
 use rand::RngExt;
 
-use crate::ScratchObject;
+use crate::{ScratchObject, data_types::ScratchCmp};
 
 declare_module!(
     "op.rs", 3, floor, sin, cos, tan, cmp, random, ceil, trunc, nearest, fma, ln, log10, exp,

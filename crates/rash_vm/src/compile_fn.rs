@@ -23,12 +23,13 @@ use ecow::EcoString;
 use crate::{
     Ptr,
     callbacks::{self, declare_callbacks},
-    compiler::{Compiler, FuncMap, FunctionArg, ScratchBlock, VarTypeChecked},
+    compiler::{Compiler, FuncMap, FunctionArg, ScratchBlock, lists::ListManager},
     config::{print_blocks, print_ir},
     data_types::ScratchObject,
-    effects::{Effects, VariableWrite},
+    effects::{Effects, VarTypeChecked, VariableWrite},
     input_primitives::{CompObj, CompStr, ScratchValue},
     jit_func::JitArgs,
+    lists::ScratchListDummy,
     runtime::{CustomBlockId, ScratchThread},
 };
 use rash_core::SpriteId;
@@ -42,6 +43,8 @@ use rash_core::SpriteId;
 pub fn compile(
     script: &[ScratchBlock],
     memory: &[ScratchObject],
+    lists: &[ScratchListDummy],
+    lists_ty: &[VarTypeChecked],
     id: SpriteId,
     num_args: usize,
     is_inherently_pausable: bool,
@@ -81,6 +84,7 @@ pub fn compile(
         call_conv,
         custom_block_effects,
         external_env,
+        ListManager::new(lists, lists_ty),
     );
 
     for block in script {

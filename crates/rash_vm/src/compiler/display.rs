@@ -22,6 +22,7 @@ impl ScratchBlock {
             ScratchBlock::VarSet(ptr, input) => format!("{ptr:?} = {}", input.format(0)),
             ScratchBlock::VarChange(ptr, input) => format!("{ptr:?} += {}", input.format(0)),
             ScratchBlock::VarRead(ptr) => format!("{ptr:?}"),
+            ScratchBlock::ListClear(ptr) => format!("{ptr:?}.clear()"),
             ScratchBlock::LocalsGet(n) => format!("l{n}"),
             ScratchBlock::OpAdd(input, input1) => op_inner("+", input, input1),
             ScratchBlock::OpSub(input, input1) => op_inner("-", input, input1),
@@ -50,9 +51,14 @@ impl ScratchBlock {
             ScratchBlock::OpLog(input) => func_call_inner("log", &[input]),
             ScratchBlock::OpExp(input) => func_call_inner("e^", &[input]),
             ScratchBlock::OpExp10(input) => func_call_inner("10^", &[input]),
-            ScratchBlock::OpCmp(input, input1, Ordering::Greater) => op_inner(">", input, input1),
-            ScratchBlock::OpCmp(input, input1, Ordering::Less) => op_inner("<", input, input1),
-            ScratchBlock::OpCmp(input, input1, Ordering::Equal) => op_inner("==", input, input1),
+            ScratchBlock::OpCmp(input, input1, ord) => {
+                let op = match ord {
+                    Ordering::Greater => ">",
+                    Ordering::Less => "<",
+                    Ordering::Equal => "==",
+                };
+                op_inner(op, input, input1)
+            }
             ScratchBlock::OpRandom(input, input1) => func_call_inner("random", &[input, input1]),
             ScratchBlock::OpStrLetterOf(input, input1) => {
                 func_call_inner("str.letter_of", &[input, input1])

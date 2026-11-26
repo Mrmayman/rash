@@ -10,9 +10,10 @@ use crate::{
     compiler::{FuncMap, ScratchBlock},
     config::print_blocks,
     data_types::ScratchObject,
-    effects::{Effects, VariableWrite},
+    effects::{Effects, VarTypeChecked, VariableWrite},
     gapvec::GapVec,
     jit_func::JitFunction,
+    lists::{ScratchList, ScratchListDummy},
 };
 use rash_core::{CostumeStore, RunState, SpriteId, SpriteLoadData};
 
@@ -238,16 +239,9 @@ impl ProjectBuilder {
         self.runtime.costumes = costumes;
     }
 
+    // This is where all your magic happens :D
     #[must_use]
     pub fn build(mut self) -> Runtime {
-        // This is where all your magic happens :D
-        self.compile();
-
-        self.runtime.init();
-        self.runtime
-    }
-
-    fn compile(&mut self) {
         let analysis = self.analyze_custom_blocks();
 
         self.runtime.memory = (0..analysis.var_buf_len)
@@ -257,6 +251,23 @@ impl ProjectBuilder {
                     .get(&Ptr(n))
                     .cloned()
                     .unwrap_or(ScratchObject::Number(0.0))
+            })
+            .collect();
+
+        self.runtime.lists = (0..analysis.list_buf_len)
+            .into_iter()
+            .map(|n| {
+                // TODO: self.original_lists
+                // TODO: suitable type based on analysis and self.original_lists
+                ScratchListDummy::from_list(&ScratchList::<ScratchObject>::new())
+            })
+            .collect();
+
+        self.runtime.lists_ty = (0..analysis.list_buf_len)
+            .into_iter()
+            .map(|n| {
+                // TODO: suitable type based on analysis and self.original_lists
+                VarTypeChecked::Object
             })
             .collect();
 
@@ -286,6 +297,8 @@ impl ProjectBuilder {
             let (thread, static_strings) = compile(
                 &scr.blocks,
                 &self.runtime.memory,
+                &self.runtime.lists,
+                &self.runtime.lists_ty,
                 *sprite_id,
                 script.num_args,
                 scr.kind.is_screen_refresh(),
@@ -338,6 +351,8 @@ impl ProjectBuilder {
             let (thread, static_strings) = compile(
                 &scr.blocks,
                 &self.runtime.memory,
+                &self.runtime.lists,
+                &self.runtime.lists_ty,
                 *sprite_id,
                 0,
                 true,
@@ -356,6 +371,9 @@ impl ProjectBuilder {
             *script = MaybeCompiled::Compiled(thread);
             self.runtime.static_strings.extend(static_strings);
         }
+
+        self.runtime.init();
+        self.runtime
     }
 
     pub fn set_init_state(&mut self, state_map: HashMap<SpriteId, SpriteLoadData>) {
@@ -374,6 +392,8 @@ pub struct Runtime {
     pub sprite_load_info: HashMap<SpriteId, SpriteLoadData>,
     static_strings: Vec<EcoString>,
     pub memory: Box<[ScratchObject]>,
+    lists: Box<[ScratchListDummy]>,
+    lists_ty: Box<[VarTypeChecked]>,
 }
 
 impl Runtime {
@@ -421,8 +441,13 @@ impl Runtime {
         });
     }
 
-    // Our runtime holds on to pointers and other unsafe stuff,
-    // wouldn't want to clone *that* in public.
+    /// Private, unsafe cloning implementation.
+    ///
+    /// Our runtime holds on to pointers and other unsafe stuff,
+    /// wouldn't want to clone *that* in public.
+    ///
+    /// Do not call after [`ProjectBuilder::build`] has been called.
+    /// Before that, it's safe.
     fn clone_private(&self) -> Self {
         Self {
             sprite_order: self.sprite_order.clone(),
@@ -432,6 +457,12 @@ impl Runtime {
             sprite_load_info: self.sprite_load_info.clone(),
             static_strings: self.static_strings.clone(),
             memory: self.memory.clone(),
+            lists: self
+                .lists
+                .iter()
+                .map(|n| unsafe { n.clone_unsafe() })
+                .collect(),
+            lists_ty: self.lists_ty.clone(),
         }
     }
 }

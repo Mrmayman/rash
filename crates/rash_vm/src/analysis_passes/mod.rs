@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ProjectBuilder, Ptr, ScratchBlock,
+    ListId, ProjectBuilder, Ptr, ScratchBlock,
     effects::{CallSiteInfo, Effects, VariableWrite, analyze},
     runtime::{CustomBlock, CustomBlockId, MaybeCompiled},
 };
@@ -27,6 +27,7 @@ pub struct CustomBlockAnalysis {
 pub struct AnalysisOutput {
     pub custom_blocks: HashMap<CustomBlockId, CustomBlockAnalysis>,
     pub var_buf_len: usize,
+    pub list_buf_len: usize,
 }
 
 impl std::ops::Index<&CustomBlockId> for AnalysisOutput {
@@ -66,8 +67,12 @@ impl ProjectBuilder {
         loop {
             let calls = self.collect_custom_block_calls();
             let mut accessed_vars = HashSet::new();
-            let (effects_by_block, call_sites) =
-                self.analyze_pass(&calls.parent_to_child, &mut accessed_vars);
+            let mut accessed_lists = HashSet::new();
+            let (effects_by_block, call_sites) = self.analyze_pass(
+                &calls.parent_to_child,
+                &mut accessed_vars,
+                &mut accessed_lists,
+            );
 
             if inline && self.inline_functions(&calls) {
                 continue;
@@ -75,10 +80,16 @@ impl ProjectBuilder {
 
             let custom_blocks = combine_into_analysis(effects_by_block, call_sites);
             let var_buf_len = accessed_vars.iter().map(|ptr| ptr.0 + 1).max().unwrap_or(0);
+            let list_buf_len = accessed_lists
+                .iter()
+                .map(|ptr| ptr.0 + 1)
+                .max()
+                .unwrap_or(0);
 
             return AnalysisOutput {
                 custom_blocks,
                 var_buf_len,
+                list_buf_len,
             };
         }
     }
@@ -90,6 +101,7 @@ impl ProjectBuilder {
         &mut self,
         parent_to_child: &HashMap<CustomBlockId, HashSet<CustomBlockId>>,
         accessed_vars: &mut HashSet<Ptr>,
+        accessed_lists: &mut HashSet<ListId>,
     ) -> (
         HashMap<CustomBlockId, Effects>,
         HashMap<CustomBlockId, CallSiteInfo>,
@@ -123,6 +135,9 @@ impl ProjectBuilder {
                 if first_iteration {
                     accessed_vars.extend(eff.reads);
                     accessed_vars.extend(eff.writes.into_keys());
+                    accessed_lists.extend(eff.list_reads);
+                    accessed_lists.extend(eff.list_writes.into_keys());
+                    accessed_lists.extend(eff.list_untyped_writes);
                 }
             }
 
@@ -151,6 +166,9 @@ impl ProjectBuilder {
                         );
                         accessed_vars.extend(eff.reads);
                         accessed_vars.extend(eff.writes.into_keys());
+                        accessed_lists.extend(eff.list_reads);
+                        accessed_lists.extend(eff.list_writes.into_keys());
+                        accessed_lists.extend(eff.list_untyped_writes);
                     }
                     continue;
                 }
@@ -189,6 +207,9 @@ impl ProjectBuilder {
                 if first_iteration {
                     accessed_vars.extend(effects.reads.iter().copied());
                     accessed_vars.extend(effects.writes.keys().copied());
+                    accessed_lists.extend(effects.list_reads.iter().copied());
+                    accessed_lists.extend(effects.list_writes.keys().copied());
+                    accessed_lists.extend(effects.list_untyped_writes.iter().copied());
                 }
                 effects_by_block.insert(block_id, effects);
                 changed = true;

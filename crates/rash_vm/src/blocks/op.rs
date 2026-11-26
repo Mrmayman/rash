@@ -10,7 +10,9 @@ use cranelift::{
 
 use crate::{
     ScratchBlock, callbacks,
-    compiler::{Compiler, VarTypeChecked},
+    compiler::Compiler,
+    data_types::ScratchCmp,
+    effects::VarTypeChecked,
     input_primitives::{CompStr, Input, ScratchValue},
 };
 

@@ -10,9 +10,8 @@ use cranelift::{
 
 use crate::{
     Ptr, ScratchObject,
-    compiler::VarTypeChecked,
     constant_set::ConstantMap,
-    effects::{Effects, VariableWrite},
+    effects::{Effects, VarTypeChecked, VariableWrite},
     input_primitives::{CompObj, CompStr, ScratchValue},
     variable_storage::{VarStore, VariableSlot},
 };

@@ -5,7 +5,7 @@ use utils::run_code;
 use crate::{
     Input, Ptr, ScratchBlock, ScratchObject,
     builder::{c_if, c_repeat, gt, set},
-    compiler::VarType,
+    effects::VarType,
 };
 
 mod cmp;

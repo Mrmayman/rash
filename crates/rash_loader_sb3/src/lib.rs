@@ -9,7 +9,7 @@ use json::{Block, JsonBlock, JsonStruct};
 
 use rash_core::{CostumeStore, SpriteLoadData};
 use rash_vm::{
-    Input, Ptr, ScratchBlock, ScratchObject, data_types,
+    Input, ListId, Ptr, ScratchBlock, ScratchObject, data_types,
     error::{ErrorConvert, RashError, Trace},
     runtime::{CustomBlockId, ProjectBuilder, SpriteBuilder},
 };
@@ -70,6 +70,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         let mut builder = ProjectBuilder::new();
         let mut costumes = CostumeStore::new();
         let mut variable_map = HashMap::new();
+        let mut list_map = HashMap::new();
         let mut state_map = HashMap::new();
 
         let mut custom_block_num = 0;
@@ -98,6 +99,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
             load_blocks(
                 sprite_json,
                 &mut variable_map,
+                &mut list_map,
                 &mut custom_block_num,
                 &mut sprite,
             )?;
@@ -107,6 +109,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         }
 
         self.load_original_var_values(&mut builder, &variable_map);
+        // TODO: self.load_original_list_values(&mut builder, &list_map);
 
         sprite_order.sort_by_key(|(_, order)| *order);
         let sprite_order = sprite_order.into_iter().map(|(id, _)| id).collect();
@@ -163,6 +166,7 @@ struct CustomBlockDef {
 struct CompileContext<'a> {
     sprite_json: json::Target,
     variable_map: &'a mut HashMap<String, Ptr>,
+    list_map: &'a mut HashMap<String, ListId>,
 
     custom_block_defs: HashMap<String, CustomBlockDef>,
     custom_block_num: &'a mut usize,
@@ -177,6 +181,16 @@ impl CompileContext<'_> {
         } else {
             let ptr = Ptr(self.variable_map.len());
             self.variable_map.insert(variable.to_owned(), ptr);
+            ptr
+        }
+    }
+
+    fn get_list(&mut self, list: &str) -> ListId {
+        if let Some(ptr) = self.list_map.get(list) {
+            *ptr
+        } else {
+            let ptr = ListId(self.list_map.len());
+            self.list_map.insert(list.to_owned(), ptr);
             ptr
         }
     }
@@ -378,6 +392,11 @@ fn load_block(b: &Block, ctx: &mut CompileContext) -> Result<ScratchBlock, Sb3Er
             })
         }
         "argument_reporter_string_number" => blocks::argument_reporter(b, ctx),
+        "data_deletealloflist" => {
+            let list_id = get::list_field(b)?;
+            let list_id = ctx.get_list(list_id);
+            Ok(ScratchBlock::ListClear(list_id))
+        }
         _ => {
             println!("Unknown opcode: {}\n{b:#?}\n", b.opcode);
             Ok(ScratchBlock::OpAdd(0.0.into(), 0.0.into()))

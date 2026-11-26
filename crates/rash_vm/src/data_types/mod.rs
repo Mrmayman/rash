@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 use colored::Colorize;
 use ecow::{EcoString, eco_format, string::ToEcoString};
 
-use crate::compiler::VarType;
+use crate::effects::VarType;
 
 #[cfg(test)]
 mod tests;
@@ -33,6 +33,12 @@ pub enum ScratchObject {
     Number(f64),       // 0
     String(EcoString), // 1
     Bool(bool),        // 2
+}
+
+impl Default for ScratchObject {
+    fn default() -> Self {
+        ScratchObject::String(EcoString::new())
+    }
 }
 
 const _E: () = {
@@ -197,73 +203,6 @@ impl ScratchObject {
             ScratchObject::Bool(false) => "false".into(),
         }
     }
-
-    #[inline]
-    #[must_use]
-    pub fn scratch_cmp(&self, other: &ScratchObject) -> Ordering {
-        #[inline]
-        fn makebool(b: bool) -> f64 {
-            if b { 1.0 } else { 0.0 }
-        }
-
-        #[inline]
-        fn check_str(a: &ScratchObject, cmp_str: &mut bool, n: &mut f64) {
-            match a {
-                ScratchObject::Number(num) => *n = *num,
-                ScratchObject::String(s) => {
-                    if s.is_empty() || s.trim().is_empty() {
-                        *cmp_str = true;
-                    }
-                    if let Ok(p) = s.parse::<f64>() {
-                        if p.is_nan() {
-                            *cmp_str = true;
-                        } else {
-                            *n = p;
-                        }
-                    } else {
-                        *cmp_str = true;
-                    }
-                }
-                ScratchObject::Bool(b) => *n = f64::from(u8::from(*b)),
-            }
-        }
-
-        let a = self;
-        let b = other;
-
-        match (a, b) {
-            (ScratchObject::Number(a), ScratchObject::Number(b)) => {
-                return scratch_num_cmp(*a, *b);
-            }
-            (ScratchObject::Number(a), ScratchObject::Bool(b)) => {
-                return scratch_num_cmp(*a, makebool(*b));
-            }
-            (ScratchObject::Bool(b), ScratchObject::Number(a)) => {
-                return scratch_num_cmp(makebool(*b), *a);
-            }
-            (ScratchObject::Bool(a), ScratchObject::Bool(b)) => return a.cmp(b),
-            _ => {}
-        }
-
-        let mut cmp_str = false;
-        let mut n1 = 0.0f64;
-        let mut n2 = 0.0f64;
-
-        // even if both are strings, we still have
-        // to try comparing them as numbers
-        check_str(a, &mut cmp_str, &mut n1);
-        if !cmp_str {
-            check_str(b, &mut cmp_str, &mut n2);
-        }
-
-        if cmp_str {
-            let s1 = a.convert_to_string().to_lowercase();
-            let s2 = b.convert_to_string().to_lowercase();
-            return s1.cmp(&s2);
-        }
-
-        scratch_num_cmp(n1, n2)
-    }
 }
 
 #[inline]
@@ -346,5 +285,130 @@ pub fn scratch_num_cmp(a: f64, b: f64) -> Ordering {
         (true, false) => Ordering::Greater,
         (false, true) => Ordering::Less,
         (false, false) => a.partial_cmp(&b).unwrap(),
+    }
+}
+
+pub trait ScratchCmp {
+    fn scratch_cmp(&self, other: &Self) -> Ordering;
+}
+
+impl ScratchCmp for ScratchObject {
+    fn scratch_cmp(&self, other: &Self) -> Ordering {
+        #[inline]
+        fn makebool(b: bool) -> f64 {
+            if b { 1.0 } else { 0.0 }
+        }
+
+        #[inline]
+        fn check_str(a: &ScratchObject, cmp_str: &mut bool, n: &mut f64) {
+            match a {
+                ScratchObject::Number(num) => *n = *num,
+                ScratchObject::String(s) => {
+                    if s.is_empty() || s.trim().is_empty() {
+                        *cmp_str = true;
+                    }
+                    if let Ok(p) = s.parse::<f64>() {
+                        if p.is_nan() {
+                            *cmp_str = true;
+                        } else {
+                            *n = p;
+                        }
+                    } else {
+                        *cmp_str = true;
+                    }
+                }
+                ScratchObject::Bool(b) => *n = f64::from(u8::from(*b)),
+            }
+        }
+
+        let a = self;
+        let b = other;
+
+        match (a, b) {
+            (ScratchObject::Number(a), ScratchObject::Number(b)) => {
+                return scratch_num_cmp(*a, *b);
+            }
+            (ScratchObject::Number(a), ScratchObject::Bool(b)) => {
+                return scratch_num_cmp(*a, makebool(*b));
+            }
+            (ScratchObject::Bool(b), ScratchObject::Number(a)) => {
+                return scratch_num_cmp(makebool(*b), *a);
+            }
+            (ScratchObject::Bool(a), ScratchObject::Bool(b)) => return a.cmp(b),
+            _ => {}
+        }
+
+        let mut cmp_str = false;
+        let mut n1 = 0.0f64;
+        let mut n2 = 0.0f64;
+
+        // even if both are strings, we still have
+        // to try comparing them as numbers
+        check_str(a, &mut cmp_str, &mut n1);
+        if !cmp_str {
+            check_str(b, &mut cmp_str, &mut n2);
+        }
+
+        if cmp_str {
+            let s1 = a.convert_to_string().to_lowercase();
+            let s2 = b.convert_to_string().to_lowercase();
+            return s1.cmp(&s2);
+        }
+
+        scratch_num_cmp(n1, n2)
+    }
+}
+
+impl ScratchCmp for f64 {
+    fn scratch_cmp(&self, other: &Self) -> Ordering {
+        scratch_num_cmp(*self, *other)
+    }
+}
+
+impl ScratchCmp for bool {
+    fn scratch_cmp(&self, other: &Self) -> Ordering {
+        self.cmp(other)
+    }
+}
+
+impl ScratchCmp for EcoString {
+    fn scratch_cmp(&self, other: &Self) -> Ordering {
+        #[inline]
+        fn check_str(s: &str, cmp_str: &mut bool, n: &mut f64) {
+            if s.is_empty() || s.trim().is_empty() {
+                *cmp_str = true;
+            }
+            if let Ok(p) = s.parse::<f64>() {
+                if p.is_nan() {
+                    *cmp_str = true;
+                } else {
+                    *n = p;
+                }
+            } else {
+                *cmp_str = true;
+            }
+        }
+
+        let a = self;
+        let b = other;
+
+        let mut cmp_str = false;
+        let mut n1 = 0.0f64;
+        let mut n2 = 0.0f64;
+
+        // even if both are strings, we still have
+        // to try comparing them as numbers
+        check_str(a, &mut cmp_str, &mut n1);
+        if !cmp_str {
+            check_str(b, &mut cmp_str, &mut n2);
+        }
+
+        if cmp_str {
+            let s1 = a.to_lowercase();
+            let s2 = b.to_lowercase();
+            return s1.cmp(&s2);
+        }
+
+        scratch_num_cmp(n1, n2)
     }
 }

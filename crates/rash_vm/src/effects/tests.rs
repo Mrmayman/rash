@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::{
     Ptr, ScratchBlock,
     builder::{c_if, c_if_else, c_repeat, change, fadd, fmul, set},
-    compiler::VarTypeChecked,
-    effects::{CheckEffects, Effects, VariableWrite, analyze},
+    effects::{CheckEffects, Effects, VarTypeChecked, VariableWrite, analyze},
     runtime::CustomBlockId,
 };
 

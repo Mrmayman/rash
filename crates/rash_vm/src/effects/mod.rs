@@ -9,8 +9,8 @@ use cranelift::{
 };
 
 use crate::{
-    Input, Ptr, ScratchBlock,
-    compiler::{VarType, VarTypeChecked},
+    Input, ListId, Ptr, ScratchBlock,
+    data_types::{ID_BOOL, ID_NUMBER, ID_STRING},
     input_primitives::{CompObj, CompStr, ScratchValue},
     runtime::CustomBlockId,
     variable_storage::{VarStore, VariableSlot},
@@ -40,6 +40,63 @@ impl CallSiteInfo {
         self.at_site.sequence(&effects.at_site, var_type);
         self.arguments.clone_from(&effects.arguments);
     }
+}
+
+#[derive(PartialEq, Eq, Debug, Default, Clone, Copy)]
+pub enum VarTypeChecked {
+    Number,
+    Bool,
+    String,
+    #[default]
+    Object,
+}
+
+impl VarTypeChecked {
+    pub fn get_id(self) -> Option<i64> {
+        match self {
+            Self::Number => Some(ID_NUMBER),
+            Self::Bool => Some(ID_BOOL),
+            Self::String => Some(ID_STRING),
+            Self::Object => None,
+        }
+    }
+}
+
+impl From<VarType> for VarTypeChecked {
+    fn from(value: VarType) -> Self {
+        match value {
+            VarType::Number => Self::Number,
+            VarType::Bool => Self::Bool,
+            VarType::String => Self::String,
+        }
+    }
+}
+
+impl From<Option<VarType>> for VarTypeChecked {
+    fn from(value: Option<VarType>) -> Self {
+        match value {
+            Some(n) => n.into(),
+            None => Self::Object,
+        }
+    }
+}
+
+impl From<VarTypeChecked> for Option<VarType> {
+    fn from(val: VarTypeChecked) -> Self {
+        Some(match val {
+            VarTypeChecked::Number => VarType::Number,
+            VarTypeChecked::Bool => VarType::Bool,
+            VarTypeChecked::String => VarType::String,
+            VarTypeChecked::Object => return None,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum VarType {
+    Number,
+    Bool,
+    String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -117,6 +174,13 @@ impl From<VariableSlot> for VariableWrite {
 pub struct Effects {
     pub reads: HashSet<Ptr>,
     pub writes: HashMap<Ptr, VariableWrite>,
+
+    pub list_reads: HashSet<ListId>,
+    /// Types of the items written to each list
+    pub list_writes: HashMap<ListId, VariableWrite>,
+    /// Writes that add no new item types, such as `list.clear()`
+    pub list_untyped_writes: HashSet<ListId>,
+
     pub is_unknown: bool,
     pub yields: bool,
 
@@ -133,6 +197,9 @@ impl PartialEq for Effects {
             && self.may_not_happen == other.may_not_happen
             && self.reads == other.reads
             && self.writes == other.writes
+            && self.list_reads == other.list_reads
+            && self.list_writes == other.list_writes
+            && self.list_untyped_writes == other.list_untyped_writes
     }
 }
 
@@ -141,6 +208,9 @@ impl Effects {
         Effects {
             reads: HashSet::new(),
             writes: HashMap::new(),
+            list_reads: HashSet::new(),
+            list_writes: HashMap::new(),
+            list_untyped_writes: HashSet::new(),
             is_unknown: false,
             yields: false,
             may_not_happen: false,
@@ -178,25 +248,43 @@ impl Effects {
         effects
     }
 
+    pub fn with_list_write(list: ListId, ty: VariableWrite) -> Self {
+        let mut effects = Effects::new();
+        effects.list_writes = HashMap::from([(list, ty)]);
+        effects
+    }
+
+    pub fn with_list_read(list: ListId) -> Self {
+        let mut effects = Effects::new();
+        effects.list_reads = HashSet::from([list]);
+        effects
+    }
+
+    pub fn with_list_untyped_write(list: ListId) -> Self {
+        let mut effects = Effects::new();
+        effects.list_untyped_writes = HashSet::from([list]);
+        effects
+    }
+
     pub fn sequence(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
         if other.may_not_happen {
             self.merge(other, var_type);
             return;
         }
 
-        self.union_reads(other);
+        self.union_common(other);
 
-        for (ptr, write) in &other.writes {
+        for (ptr, new_write) in &other.writes {
             let write = if self
                 .writes
                 .get(ptr)
-                .is_some_and(|old| old.direct && !write.direct)
+                .is_some_and(|old| old.direct && !new_write.direct)
             {
-                let mut w = *write;
+                let mut w = *new_write;
                 w.direct = true; // Can't downgrade a write so upgrade it back
                 w
             } else {
-                *write
+                *new_write
             };
             self.writes.insert(*ptr, write);
         }
@@ -207,7 +295,8 @@ impl Effects {
         self
     }
 
-    fn union_reads(&mut self, other: &Effects) {
+    /// Combines everything that works the same way in `sequence` and `merge`.
+    fn union_common(&mut self, other: &Effects) {
         if other.is_unknown {
             self.is_unknown = true;
         }
@@ -216,10 +305,23 @@ impl Effects {
         }
 
         self.reads.extend(other.reads.iter().copied());
+        self.list_reads.extend(other.list_reads.iter().copied());
+        self.list_untyped_writes
+            .extend(other.list_untyped_writes.iter().copied());
+
+        // Unlike variables, a list write doesn't replace the previous type,
+        // and a path that doesn't write adds no type. So only divergent
+        // writes downgrade to `Object`.
+        for (list, new_write) in &other.list_writes {
+            self.list_writes
+                .entry(*list)
+                .and_modify(|old| *old = old.merge(*new_write))
+                .or_insert(*new_write);
+        }
     }
 
     pub fn merge(&mut self, other: &Effects, var_type: &dyn Fn(Ptr) -> VariableWrite) {
-        self.union_reads(other);
+        self.union_common(other);
 
         // There are two scenarios we may be dealing with
         //
@@ -516,6 +618,8 @@ impl CheckEffects for ScratchBlock {
                 args.effects(c, v, l, e, f).then(&Effects::that_yields(), v)
             }
             ScratchBlock::ScreenRefresh => Effects::that_yields(),
+
+            ScratchBlock::ListClear(list) => Effects::with_list_untyped_write(*list),
 
             ScratchBlock::FunctionGetArg(_)
             | ScratchBlock::LooksSetShown(_)
