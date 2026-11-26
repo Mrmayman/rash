@@ -21,16 +21,6 @@ mod args;
 const X: Ptr = Ptr(0);
 
 fn suite(scripts: Vec<Script>, num_ticks_expected: usize) -> Box<[ScratchObject]> {
-    fn by_two(n: usize) -> usize {
-        if n % 2 == 0 {
-            // If n is even, standard division works
-            n / 2
-        } else {
-            // If n is odd, integer division truncates, so add 1
-            n / 2 + 1
-        }
-    }
-
     let mut builder = ProjectBuilder::new();
     let mut sprite1 = SpriteBuilder::new();
 
@@ -47,7 +37,7 @@ fn suite(scripts: Vec<Script>, num_ticks_expected: usize) -> Box<[ScratchObject]
         num_ticks += 1;
     }
 
-    assert_eq!(by_two(num_ticks), num_ticks_expected);
+    assert_eq!(num_ticks, num_ticks_expected);
     runtime.memory
 }
 

@@ -134,7 +134,7 @@ fn print_diagnostics(
         eprintln!("\n{ir_displayed}\n");
     }
     eprintln!("{err}\n{err:?}");
-    std::process::exit(1);
+    panic!()
 }
 
 fn get_call_args<'a>(builder: &'a mut FunctionBuilder<'_>) -> &'a [cranelift::prelude::Value] {

@@ -10,7 +10,7 @@ use crate::{
 
 impl Compiler<'_> {
     pub fn var_read(&mut self, builder: &mut FunctionBuilder<'_>, ptr: Ptr) -> ScratchValue {
-        let val = self.vars.get(ptr, builder).val;
+        let val = self.vars.get(ptr, builder, &mut self.constants).val;
         if self.move_optimize == ptr {
             val
         } else {
@@ -21,7 +21,10 @@ impl Compiler<'_> {
     pub fn var_set(&mut self, obj: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
         match obj {
             Input::Obj(obj) => {
-                self.vars.get(ptr, builder).val.drop_in_code(self, builder);
+                self.vars
+                    .get(ptr, builder, &mut self.constants)
+                    .val
+                    .drop_in_code(self, builder);
                 match obj {
                     ScratchObject::Number(num) => {
                         self.vars.store_f64(ptr, builder, *num, &mut self.constants);
@@ -68,7 +71,10 @@ impl Compiler<'_> {
                 self.move_optimize = Ptr(usize::MAX);
 
                 if count != 1 {
-                    self.vars.get(ptr, builder).val.drop_in_code(self, builder);
+                    self.vars
+                        .get(ptr, builder, &mut self.constants)
+                        .val
+                        .drop_in_code(self, builder);
                 }
                 self.vars.store(
                     ptr,
@@ -87,7 +93,7 @@ impl Compiler<'_> {
 
     pub fn var_change(&mut self, input: &Input, builder: &mut FunctionBuilder<'_>, ptr: Ptr) {
         let input = input.get_number(self, builder);
-        let old_value = self.vars.get(ptr, builder).val;
+        let old_value = self.vars.get(ptr, builder, &mut self.constants).val;
 
         let old_num = old_value.get_number(self, builder);
         let new_num = builder.ins().fadd(old_num, input);

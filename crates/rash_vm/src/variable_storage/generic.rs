@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use cranelift::{
     codegen::ir::{
-        InstBuilder, MemFlagsData, Value,
+        InstBuilder, MemFlagsData,
         types::{F64, I64},
     },
     frontend::FunctionBuilder,
@@ -21,16 +21,13 @@ use crate::{
 pub struct GenericVarStore {
     variable_types: HashMap<Ptr, VariableWrite>,
     memory: *const ScratchObject,
-    base_ptr: Value,
 }
 
 impl GenericVarStore {
-    pub fn new(builder: &mut FunctionBuilder, memory: &[ScratchObject]) -> Self {
-        let memory = memory.as_ptr();
+    pub fn new(memory: &[ScratchObject]) -> Self {
         GenericVarStore {
             variable_types: HashMap::new(),
-            base_ptr: builder.ins().iconst(I64, memory as usize as i64),
-            memory,
+            memory: memory.as_ptr(),
         }
     }
 }
@@ -40,14 +37,20 @@ impl VarStore for GenericVarStore {
         Box::new(self.clone())
     }
 
-    fn get(&self, ptr: Ptr, builder: &mut FunctionBuilder<'_>) -> super::VariableSlot {
+    fn get(
+        &self,
+        ptr: Ptr,
+        builder: &mut FunctionBuilder<'_>,
+        constants: &mut ConstantMap,
+    ) -> super::VariableSlot {
+        let load_ptr = constants.get_int(self.memory as usize as i64, builder);
         let offset = (ptr.0 * std::mem::size_of::<ScratchObject>()) as i32;
         let variable = self.variable_types.get(&ptr).copied().unwrap_or_default();
 
         let mut load_val = |t, off| {
             builder
                 .ins()
-                .load(t, MemFlagsData::new(), self.base_ptr, offset + off)
+                .load(t, MemFlagsData::new(), load_ptr, offset + off)
         };
 
         let val = match variable.ty {
