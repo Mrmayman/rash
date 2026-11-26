@@ -1,8 +1,6 @@
-use std::time::Instant;
-
 use rash_core::{ShaderState, SpriteId};
 
-use crate::WindowSize;
+use crate::{RenderTarget, WindowSize};
 
 use super::Renderer;
 
@@ -15,10 +13,11 @@ impl Renderer {
         surface: &wgpu::Surface,
     ) {
         if new_size.width > 0 && new_size.height > 0 {
+            let config = self.config.as_mut().expect("surface renderer required");
             self.window_size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
-            surface.configure(device, &self.config);
+            config.width = new_size.width;
+            config.height = new_size.height;
+            surface.configure(device, config);
 
             self.global_state.resolution = [new_size.width as f32, new_size.height as f32];
             self.update_global_state(queue);
@@ -33,34 +32,14 @@ impl Renderer {
         );
     }
 
-    fn render_inner(
+    fn render_to_view(
         &mut self,
         sprite_order: &[SpriteId],
         graphics: &[ShaderState],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        surface: &wgpu::Surface,
+        view: &wgpu::TextureView,
     ) {
-        let output = match surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(s)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(s) => s,
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Validation
-            | wgpu::CurrentSurfaceTexture::Occluded => {
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                self.resize(self.window_size, device, queue, surface);
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                // TODO: recreate device and all resources
-                panic!("Surface lost");
-            }
-        };
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
@@ -103,7 +82,24 @@ impl Renderer {
 
         // submit will accept anything that implements IntoIter
         queue.submit(std::iter::once(encoder.finish()));
-        queue.present(output);
+    }
+
+    pub fn render_to_target(
+        &mut self,
+        sprite_order: &[SpriteId],
+        target: &RenderTarget,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        let size = target.size();
+        if self.global_state.resolution != [size.width as f32, size.height as f32] {
+            self.global_state.resolution = [size.width as f32, size.height as f32];
+            self.update_global_state(queue);
+        }
+
+        let graphics: Vec<ShaderState> = self.state.generate_shader_buffer();
+        queue.write_buffer(&self.sprites_buffer, 0, bytemuck::cast_slice(&graphics));
+        self.render_to_view(sprite_order, &graphics, device, queue, target.view());
     }
 
     pub fn render(
@@ -113,20 +109,24 @@ impl Renderer {
         queue: &wgpu::Queue,
         surface: &wgpu::Surface,
     ) {
+        let output = match surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(output)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(output) => output,
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Validation
+            | wgpu::CurrentSurfaceTexture::Occluded => return,
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                self.resize(self.window_size, device, queue, surface);
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Lost => panic!("Surface lost"),
+        };
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         let graphics: Vec<ShaderState> = self.state.generate_shader_buffer();
-
         queue.write_buffer(&self.sprites_buffer, 0, bytemuck::cast_slice(&graphics));
-
-        self.render_inner(sprite_order, &graphics, device, queue, surface);
-
-        let frametime = self.last_time.elapsed().as_secs_f64();
-        self.last_time = Instant::now();
-
-        let target_frametime = 1.0 / 30.0;
-        if frametime < target_frametime {
-            std::thread::sleep(std::time::Duration::from_secs_f64(
-                target_frametime - frametime,
-            ));
-        }
+        self.render_to_view(sprite_order, &graphics, device, queue, &view);
+        queue.present(output);
     }
 }

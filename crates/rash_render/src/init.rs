@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::time::Instant;
 
 use rash_core::{CostumeStore, RunState, ShaderState, SpriteData, SpriteId, SpriteLoadData};
 use wgpu::util::DeviceExt;
@@ -25,6 +24,38 @@ impl Renderer {
         let WindowSize { width, height } = window_size;
 
         let config = create_surface_config(surface, adapter, width, height);
+
+        Self::new_with_format(
+            window_size,
+            Some(config),
+            false,
+            device,
+            queue,
+            sprite_load_info,
+            costumes,
+        )
+    }
+
+    pub fn new_offscreen(
+        size: WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        sprite_load_info: &HashMap<SpriteId, SpriteLoadData>,
+        costumes: &mut CostumeStore,
+    ) -> Self {
+        Self::new_with_format(size, None, true, device, queue, sprite_load_info, costumes)
+    }
+
+    fn new_with_format(
+        window_size: WindowSize,
+        config: Option<wgpu::SurfaceConfiguration>,
+        encode_srgb_for_texture: bool,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        sprite_load_info: &HashMap<SpriteId, SpriteLoadData>,
+        costumes: &mut CostumeStore,
+    ) -> Self {
+        let WindowSize { width, height } = window_size;
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Render Bind Group Layout"),
@@ -56,8 +87,16 @@ impl Renderer {
 
         let costume_layout = Texture::get_bind_group_layout(device);
 
-        let render_pipeline =
-            create_render_pipeline(device, &config, &bind_group_layout, &costume_layout);
+        let render_pipeline = create_render_pipeline(
+            device,
+            config
+                .as_ref()
+                .map(|n| n.format)
+                .unwrap_or(wgpu::TextureFormat::Rgba8Unorm),
+            encode_srgb_for_texture,
+            &bind_group_layout,
+            &costume_layout,
+        );
 
         let sprites_state = vec![ShaderState::default(); sprite_load_info.len()];
 
@@ -119,7 +158,6 @@ impl Renderer {
             sprites_buffer,
             global_state,
             global_buffer,
-            last_time: Instant::now(),
             textures,
             state: RunState::with_sprites(sprites),
         }
@@ -165,13 +203,22 @@ fn create_surface_config(
 
 fn create_render_pipeline(
     device: &wgpu::Device,
-    config: &wgpu::wgt::SurfaceConfiguration<Vec<wgpu::TextureFormat>>,
+    output_format: wgpu::TextureFormat,
+    encode_srgb_for_texture: bool,
     bind_group_layout: &wgpu::BindGroupLayout,
     costume_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
     let common = include_str!("shaders/common.wgsl");
     let vert = common.to_owned() + include_str!("shaders/vert.wgsl");
-    let frag = common.to_owned() + include_str!("shaders/frag.wgsl");
+    let frag = common.to_owned()
+        + &include_str!("shaders/frag.wgsl").replace(
+            "    return color;",
+            if encode_srgb_for_texture {
+                "    let encoded = select(1.055 * pow(color.rgb, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055), color.rgb * 12.92, color.rgb <= vec3<f32>(0.0031308));\n    return vec4<f32>(encoded, color.a);"
+            } else {
+                "    return color;"
+            },
+        );
 
     let vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Vertex Shader"),
@@ -201,7 +248,7 @@ fn create_render_pipeline(
             module: &frag_shader,
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
-                format: config.format,
+                format: output_format,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu::ColorWrites::ALL,
             })],

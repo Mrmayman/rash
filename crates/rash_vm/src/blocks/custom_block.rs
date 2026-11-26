@@ -110,25 +110,22 @@ impl Compiler<'_> {
             return;
         }
 
-        for _ in 0..2 {
-            // TODO: Hacky workaround for too-fast timing
-            self.break_counter += 1;
-            self.save_vars(builder);
-            let break_counter = self.constants.get_int(self.break_counter as i64, builder);
+        self.break_counter += 1;
+        self.save_vars(builder);
+        let break_counter = self.constants.get_int(self.break_counter as i64, builder);
 
-            builder.ins().return_(&[break_counter]);
-            self.constants.clear();
+        builder.ins().return_(&[break_counter]);
+        self.constants.clear();
 
-            let b = builder.create_block();
-            self.break_points.push(b);
-            builder.switch_to_block(b);
+        let b = builder.create_block();
+        self.break_points.push(b);
+        builder.switch_to_block(b);
 
-            self.vars.reinit(
-                builder,
-                &mut self.constants,
-                self.memory,
-                &Effects::unknown(),
-            );
-        }
+        self.vars.reinit(
+            builder,
+            &mut self.constants,
+            self.memory,
+            &Effects::unknown(),
+        );
     }
 }

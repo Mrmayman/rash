@@ -78,9 +78,9 @@ impl SvgRenderer {
 
 #[derive(Debug, Deserialize)]
 struct Svg {
-    #[serde(rename = "width")]
+    #[serde(rename = "@width")]
     width: String,
-    #[serde(rename = "height")]
+    #[serde(rename = "@height")]
     height: String,
 }
 
