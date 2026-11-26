@@ -6,6 +6,7 @@ use crate::{App, RuntimeConfig};
 
 pub enum Message {
     OpenProject,
+    RestartVm,
     UpdateConfig(RuntimeConfig),
 }
 
@@ -21,14 +22,19 @@ impl App {
                     return;
                 };
 
-                let mut vm = match rash_loader_sb3::load_from_path(&path) {
+                let builder = match rash_loader_sb3::load_from_path(&path) {
                     Ok(vm) => vm,
                     Err(err) => {
                         eprintln!("{err}");
                         std::process::exit(1);
                     }
                 };
+                self.builder = builder;
 
+                self.update(Message::RestartVm);
+            }
+            Message::RestartVm => {
+                let mut vm = self.builder.clone().build();
                 let renderer = Renderer::new_offscreen(
                     self.target.size(),
                     &self.wgpu.device,

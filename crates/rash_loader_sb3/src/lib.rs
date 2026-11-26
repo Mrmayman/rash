@@ -11,7 +11,7 @@ use rash_core::{CostumeStore, SpriteLoadData};
 use rash_vm::{
     Input, Ptr, ScratchBlock, ScratchObject, data_types,
     error::{ErrorConvert, RashError, Trace},
-    runtime::{CustomBlockId, ProjectBuilder, Runtime, SpriteBuilder},
+    runtime::{CustomBlockId, ProjectBuilder, SpriteBuilder},
 };
 use serde_json::Value;
 use zip::ZipArchive;
@@ -31,7 +31,7 @@ mod sprites;
 
 pub use error::{FieldType, Sb3Error, Sb3ErrorKind};
 
-pub fn load_from_path(path: impl AsRef<Path>) -> Result<Runtime, Sb3Error> {
+pub fn load_from_path(path: impl AsRef<Path>) -> Result<ProjectBuilder, Sb3Error> {
     let path = path.as_ref();
     let file = std::fs::File::open(path)
         .to("std::fs::File::open", "load_from_path")
@@ -39,7 +39,7 @@ pub fn load_from_path(path: impl AsRef<Path>) -> Result<Runtime, Sb3Error> {
     load_from_reader(file)
 }
 
-pub fn load_from_reader<R: Read + Seek>(r: R) -> Result<Runtime, Sb3Error> {
+pub fn load_from_reader<R: Read + Seek>(r: R) -> Result<ProjectBuilder, Sb3Error> {
     let loader = ProjectLoader::new(r)?;
     loader.build()
 }
@@ -64,7 +64,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         Ok(Self { json, archive })
     }
 
-    pub fn build(mut self) -> Result<Runtime, Sb3Error> {
+    pub fn build(mut self) -> Result<ProjectBuilder, Sb3Error> {
         const FN_N: &str = "ProjectLoader::build";
 
         let mut builder = ProjectBuilder::new();
@@ -115,7 +115,7 @@ impl<R: Read + Seek> ProjectLoader<R> {
         builder.set_costumes(costumes);
         builder.set_init_state(state_map);
 
-        Ok(builder.build())
+        Ok(builder)
     }
 
     fn load_original_var_values(

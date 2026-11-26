@@ -43,7 +43,7 @@ fn main() {
     }
 
     println!("Loading project from {}", path.display());
-    let vm = match rash_loader_sb3::load_from_path(&path) {
+    let builder = match rash_loader_sb3::load_from_path(&path) {
         Ok(vm) => vm,
         Err(err) => {
             eprintln!("{err}");
@@ -68,7 +68,7 @@ fn main() {
     eframe::run_native(
         "Rash",
         options,
-        Box::new(move |creation_context| Ok(Box::new(App::new(config, vm, creation_context)))),
+        Box::new(move |creation_context| Ok(Box::new(App::new(config, builder, creation_context)))),
     )
     .unwrap();
 }
@@ -98,7 +98,9 @@ struct ImpureState {
 
 struct App {
     renderer: Renderer,
+    builder: ProjectBuilder,
     vm: Runtime,
+
     wgpu: egui_wgpu::RenderState,
     target: RenderTarget,
     texture_id: egui::TextureId,
@@ -118,7 +120,7 @@ struct App {
 impl App {
     fn new(
         config: RuntimeConfig,
-        mut vm: Runtime,
+        builder: ProjectBuilder,
         creation_context: &eframe::CreationContext<'_>,
     ) -> Self {
         let wgpu = creation_context
@@ -131,6 +133,8 @@ impl App {
             WindowSize::new(config.project_resolution[0], config.project_resolution[1]),
         );
         let texture_id = register_texture(&wgpu, target.view());
+
+        let mut vm = builder.clone().build();
         let renderer = Renderer::new_offscreen(
             target.size(),
             &wgpu.device,
@@ -142,6 +146,7 @@ impl App {
 
         Self {
             renderer,
+            builder,
             vm,
             wgpu,
             target,

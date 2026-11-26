@@ -102,7 +102,25 @@ impl eframe::App for App {
 
 impl App {
     fn menu_project(&mut self, ui: &mut egui::Ui) {
+        let default_widgets = egui::Visuals::dark().widgets;
+        ui.visuals_mut().widgets.inactive = default_widgets.inactive;
+        ui.visuals_mut().widgets.hovered = default_widgets.hovered;
+        ui.visuals_mut().widgets.active = default_widgets.active;
+        ui.visuals_mut().button_frame = true;
+
         let mut new_cfg = self.config;
+
+        ui.horizontal(|ui| {
+            if ui.button(" Restart ").clicked() {
+                self.update(Message::RestartVm);
+            }
+            // if ui.button(" Pause ").clicked() {
+            //     todo!()
+            // }
+            // if ui.button(" Stop ").clicked() {
+            //     todo!()
+            // }
+        });
 
         ui.checkbox(&mut new_cfg.turbo_mode, "Turbo Mode");
         ui.checkbox(&mut new_cfg.render_at_high_resolution, "High Quality Pen");

@@ -41,7 +41,7 @@ fn main() {
     );
 
     println!("Loading project from {}", path.display());
-    let vm = rash_loader_sb3::load_from_path(&path).unwrap();
+    let vm = rash_loader_sb3::load_from_path(&path).unwrap().build();
     let mut app = pollster::block_on(App::new(vm, window)).unwrap();
 
     event_loop
